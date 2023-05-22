@@ -1,0 +1,92 @@
+
+
+/* Start:/local/templates/task/components/bitrix/form.result.new/form_result/style.css?1684013532666*/
+table.form-table
+{
+	width:100%;
+	background-color:white;
+	border-collapse:collapse;
+	font-size:100%;
+	font-weight:normal;
+	line-height:160%;
+}
+
+table.form-table th, table.form-table td
+{
+	border:1px solid #ADC3D5;
+	padding: 5px 5px;
+	vertical-align:top;
+}
+
+table.form-table th
+{
+	background-image:url(/local/templates/task/components/bitrix/form.result.new/form_result/images/table_head.gif);
+	background-repeat:repeat-x;
+	text-align: left;
+	color:#25639A;
+}
+
+
+table.form-table td
+{
+	padding: 15px 5px;
+}
+
+.form-required 
+{
+	color: red;
+}
+
+.error-fld {
+	display: block;
+	float: left;
+	height: 13px;
+	width: 15px;
+	background-repeat: no-repeat;
+	background-image: url(/local/templates/task/components/bitrix/form.result.new/form_result/images/icon_warn.gif);
+}
+/* End */
+
+
+/* Start:/local/templates/task/components/bitrix/news.list/news_list/style.css?1684619234150*/
+div.news-list
+{
+	word-wrap: break-word;
+}
+div.news-list img.preview_picture
+{
+	float:left;
+	margin:0 4px 6px 0;
+}
+.news-date-time {
+	color:#486DAA;
+}
+
+/* End */
+
+
+/* Start:/local/templates/task/components/bitrix/news.detail/news_detail/style.css?1684739513155*/
+div.news-detail
+{
+	word-wrap: break-word;
+}
+div.news-detail img.detail_picture
+{
+	float:left;
+	margin:0 8px 6px 1px;
+}
+.news-date-time
+{
+	color:#486DAA;
+}
+
+/* End */
+
+
+/* Start:/bitrix/components/bitrix/system.show_message/templates/.default/style.min.css?168392218951*/
+font.errortext{color:red}font.notetext{color:green}
+/* End */
+/* /local/templates/task/components/bitrix/form.result.new/form_result/style.css?1684013532666 */
+/* /local/templates/task/components/bitrix/news.list/news_list/style.css?1684619234150 */
+/* /local/templates/task/components/bitrix/news.detail/news_detail/style.css?1684739513155 */
+/* /bitrix/components/bitrix/system.show_message/templates/.default/style.min.css?168392218951 */

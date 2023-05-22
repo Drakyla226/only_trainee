@@ -7,31 +7,30 @@
 	<div class="contact-form__form-inputs">
 		<?foreach ($arResult["QUESTIONS"] as $FIELD_SID => $arQuestion){
 			$html_code = str_replace('class="', 'class="input__input"', $arQuestion["HTML_CODE"]);
-			if ($arQuestion['STRUCTURE'][0]['FIELD_TYPE'] == 'hidden'){?>
+			if ($arQuestion['STRUCTURE'][0]['FIELD_TYPE'] == 'hidden'):?>
 				<?=$arQuestion["HTML_CODE"];?>
-			<?}else{
-				if (is_array($arResult["FORM_ERRORS"]) && array_key_exists($FIELD_SID, $arResult['FORM_ERRORS'])){?>
-					<span class="error-fld" title="<?=htmlspecialcharsbx($arResult["FORM_ERRORS"][$FIELD_SID])?>"></span><?}
-				if ($arQuestion["CAPTION"] != "Сообщение"){?>
+			<?else:
+				if (is_array($arResult["FORM_ERRORS"]) && array_key_exists($FIELD_SID, $arResult['FORM_ERRORS'])):?>
+					<span class="error-fld" title="<?=htmlspecialcharsbx($arResult["FORM_ERRORS"][$FIELD_SID])?>"></span><?endif;
+				if ($arQuestion["CAPTION"] != "Сообщение"):?>
 					<div class="input contact-form__input">
 					<label class="input__label">
 					<div class="input__label-text"><?=$arQuestion["CAPTION"]?><?=$arQuestion["REQUIRED"] == "Y" ? $arResult["REQUIRED_SIGN"] : ""?></div>
 					<?=$html_code?>
 					</label>
 					</div>
-				<?}
-			}
-		} //endwhile?>
+				<?endif;
+			endif;
+		}?>
 	</div>
 
 	<?foreach ($arResult["QUESTIONS"] as $FIELD_SID => $arQuestion){
-		if ($arQuestion['STRUCTURE'][0]['FIELD_TYPE'] == 'hidden'){?>
+		if ($arQuestion['STRUCTURE'][0]['FIELD_TYPE'] == 'hidden'):?>
 			<?=$arQuestion["HTML_CODE"];?>
-		<?}else{
-			if (is_array($arResult["FORM_ERRORS"]) && array_key_exists($FIELD_SID, $arResult['FORM_ERRORS'])){?>
-				<span class="error-fld" title="<?=htmlspecialcharsbx($arResult["FORM_ERRORS"][$FIELD_SID])?>"></span>
-			<?}
-			if ($arQuestion["CAPTION"] == "Сообщение"){?>
+		<?else:
+			if (is_array($arResult["FORM_ERRORS"]) && array_key_exists($FIELD_SID, $arResult['FORM_ERRORS'])):?>
+				<span class="error-fld" title="<?=htmlspecialcharsbx($arResult["FORM_ERRORS"][$FIELD_SID])?>"></span><?endif;
+			if ($arQuestion["CAPTION"] == "Сообщение"):?>
 				<div class="contact-form__form-message">
 					<div class="input">
 						<label class="input__label">
@@ -41,8 +40,8 @@
 						</label>
 					</div>
 				</div>
-			<?}
-			}
+			<?endif;
+			endif;
 		} //endwhile?>
 
 	<div class="contact-form__bottom">

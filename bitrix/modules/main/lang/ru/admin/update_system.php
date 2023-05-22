@@ -9,7 +9,7 @@ $MESS["SUP_EDITION"] = "Редакция продукта:";
 $MESS["SUP_SITES"] = "Максимальное количество сайтов:";
 $MESS["SUP_USERS"] = "Максимальное количество пользователей:";
 $MESS["SUP_ACTIVE"] = "Обновления доступны:";
-$MESS["SUP_MARKET_SUBSCRIPTION"] = "Битрикс24.Маркет Плюс действует до:";
+$MESS["SUP_MARKET_SUBSCRIPTION"] = "Битрикс24.Маркет Плюс доступен до:";
 $MESS["SUP_MARKET_SUBSCRIPTION_DEMO"] = "Пробный период Битрикс24.Маркет Плюс действует до:";
 $MESS["SUP_ACTIVE_PERIOD"] = "с #DATE_FROM# по #DATE_TO#";
 $MESS["SUP_SERVER"] = "Сервер обновлений:";
@@ -222,4 +222,5 @@ $MESS['SUP_WRONG_GD'] = "Для обновления продукта необх
 $MESS["SUP_CONFLICT_POPUP_TITLE"] = "Конфликты зависимостей";
 $MESS["SUP_CONFLICT_NOTHING_SELECTED"] = "Ничего не выбрано";
 $MESS["SUP_CONFLICT_MODULE_MESSAGE"] = "Для установки #MODULE# необходимо наличие обновлений: #REQUIRES#";
+$MESS['SUP_PHP_LWARN_PHP8'] = 'Подробнее о переходе на PHP 8 вы можете прочитать <a href="https://helpdesk.bitrix24.ru/open/17332020/">на странице поддержки</a>.';
 ?>
