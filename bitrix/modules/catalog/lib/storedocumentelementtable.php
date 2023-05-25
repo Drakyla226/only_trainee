@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Catalog;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\EnumField;
@@ -29,7 +30,20 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_StoreDocumentElement_Query query()
+ * @method static EO_StoreDocumentElement_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_StoreDocumentElement_Result getById($id)
+ * @method static EO_StoreDocumentElement_Result getList(array $parameters = [])
+ * @method static EO_StoreDocumentElement_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_StoreDocumentElement createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_StoreDocumentElement_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_StoreDocumentElement wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_StoreDocumentElement_Collection wakeUpCollection($rows)
+ */
 
 class StoreDocumentElementTable extends DataManager
 {
@@ -151,5 +165,28 @@ class StoreDocumentElementTable extends DataManager
 				['join_type' => 'LEFT']
 			),
 		];
+	}
+
+	/**
+	 * Delete all rows for document.
+	 * @internal
+	 *
+	 * @param int $id
+	 * @return void
+	 */
+	public static function deleteByDocument(int $id): void
+	{
+		if ($id <= 0)
+		{
+			return;
+		}
+
+		$conn = Application::getConnection();
+		$helper = $conn->getSqlHelper();
+		$conn->queryExecute(
+			'delete from ' . $helper->quote(self::getTableName())
+			. ' where ' . $helper->quote('DOC_ID') . ' = ' . $id
+		);
+		unset($helper, $conn);
 	}
 }

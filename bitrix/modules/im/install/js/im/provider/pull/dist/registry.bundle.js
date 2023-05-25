@@ -5,7 +5,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	'use strict';
 
 	function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
-
 	function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
 	var ImBasePullHandler = /*#__PURE__*/function () {
 	  babelHelpers.createClass(ImBasePullHandler, null, [{
@@ -15,26 +14,20 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      return new this(params);
 	    }
 	  }]);
-
 	  function ImBasePullHandler() {
 	    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 	    babelHelpers.classCallCheck(this, ImBasePullHandler);
-
 	    if (babelHelpers["typeof"](params.controller) === 'object' && params.controller) {
 	      this.controller = params.controller;
 	    }
-
 	    if (babelHelpers["typeof"](params.store) === 'object' && params.store) {
 	      this.store = params.store;
 	    }
-
 	    this.option = babelHelpers["typeof"](params.store) === 'object' && params.store ? params.store : {};
-
 	    if (!(babelHelpers["typeof"](this.option.handlingDialog) === 'object' && this.option.handlingDialog && this.option.handlingDialog.chatId && this.option.handlingDialog.dialogId)) {
 	      this.option.handlingDialog = false;
 	    }
 	  }
-
 	  babelHelpers.createClass(ImBasePullHandler, [{
 	    key: "getModuleId",
 	    value: function getModuleId() {
@@ -49,30 +42,24 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    key: "skipExecute",
 	    value: function skipExecute(params) {
 	      var extra = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
-
 	      if (!extra.optionImportant) {
 	        if (this.option.skip) {
 	          im_lib_logger.Logger.info('Pull: command skipped while loading messages', params);
 	          return true;
 	        }
-
 	        if (!this.option.handlingDialog) {
 	          return false;
 	        }
 	      }
-
 	      if (typeof params.chatId !== 'undefined' || typeof params.dialogId !== 'undefined') {
 	        if (typeof params.chatId !== 'undefined' && parseInt(params.chatId) === parseInt(this.option.handlingDialog.chatId)) {
 	          return false;
 	        }
-
 	        if (typeof params.dialogId !== 'undefined' && params.dialogId.toString() === this.option.handlingDialog.dialogId.toString()) {
 	          return false;
 	        }
-
 	        return true;
 	      }
-
 	      return false;
 	    }
 	  }, {
@@ -89,41 +76,37 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    key: "handleMessageAdd",
 	    value: function handleMessageAdd(params, extra) {
 	      var _this = this;
-
 	      im_lib_logger.Logger.warn('handleMessageAdd', params);
-
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      var collection = this.store.state.messages.collection[params.chatId];
-
 	      if (!collection) {
 	        collection = [];
-	      } //search for message with message id from params
+	      }
 
-
+	      //search for message with message id from params
 	      var message = collection.find(function (element) {
 	        if (params.message.templateId && element.id === params.message.templateId) {
 	          return true;
 	        }
-
 	        return element.id === params.message.id;
-	      }); //stop if it's message with 'push' (pseudo push message in mobile)
+	      });
 
+	      //stop if it's message with 'push' (pseudo push message in mobile)
 	      if (message && params.message.push) {
 	        return false;
 	      }
-
 	      if (params.chat && params.chat[params.chatId]) {
-	        var existingChat = this.store.getters['dialogues/getByChatId'](params.chatId); //add new chat if there is no one
-
+	        var existingChat = this.store.getters['dialogues/getByChatId'](params.chatId);
+	        //add new chat if there is no one
 	        if (!existingChat) {
 	          var chatToAdd = Object.assign({}, params.chat[params.chatId], {
 	            dialogId: params.dialogId
 	          });
 	          this.store.dispatch('dialogues/set', chatToAdd);
-	        } //otherwise - update it
+	        }
+	        //otherwise - update it
 	        else {
 	          this.store.dispatch('dialogues/update', {
 	            dialogId: params.dialogId,
@@ -132,38 +115,12 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	        }
 	      }
 
-	      var recentItem = this.store.getters['recent/get'](params.dialogId); //add recent item if there is no one
-
-	      if (!recentItem) {
-	        var newRecentItem = this.prepareRecentItem(params);
-	        this.store.dispatch('recent/set', [newRecentItem]);
-	      } //otherwise - update it
-	      else {
-	        this.store.dispatch('recent/update', {
-	          id: params.dialogId,
-	          fields: {
-	            lines: params.lines || {
-	              id: 0
-	            },
-	            message: {
-	              id: params.message.id,
-	              text: params.message.textOriginal,
-	              date: params.message.date,
-	              senderId: params.message.senderId,
-	              withFile: typeof params.message.params['FILE_ID'] !== 'undefined',
-	              withAttach: typeof params.message.params['ATTACH'] !== 'undefined'
-	            },
-	            counter: params.counter
-	          }
-	        });
-	      } //set users
-
-
+	      //set users
 	      if (params.users) {
 	        this.store.dispatch('users/set', ui_vue_vuex.VuexBuilderModel.convertToArray(params.users));
-	      } //set files
+	      }
 
-
+	      //set files
 	      if (params.files) {
 	        var files = this.controller.application.prepareFilesBeforeSave(ui_vue_vuex.VuexBuilderModel.convertToArray(params.files));
 	        files.forEach(function (file) {
@@ -182,9 +139,9 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	            _this.store.dispatch('files/set', file);
 	          }
 	        });
-	      } //if we already have message - update it and scrollToBottom
+	      }
 
-
+	      //if we already have message - update it and scrollToBottom
 	      if (message) {
 	        im_lib_logger.Logger.warn('New message pull handler: we already have this message', params.message);
 	        this.store.dispatch('messages/update', {
@@ -202,7 +159,8 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	            });
 	          }
 	        });
-	      } //if we dont have message and we have all pages - add new message and send newMessage event (handles scroll stuff)
+	      }
+	      //if we dont have message and we have all pages - add new message and send newMessage event (handles scroll stuff)
 	      //we dont do anything if we dont have message and there are unloaded messages
 	      else if (this.controller.application.isUnreadMessagesLoaded()) {
 	        im_lib_logger.Logger.warn('New message pull handler: we dont have this message', params.message);
@@ -216,16 +174,16 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	            });
 	          }
 	        });
-	      } //stop writing event
+	      }
 
-
+	      //stop writing event
 	      this.controller.application.stopOpponentWriting({
 	        dialogId: params.dialogId,
 	        userId: params.message.senderId
-	      }); //if we sent message and there are no unloaded unread pages - read all messages on server and client, set counter to 0
-	      //TODO: to think about it during new chat development
+	      });
 
-	      if (params.message.senderId === this.controller.application.getUserId() && this.controller.application.isUnreadMessagesLoaded()) {
+	      // if we sent message - read all messages on server and client, set counter to 0
+	      if (params.message.senderId === this.controller.application.getUserId()) {
 	        if (this.store.state.dialogues.collection[params.dialogId] && this.store.state.dialogues.collection[params.dialogId].counter !== 0) {
 	          this.controller.restClient.callMethod('im.dialog.read', {
 	            dialog_id: params.dialogId
@@ -237,7 +195,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	                chatId: params.chatId,
 	                cancelIfScrollChange: false
 	              });
-
 	              _this.store.dispatch('dialogues/update', {
 	                dialogId: params.dialogId,
 	                fields: {
@@ -247,22 +204,24 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	            });
 	          });
 	        }
-	      } //increase the counter if message is not ours
+	      }
+	      //increase the counter if message is not ours
 	      else if (params.message.senderId !== this.controller.application.getUserId()) {
 	        this.store.dispatch('dialogues/increaseCounter', {
 	          dialogId: params.dialogId,
 	          count: 1
 	        });
-	      } //set new lastMessageId (used for pagination)
+	      }
 
-
+	      //set new lastMessageId (used for pagination)
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: {
 	          lastMessageId: params.message.id
 	        }
-	      }); //increase total message count
+	      });
 
+	      //increase total message count
 	      this.store.dispatch('dialogues/increaseMessageCounter', {
 	        dialogId: params.dialogId,
 	        count: 1
@@ -284,53 +243,35 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.controller.application.stopOpponentWriting({
 	        dialogId: params.dialogId,
 	        userId: params.senderId
 	      });
+	      var fields = {
+	        params: params.params,
+	        blink: true
+	      };
+	      if (command === "messageUpdate") {
+	        if (typeof params.textLegacy !== 'undefined') {
+	          fields.textLegacy = params.textLegacy;
+	        }
+	        if (typeof params.textOriginal !== 'undefined') {
+	          fields.textOriginal = params.textOriginal;
+	        }
+	        if (typeof params.text !== 'undefined') {
+	          fields.text = params.text;
+	        }
+	      }
 	      this.store.dispatch('messages/update', {
 	        id: params.id,
 	        chatId: params.chatId,
-	        fields: {
-	          text: command === "messageUpdate" ? params.text : '',
-	          textOriginal: command === "messageUpdate" ? params.textOriginal : '',
-	          params: params.params,
-	          blink: true
-	        }
+	        fields: fields
 	      }).then(function () {
 	        main_core_events.EventEmitter.emit(im_const.EventType.dialog.scrollToBottom, {
 	          chatId: params.chatId,
 	          cancelIfScrollChange: true
 	        });
 	      });
-	      var recentItem = this.store.getters['recent/get'](params.dialogId);
-
-	      if (command === 'messageUpdate' && recentItem.element && recentItem.element.message.id === params.id) {
-	        this.store.dispatch('recent/update', {
-	          id: params.dialogId,
-	          fields: {
-	            message: {
-	              id: params.id,
-	              text: params.text,
-	              date: recentItem.element.message.date
-	            }
-	          }
-	        });
-	      }
-
-	      if (command === 'messageDelete' && recentItem.element && recentItem.element.message.id === params.id) {
-	        this.store.dispatch('recent/update', {
-	          id: params.dialogId,
-	          fields: {
-	            message: {
-	              id: params.id,
-	              text: 'Message deleted',
-	              date: recentItem.element.message.date
-	            }
-	          }
-	        });
-	      }
 	    }
 	  }, {
 	    key: "handleMessageDeleteComplete",
@@ -338,7 +279,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('messages/delete', {
 	        id: params.id,
 	        chatId: params.chatId
@@ -355,7 +295,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('messages/update', {
 	        id: params.id,
 	        chatId: params.chatId,
@@ -372,7 +311,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: {
@@ -386,7 +324,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: {
@@ -400,7 +337,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: params.params
@@ -412,7 +348,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: {
@@ -426,7 +361,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: {
@@ -440,7 +374,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('messages/update', {
 	        id: params.id,
 	        chatId: params.chatId,
@@ -460,18 +393,15 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.controller.application.startOpponentWriting(params);
 	    }
 	  }, {
 	    key: "handleReadMessage",
 	    value: function handleReadMessage(params, extra) {
 	      var _this2 = this;
-
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('messages/readMessages', {
 	        chatId: params.chatId,
 	        readId: params.lastId
@@ -482,12 +412,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	            counter: params.counter
 	          }
 	        });
-	      });
-	      this.store.dispatch('recent/update', {
-	        id: params.dialogId,
-	        fields: {
-	          counter: params.counter
-	        }
 	      });
 	    }
 	  }, {
@@ -511,7 +435,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/updateReaded', {
 	        dialogId: params.dialogId,
 	        userId: params.userId,
@@ -520,20 +443,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	        date: params.date,
 	        action: true
 	      });
-	      var recentItem = this.store.getters['recent/get'](params.dialogId);
-
-	      if (recentItem) {
-	        var message = recentItem.element.message;
-	        this.store.dispatch('recent/update', {
-	          id: params.dialogId,
-	          fields: {
-	            counter: params.counter,
-	            message: _objectSpread(_objectSpread({}, message), {}, {
-	              status: 'delivered'
-	            })
-	          }
-	        });
-	      }
 	    }
 	  }, {
 	    key: "handleUnreadMessageOpponent",
@@ -551,7 +460,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('dialogues/updateReaded', {
 	        dialogId: params.dialogId,
 	        userId: params.userId,
@@ -564,7 +472,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (this.skipExecute(params, extra)) {
 	        return false;
 	      }
-
 	      this.store.dispatch('files/set', this.controller.application.prepareFilesBeforeSave(ui_vue_vuex.VuexBuilderModel.convertToArray({
 	        file: params.fileParams
 	      }))).then(function () {
@@ -574,33 +481,15 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      });
 	    }
 	  }, {
-	    key: "handleChatPin",
-	    value: function handleChatPin(params, extra) {
-	      this.store.dispatch('recent/pin', {
-	        id: params.dialogId,
-	        action: params.active
-	      });
-	    }
-	  }, {
-	    key: "handleChatHide",
-	    value: function handleChatHide(params, extra) {
-	      this.store.dispatch('recent/delete', {
-	        id: params.dialogId
-	      });
-	    }
-	  }, {
 	    key: "handleChatMuteNotify",
 	    value: function handleChatMuteNotify(params, extra) {
 	      var existingChat = this.store.getters['dialogues/get'](params.dialogId);
-
 	      if (!existingChat) {
 	        return false;
 	      }
-
 	      var existingMuteList = existingChat.muteList;
 	      var newMuteList = [];
 	      var currentUser = this.store.state.application.common.userId;
-
 	      if (params.mute) {
 	        newMuteList = [].concat(babelHelpers.toConsumableArray(existingMuteList), [currentUser]);
 	      } else {
@@ -608,21 +497,10 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	          return element !== currentUser;
 	        });
 	      }
-
 	      this.store.dispatch('dialogues/update', {
 	        dialogId: params.dialogId,
 	        fields: {
 	          muteList: newMuteList
-	        }
-	      });
-	    }
-	  }, {
-	    key: "handleReadNotifyList",
-	    value: function handleReadNotifyList(params, extra) {
-	      this.store.dispatch('recent/update', {
-	        id: 'notify',
-	        fields: {
-	          counter: params.counter
 	        }
 	      });
 	    }
@@ -636,50 +514,11 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	        });
 	      }
 	    }
-	  }, {
-	    key: "prepareRecentItem",
-	    value: function prepareRecentItem(params) {
-	      var type = 'user';
-
-	      if (params.dialogId.toString().startsWith('chat')) {
-	        type = 'chat';
-	      }
-
-	      params.dialogId.toString().startsWith('chat');
-	      var title = type === 'chat' ? params.chat[params.chatId].name : params.users[params.dialogId].name;
-	      var chat = params.chat[params.chatId] ? params.chat[params.chatId] : {};
-
-	      if (!params.users) {
-	        params.users = {};
-	      }
-
-	      var user = params.users[params.dialogId] ? params.users[params.dialogId] : {};
-	      var userId = type === 'user' ? params.dialogId : 0;
-	      return {
-	        id: params.dialogId,
-	        type: type,
-	        title: title,
-	        counter: params.counter,
-	        chatId: params.chatId,
-	        chat: chat,
-	        user: user,
-	        userId: userId,
-	        message: {
-	          id: params.message.id,
-	          text: params.message.textOriginal,
-	          date: params.message.date,
-	          senderId: params.message.senderId,
-	          withFile: typeof params.message.params['FILE_ID'] !== 'undefined',
-	          withAttach: typeof params.message.params['ATTACH'] !== 'undefined'
-	        }
-	      };
-	    }
 	  }]);
 	  return ImBasePullHandler;
 	}();
 
 	function ownKeys$1(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
-
 	function _objectSpread$1(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$1(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$1(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
 	var ImCallPullHandler = /*#__PURE__*/function () {
 	  babelHelpers.createClass(ImCallPullHandler, null, [{
@@ -689,26 +528,20 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      return new this(params);
 	    }
 	  }]);
-
 	  function ImCallPullHandler() {
 	    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 	    babelHelpers.classCallCheck(this, ImCallPullHandler);
-
 	    if (babelHelpers["typeof"](params.application) === 'object' && params.application) {
 	      this.application = params.application;
 	    }
-
 	    if (babelHelpers["typeof"](params.controller) === 'object' && params.controller) {
 	      this.controller = params.controller;
 	    }
-
 	    if (babelHelpers["typeof"](params.store) === 'object' && params.store) {
 	      this.store = params.store;
 	    }
-
 	    this.option = babelHelpers["typeof"](params.store) === 'object' && params.store ? params.store : {};
 	  }
-
 	  babelHelpers.createClass(ImCallPullHandler, [{
 	    key: "getModuleId",
 	    value: function getModuleId() {
@@ -725,7 +558,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (params.dialogId !== this.store.state.application.dialog.dialogId) {
 	        return false;
 	      }
-
 	      var users = Object.values(params.users).map(function (user) {
 	        return _objectSpread$1(_objectSpread$1({}, user), {}, {
 	          lastActivityDate: new Date()
@@ -747,11 +579,9 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (params.dialogId !== this.store.state.application.dialog.dialogId) {
 	        return false;
 	      }
-
 	      if (params.userId === this.controller.getUserId()) {
 	        this.application.kickFromCall();
 	      }
-
 	      this.store.commit('conference/common', {
 	        userCount: params.userCount
 	      });
@@ -763,14 +593,12 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    key: "handleCallUserNameUpdate",
 	    value: function handleCallUserNameUpdate(params) {
 	      var currentUser = this.store.getters['users/get'](params.userId);
-
 	      if (!currentUser) {
 	        this.store.dispatch('users/set', {
 	          id: params.userId,
 	          lastActivityDate: new Date()
 	        });
 	      }
-
 	      this.store.dispatch('users/update', {
 	        id: params.userId,
 	        fields: {
@@ -806,7 +634,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (params.chatId !== this.application.getChatId()) {
 	        return false;
 	      }
-
 	      this.store.dispatch('conference/setConferenceTitle', {
 	        conferenceTitle: params.name
 	      });
@@ -817,13 +644,11 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (params.chatId !== this.application.getChatId()) {
 	        return false;
 	      }
-
 	      if (params.isBroadcast !== '') {
 	        this.store.dispatch('conference/setBroadcastMode', {
 	          broadcastMode: params.isBroadcast
 	        });
 	      }
-
 	      if (params.presenters.length > 0) {
 	        this.store.dispatch('conference/setPresenters', {
 	          presenters: params.presenters,
@@ -836,10 +661,8 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	}();
 
 	function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
-
 	function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
-
-	function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+	function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i]; return arr2; }
 	var ImNotificationsPullHandler = /*#__PURE__*/function () {
 	  babelHelpers.createClass(ImNotificationsPullHandler, null, [{
 	    key: "create",
@@ -848,26 +671,20 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      return new this(params);
 	    }
 	  }]);
-
 	  function ImNotificationsPullHandler() {
 	    var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 	    babelHelpers.classCallCheck(this, ImNotificationsPullHandler);
-
 	    if (babelHelpers["typeof"](params.application) === 'object' && params.application) {
 	      this.application = params.application;
 	    }
-
 	    if (babelHelpers["typeof"](params.controller) === 'object' && params.controller) {
 	      this.controller = params.controller;
 	    }
-
 	    if (babelHelpers["typeof"](params.store) === 'object' && params.store) {
 	      this.store = params.store;
 	    }
-
 	    this.option = babelHelpers["typeof"](params.store) === 'object' && params.store ? params.store : {};
 	  }
-
 	  babelHelpers.createClass(ImNotificationsPullHandler, [{
 	    key: "getModuleId",
 	    value: function getModuleId() {
@@ -884,9 +701,7 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (extra.server_time_ago > 30 || params.onlyFlash === true) {
 	        return false;
 	      }
-
 	      var user = this.store.getters['users/get'](params.userId);
-
 	      if (!user) {
 	        var users = [];
 	        users.push({
@@ -897,7 +712,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	        });
 	        this.store.dispatch('users/set', users);
 	      }
-
 	      this.store.dispatch('notifications/add', {
 	        data: params
 	      });
@@ -922,7 +736,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      if (extra.server_time_ago > 30) {
 	        return false;
 	      }
-
 	      this.store.dispatch('notifications/delete', {
 	        id: params.id
 	      });
@@ -935,11 +748,9 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    key: "handleNotifyRead",
 	    value: function handleNotifyRead(params, extra) {
 	      var _this = this;
-
 	      if (extra.server_time_ago > 30) {
 	        return false;
 	      }
-
 	      params.list.forEach(function (id) {
 	        _this.store.dispatch('notifications/read', {
 	          ids: [id],
@@ -960,11 +771,9 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    key: "handleNotifyUnread",
 	    value: function handleNotifyUnread(params, extra) {
 	      var _this2 = this;
-
 	      if (extra.server_time_ago > 30) {
 	        return false;
 	      }
-
 	      params.list.forEach(function (id) {
 	        _this2.store.dispatch('notifications/read', {
 	          ids: [id],
@@ -985,11 +794,9 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    key: "handleNotifyDelete",
 	    value: function handleNotifyDelete(params, extra) {
 	      var _this3 = this;
-
 	      if (extra.server_time_ago > 30) {
 	        return false;
 	      }
-
 	      var idsToDelete = Object.keys(params.id).map(function (id) {
 	        return parseInt(id, 10);
 	      });
@@ -1008,7 +815,6 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	    value: function updateRecentListOnDelete(counterValue) {
 	      var message;
 	      var latestNotification = this.getLatest();
-
 	      if (latestNotification !== null) {
 	        message = {
 	          id: latestNotification.id,
@@ -1017,15 +823,12 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	        };
 	      } else {
 	        var notificationChat = this.store.getters['recent/get']('notify');
-
 	        if (notificationChat === false) {
 	          return;
 	        }
-
 	        message = notificationChat.element.message;
 	        message.text = this.controller.localize['IM_NOTIFICATIONS_DELETED_ITEM_STUB'];
 	      }
-
 	      this.store.dispatch('recent/update', {
 	        id: "notify",
 	        fields: {
@@ -1040,14 +843,11 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      var latestNotification = {
 	        id: 0
 	      };
-
 	      var _iterator = _createForOfIteratorHelper(this.store.state.notifications.collection),
-	          _step;
-
+	        _step;
 	      try {
 	        for (_iterator.s(); !(_step = _iterator.n()).done;) {
 	          var notification = _step.value;
-
 	          if (notification.id > latestNotification.id) {
 	            latestNotification = notification;
 	          }
@@ -1057,11 +857,9 @@ this.BX.Messenger.Provider = this.BX.Messenger.Provider || {};
 	      } finally {
 	        _iterator.f();
 	      }
-
 	      if (latestNotification.id === 0) {
 	        return null;
 	      }
-
 	      return latestNotification;
 	    }
 	  }]);

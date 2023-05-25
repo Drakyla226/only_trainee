@@ -18,6 +18,8 @@ export type PopupOptions = {
 	resizable?: boolean,
 	padding?: number,
 	contentPadding?: number,
+	borderRadius?: string,
+	contentBorderRadius?: string,
 	background?: string,
 	cacheable?: boolean,
 	contentBackground?: string,
@@ -34,9 +36,11 @@ export type PopupOptions = {
 	contentColor?: 'white' | 'gray',
 	draggable?: boolean | { restrict: boolean },
 	darkMode?: boolean,
+	fixed?: boolean,
 	compatibleMode?: boolean,
 	bindOnResize?: boolean,
 	targetContainer?: HTMLElement,
+	disableScroll?: boolean,
 
 	//Compatibility
 	noAllPaddings?: boolean,

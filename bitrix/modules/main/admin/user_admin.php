@@ -16,7 +16,7 @@
  * @global string $order
  */
 
-require_once(dirname(__FILE__)."/../include/prolog_admin_before.php");
+require_once(__DIR__."/../include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/prolog.php");
 define("HELP_FILE", "users/user_admin.php");
 $entity_id = "USER";
@@ -222,13 +222,15 @@ if($lAdmin->EditAction())
 		$DB->StartTransaction();
 
 		$ob = new CUser;
-		if(!$ob->Update($ID, $arFields))
+		if ($ob->Update($ID, $arFields))
+		{
+			$DB->Commit();
+		}
+		else
 		{
 			$lAdmin->AddUpdateError(GetMessage("SAVE_ERROR").$ID.": ".$ob->LAST_ERROR, $ID);
 			$DB->Rollback();
 		}
-
-		$DB->Commit();
 	}
 }
 
@@ -278,7 +280,10 @@ if(($arID = $lAdmin->GroupAction()) && ($USER->CanDoOperation('edit_all_users') 
 						$err = '<br>'.$ex->GetString();
 					$lAdmin->AddGroupError(GetMessage("DELETE_ERROR").$err, $ID);
 				}
-				$DB->Commit();
+				else
+				{
+					$DB->Commit();
+				}
 				break;
 			case "activate":
 			case "deactivate":

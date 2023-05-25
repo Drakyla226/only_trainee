@@ -1,14 +1,16 @@
-import {Entry} from "calendar.entry";
 import {Util} from 'calendar.util';
-import {Event, Loc, Type } from 'main.core';
+import {Event, Loc, Runtime, Type} from 'main.core';
 import {CalendarSection} from './calendarsection';
 import {CalendarTaskSection} from './calendartasksection';
 import {EventEmitter} from 'main.core.events';
-export {CalendarSection};
+
+export { CalendarSection };
 
 export class SectionManager
 {
 	static newEntrySectionId = null;
+	static EXTERNAL_TYPE_LOCAL = 'local';
+	static RELOAD_DELAY = 1000;
 
 	constructor(data, config)
 	{
@@ -16,7 +18,11 @@ export class SectionManager
 		this.setConfig(config);
 		this.addTaskSection();
 		this.sortSections();
-		EventEmitter.subscribeOnce('BX.Calendar.Section:delete', this.deleteSectionHandler.bind(this));
+		EventEmitter.subscribeOnce('BX.Calendar.Section:delete', (event) => {
+			this.deleteSectionHandler(event.data.sectionId);
+		});
+
+		this.reloadDataDebounce = Runtime.debounce(this.reloadData, SectionManager.RELOAD_DELAY, this);
 	}
 
 	setSections(rawSections = [])
@@ -66,6 +72,7 @@ export class SectionManager
 		this.sectionAccessTasks = config.sectionAccessTasks;
 		this.showTasks = config.showTasks;
 		this.customizationData = config.sectionCustomization || {};
+		this.meetSectionId = parseInt(config.meetSectionId, 10);
 	}
 
 	addTaskSection()
@@ -109,51 +116,41 @@ export class SectionManager
 			}
 			else
 			{
-				this.reloadData();
+				this.reloadDataDebounce();
 			}
 		}
 		else if (params.command === 'edit_section')
 		{
-			this.reloadData().then(() => {
-				Util.getBX().Event.EventEmitter.emit(
-					'BX.Calendar.Section:pull-edit'
-				);
-			});
-
+			this.reloadDataDebounce();
 			Util.getBX().Event.EventEmitter.emit('BX.Calendar:doRefresh');
 		}
 		else
 		{
-			this.reloadData();
+			this.reloadDataDebounce();
 		}
 	}
 
 	reloadData()
 	{
-		return new Promise(resolve => {
-			BX.ajax.runAction('calendar.api.calendarajax.getSectionList', {
-					data: {
-						'type': this.calendarType,
-						'ownerId': this.ownerId
+		BX.ajax.runAction('calendar.api.calendarajax.getSectionList', {
+				data: {
+					'type': this.calendarType,
+					'ownerId': this.ownerId
+				}
+			})
+			.then(response => {
+					this.setSections(response.data.sections || []);
+					this.sortSections();
+					if (response.data.config)
+					{
+						this.setConfig(config);
 					}
-				})
-				.then((response) => {
-						this.setSections(response.data.sections || []);
-						if (response.data.config)
-						{
-							this.setConfig(config);
-						}
-						this.addTaskSection();
-
-						resolve(response.data);
-					},
-					// Failure
-					(response) => {
-						//this.calendar.displayError(response.errors);
-						resolve(response.data);
-					}
-				);
-		});
+					this.addTaskSection();
+					Util.getBX().Event.EventEmitter.emit(
+						'BX.Calendar.Section:pull-reload-data'
+					);
+				}
+			);
 	}
 
 	getSections()
@@ -234,7 +231,6 @@ export class SectionManager
 			}
 
 			const isCustomization = params.section.id && params.section.isPseudo();
-
 			BX.ajax.runAction('calendar.api.calendarajax.editCalendarSection', {
 					data: {
 						analyticsLabel: {
@@ -248,7 +244,8 @@ export class SectionManager
 						color: color,
 						access: access || null,
 						userId: this.userId,
-						customization: isCustomization ? 'Y' : 'N'
+						customization: isCustomization ? 'Y' : 'N',
+						external_type: params?.section?.id ? params.section.getExternalType() : 'local'
 					}
 				})
 				.then(
@@ -262,6 +259,7 @@ export class SectionManager
 						const sectionList = response.data.sectionList || [];
 						this.setSections(sectionList);
 						this.sortSections();
+						this.addTaskSection();
 
 						Util.getBX().Event.EventEmitter.emit(
 							'BX.Calendar.Section:edit',
@@ -359,7 +357,9 @@ export class SectionManager
 		if (this.sectionIndex[sectionId] !== undefined)
 		{
 			this.sections = BX.util.deleteFromArray(this.sections, this.sectionIndex[sectionId]);
-			for (var i = 0; i < this.sections.length; i++)
+
+			this.sectionIndex = {};
+			for (let i = 0; i < this.sections.length; i++)
 			{
 				this.sectionIndex[this.sections[i].id] = i;
 			}
@@ -378,16 +378,21 @@ export class SectionManager
 					'user',
 					calendarContext.util.userId
 				);
-				return parseInt(section.id, 10);
+				return parseInt(section?.id, 10);
 			}
 			else
 			{
 				const section = calendarContext.sectionManager.getDefaultSection(calendarType, ownerId);
-				return parseInt(section.id, 10);
+				return parseInt(section?.id, 10);
 			}
-
 		}
-		return SectionManager.newEntrySectionId;
+
+		if (SectionManager.newEntrySectionId)
+		{
+			return SectionManager.newEntrySectionId;
+		}
+
+		return null;
 	}
 
 	static setNewEntrySectionId(sectionId)
@@ -501,19 +506,26 @@ export class SectionManager
 
 	getDefaultSection(calendarType = null, ownerId = null)
 	{
+		let sections = this.getSectionListForEdit();
+
 		calendarType = Type.isString(calendarType) ? calendarType : this.calendarType;
 		ownerId = Type.isNumber(ownerId) ? ownerId : this.ownerId;
 
-		const userSettings = Util.getUserSettings();
-		const key = calendarType + ownerId;
-		const defaultSectionId = userSettings.defaultSections[key] || userSettings.lastUsedSection;
-		const sections = this.getSectionListForEdit();
+		let section;
 
-		let section = sections.find((item) => {
-			return item.type === calendarType
-				&& item.ownerId === ownerId
-				&& item.id === defaultSectionId;
-		});
+		if (calendarType === 'user')
+		{
+			const defaultSectionId = this.meetSectionId;
+			section = sections.find((item) => {
+				return item.type === calendarType
+					&& item.ownerId === ownerId
+					&& item.id === defaultSectionId;
+			});
+		}
+		else
+		{
+			sections = sections.sort((section1, section2) => section1.id - section2.id);
+		}
 
 		if (!section)
 		{
@@ -592,5 +604,33 @@ export class SectionManager
 				}
 			}
 		}
+	}
+
+	static getSectionExternalConnection(section, sectionExternalType): any
+	{
+		const calendarContext = Util.getCalendarContext();
+		const linkList = section.getConnectionLinks();
+
+		let provider = undefined;
+		let connection = undefined;
+		let connectionId = linkList.length
+			? parseInt(linkList[0].id)
+			: parseInt(section.data.CAL_DAV_CON, 10)
+		;
+
+		if (connectionId && calendarContext && calendarContext.syncInterface)
+		{
+			[provider, connection] = calendarContext.syncInterface.getProviderById(connectionId);
+
+			if (
+				connection
+				&& (!linkList.length || connection.getType() === sectionExternalType)
+			)
+			{
+				return connection;
+			}
+		}
+
+		return null;
 	}
 }

@@ -142,8 +142,14 @@ if($REQUEST_METHOD=="POST" && $Update.$Apply.$RestoreDefaults <> '' && check_bit
 
 		foreach($arTypes as $type)
 		{
-			if (!in_array($type['XML_ID'], $_REQUEST['denied_superpose_types']))
+			if (
+				isset($_REQUEST['denied_superpose_types'])
+				&& is_array($_REQUEST['denied_superpose_types'])
+				&& !in_array($type['XML_ID'], $_REQUEST['denied_superpose_types'])
+			)
+			{
 				$SET['denied_superpose_types'][] = $type['XML_ID'];
+			}
 		}
 
 		$CUR_SET = CCalendar::GetSettings(array('getDefaultForEmpty' => false));
@@ -259,7 +265,7 @@ $tabControl->BeginNextTab();
     <tr>
         <td><input name="sync_by_push" type="checkbox" value="Y" id="cal_sync_by_push" <?if($SET['sync_by_push']){echo'checked';}?>/></td>
         <td>
-            <label for="cal_sync_by_push"><?= GetMessage("CAL_SYNC_BY_PUSH")?></label>
+            <label for="cal_sync_by_push"><?= GetMessage("CAL_SYNC_PUSH_ENABLE")?></label>
         </td>
     </tr>
 	<tr>
@@ -325,7 +331,7 @@ BX.ready(function(){
 			<?
 			foreach($arPathes as $pathName)
 			{
-				$val = $SET['pathes'][$siteId][$pathName];
+				$val = $SET['pathes'][$siteId][$pathName] ?? null;
 				if (!isset($val) || empty($val))
 					$val = $SET[$pathName];
 

@@ -1,10 +1,17 @@
 <?php
+
+use Bitrix\Im\Integration\UI\EntitySelector\DepartmentDataFilter;
+
 return [
 	'controllers' => [
 		'value' => [
+			'namespaces' => [
+				'\\Bitrix\\Im\\V2\\Controller' => 'v2',
+			],
 			'defaultNamespace' => '\\Bitrix\\Im\\Controller',
 			'restIntegration' => [
-				'enabled' => true
+				'enabled' => true,
+				'scopes' => ['im.import']
 			]
 		],
 		'readonly' => true,
@@ -27,6 +34,11 @@ return [
 					'id' => 'im.userDataFilter',
 					'entityId' => 'user',
 					'className' => '\\Bitrix\\Im\\Integration\\UI\\EntitySelector\\UserDataFilter',
+				],
+				[
+					'id' => 'im.departmentDataFilter',
+					'entityId' => 'department',
+					'className' => DepartmentDataFilter::class,
 				]
 			],
 			'entities' => [
@@ -42,6 +54,13 @@ return [
 					'provider' => [
 						'moduleId' => 'im',
 						'className' => '\\Bitrix\\Im\\Integration\\UI\\EntitySelector\\ChatProvider',
+					],
+				],
+				[
+					'entityId' => 'im-chat-user',
+					'provider' => [
+						'moduleId' => 'im',
+						'className' => '\\Bitrix\\Im\\Integration\\UI\\EntitySelector\\ChatUserProvider',
 					],
 				],
 				[

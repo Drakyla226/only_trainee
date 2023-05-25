@@ -16,8 +16,13 @@ export class YandexProvider extends CaldavConnection
 			templateClass: 'BX.Calendar.Sync.Interface.YandexTemplate',
 		});
 
+		this.connectionName = Loc.getMessage('CALENDAR_TITLE_YANDEX');
 		this.connectionsSyncInfo = options.connections;
 
-		this.setConnections(options);
+		if (options.connections && options.connections[0] && options.connections[0].syncInfo)
+		{
+			this.setSyncDate(options.connections[0].syncInfo.syncOffset);
+		}
+		this.setConnections();
 	}
 }

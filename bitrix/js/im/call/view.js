@@ -21,6 +21,12 @@
 		Error: 5
 	};
 
+	const RoomState = {
+		None: 1,
+		Speaker: 2,
+		NonSpeaker: 3,
+	}
+
 	var EventName = {
 		onShow: 'onShow',
 		onClose: 'onClose',
@@ -38,6 +44,7 @@
 		onUserClick: 'onUserClick',
 		onUserRename: 'onUserRename',
 		onUserPinned: 'onUserPinned',
+		onDeviceSelectorShow: 'onDeviceSelectorShow',
 	};
 
 	var newUserPosition = 999;
@@ -113,6 +120,7 @@
 			parentContainer: this.container,
 			userModel: localUserModel,
 			allowBackgroundItem: BX.Call.Hardware.BackgroundDialog.isAvailable() && this.isIntranetOrExtranet,
+			allowMaskItem: BX.Call.Hardware.BackgroundDialog.isMaskAvailable() && this.isIntranetOrExtranet,
 			onUserRename: this._onUserRename.bind(this),
 			onUserRenameInputFocus: this._onUserRenameInputFocus.bind(this),
 			onUserRenameInputBlur: this._onUserRenameInputBlur.bind(this),
@@ -231,6 +239,7 @@
 
 		this.uiState = config.uiState || UiState.Calling;
 		this.layout = config.layout || Layouts.Centered;
+		this.roomState = RoomState.None;
 
 		this.eventEmitter = new BX.Event.EventEmitter(this, 'BX.Call.View');
 
@@ -759,6 +768,33 @@
 		});
 	};
 
+	BX.Call.View.prototype.setRoomState = function(roomState)
+	{
+		if (this.roomState === roomState)
+		{
+			return;
+		}
+		this.roomState = roomState;
+		if (this.buttons.microphone)
+		{
+			this.buttons.microphone.setSideIcon(this.getMicrophoneSideIcon(this.roomState));
+		}
+	}
+
+	BX.Call.View.prototype.getMicrophoneSideIcon = function(roomState)
+	{
+		switch (roomState)
+		{
+			case RoomState.Speaker:
+				return 'ellipsis';
+			case RoomState.NonSpeaker:
+				return 'pointer';
+			case RoomState.None:
+			default:
+				return null;
+		}
+	}
+
 	BX.Call.View.prototype.setCurrentPage = function(pageNumber)
 	{
 		if (pageNumber < 1 || pageNumber > this.pagesCount || pageNumber == this.currentPage)
@@ -962,16 +998,16 @@
 	{
 		this.isUserBlockFolded = isUserBlockFolded;
 
+		if (this.elements.userBlock)
+		{
+			this.elements.userBlock.classList.toggle("folded", this.isUserBlockFolded);
+		}
+		if (this.elements.root)
+		{
+			this.elements.root.classList.toggle("bx-messenger-videocall-userblock-folded", this.isUserBlockFolded);
+		}
 		if(this.isUserBlockFolded)
 		{
-			if (this.elements.userBlock)
-			{
-				this.elements.userBlock.classList.add("folded");
-			}
-			if (this.elements.root)
-			{
-				this.elements.root.classList.add("bx-messenger-videocall-userblock-folded");
-			}
 			if (this.buttons.participants && this.layout == Layouts.Centered)
 			{
 				this.buttons.participants.update({
@@ -981,14 +1017,6 @@
 		}
 		else
 		{
-			if (this.elements.userBlock)
-			{
-				this.elements.userBlock.classList.remove("folded");
-			}
-			if (this.elements.root)
-			{
-				this.elements.root.classList.remove("bx-messenger-videocall-userblock-folded");
-			}
 			if (this.buttons.participants)
 			{
 				this.buttons.participants.update({
@@ -1000,7 +1028,7 @@
 
 	BX.Call.View.prototype.addUser = function(userId, state, direction)
 	{
-		userId = parseInt(userId, 10);
+		userId = Number(userId);
 		if(this.users[userId])
 		{
 			return;
@@ -1291,11 +1319,6 @@
 
 	BX.Call.View.prototype.showFloorRequestNotification = function(userId)
 	{
-		if (!this.userData[userId])
-		{
-			return;
-		}
-
 		var userModel = this.userRegistry.get(userId);
 		if (!userModel)
 		{
@@ -1686,6 +1709,7 @@
 			faceImproveEnabled: BX.Call.Util.isDesktop() && typeof (BX.desktop) !== 'undefined' && BX.desktop.cameraSmoothingStatus(),
 			allowFaceImprove: BX.Call.Util.isDesktop() && typeof (BX.desktop) !== 'undefined' && BX.desktop.enableInVersion(64),
 			allowBackground: BX.Call.Hardware.BackgroundDialog.isAvailable() && this.isIntranetOrExtranet,
+			allowMask: BX.Call.Hardware.BackgroundDialog.isMaskAvailable() && this.isIntranetOrExtranet,
 			allowAdvancedSettings: typeof (BXIM) !== 'undefined' && this.isIntranetOrExtranet,
 			showCameraBlock: !this.isButtonBlocked('camera'),
 			events: {
@@ -1698,9 +1722,11 @@
 				onChangeHdVideo: this._onChangeHdVideo.bind(this),
 				onChangeMicAutoParams: this._onChangeMicAutoParams.bind(this),
 				onChangeFaceImprove: this._onChangeFaceImprove.bind(this),
-				onDestroy: function()
-				{
+				onDestroy: function() {
 					this.deviceSelector = null;
+				}.bind(this),
+				onShow: function() {
+					this.eventEmitter.emit(EventName.onDeviceSelectorShow, {})
 				}.bind(this)
 			}
 		});
@@ -2903,8 +2929,10 @@
 						enabled: !this.isMuted,
 						arrowHidden: this.layout == Layouts.Mobile,
 						arrowEnabled: this.isMediaSelectionAllowed(),
+						showPointer: true, //todo
 						blocked: this.isButtonBlocked("microphone"),
 						showLevel: true,
+						sideIcon: this.getMicrophoneSideIcon(this.roomState),
 						onClick: function(e)
 						{
 							this._onMicrophoneButtonClick(e);
@@ -2915,7 +2943,8 @@
 						onMouseOut: function(e)
 						{
 							this._destroyHotKeyHint();
-						}.bind(this)
+						}.bind(this),
+						onSideIconClick: this._onMicrophoneSideIconClick.bind(this),
 					});
 					left.appendChild(this.buttons.microphone.render());
 					break;
@@ -4011,13 +4040,10 @@
 		)
 		{
 			e.preventDefault();
-			this.muteSpeaker(!this.speakerMuted);
-
-			BX.UI.Notification.Center.notify({
-				content: BX.message(this.speakerMuted? 'IM_M_CALL_MUTE_SPEAKERS_OFF': 'IM_M_CALL_MUTE_SPEAKERS_ON'),
-				position: "top-right",
-				autoHideDelay: 3000,
-				closeButton: true
+			this.eventEmitter.emit(EventName.onButtonClick, {
+				buttonName: "toggleSpeaker",
+				speakerMuted: this.speakerMuted,
+				fromHotKey: true,
 			});
 		}
 		else if (
@@ -4252,6 +4278,14 @@
 		this.showDeviceSelector(e.currentTarget);
 	};
 
+	BX.Call.View.prototype._onMicrophoneSideIconClick = function(e)
+	{
+		e.stopPropagation();
+		this.eventEmitter.emit(EventName.onButtonClick, {
+			buttonName: "microphoneSideIcon",
+		});
+	};
+
 	BX.Call.View.prototype._onMicrophoneSelected = function(e)
 	{
 		if(e.data.deviceId === this.microphoneId)
@@ -4296,7 +4330,10 @@
 
 	BX.Call.View.prototype._onSpeakerButtonClick = function(e)
 	{
-		this.muteSpeaker(!this.speakerMuted);
+		this.eventEmitter.emit(EventName.onButtonClick, {
+			buttonName: "toggleSpeaker",
+			speakerMuted: this.speakerMuted
+		});
 	};
 
 	BX.Call.View.prototype._onChangeHdVideo = function(e)
@@ -4716,6 +4753,7 @@
 		this.parentContainer = config.parentContainer;
 		this.userModel = config.userModel;
 		this.allowBackgroundItem = BX.prop.getBoolean(config, "allowBackgroundItem", true);
+		this.allowMaskItem = BX.prop.getBoolean(config, "allowMaskItem", true);
 		this.userModel.subscribe("changed", this._onUserFieldChanged.bind(this));
 		this.incomingVideoConstraints = {
 			width: 0,
@@ -5091,6 +5129,30 @@
 
 		this.elements.container.appendChild(this.elements.removeButton);*/
 
+		this.elements.buttonMask = BX.create("div", {
+			props: {
+				className: "bx-messenger-videocall-user-panel-button mask"
+			},
+			children: [
+				BX.create("div", {
+					props: {
+						className: "bx-messenger-videocall-user-panel-button-icon mask"
+					}
+				}),
+				BX.create("div", {
+					props: {
+						className: "bx-messenger-videocall-user-panel-button-text"
+					},
+					text: BX.message("IM_CALL_CHANGE_MASK")
+				})
+			],
+			events: {
+				click: function()
+				{
+					BX.Call.Hardware.BackgroundDialog.open({'tab': 'mask'});
+				}
+			}
+		});
 		this.elements.buttonBackground = BX.create("div", {
 			props: {
 				className: "bx-messenger-videocall-user-panel-button"
@@ -5196,15 +5258,15 @@
 		}
 
 		// vox low quality temporary workaround
-
-		if (this.incomingVideoConstraints.width >= 320 && this.incomingVideoConstraints.width <= 640)
-		{
-			this.incomingVideoConstraints.width = 640;
-		}
-		if (this.incomingVideoConstraints.height >= 180 && this.incomingVideoConstraints.height <= 360)
-		{
-			this.incomingVideoConstraints.height = 360;
-		}
+		// (disabled to test quality)
+		// if (this.incomingVideoConstraints.width >= 320 && this.incomingVideoConstraints.width <= 640)
+		// {
+		// 	this.incomingVideoConstraints.width = 640;
+		// }
+		// if (this.incomingVideoConstraints.height >= 180 && this.incomingVideoConstraints.height <= 360)
+		// {
+		// 	this.incomingVideoConstraints.height = 360;
+		// }
 
 		this.videoRenderer.requestVideoSize(this.incomingVideoConstraints.width, this.incomingVideoConstraints.height);
 	};
@@ -5223,7 +5285,7 @@
 			}
 		}*/
 
-		if (this.elements.video && this.elements.video.srcObject)
+		/*if (this.elements.video && this.elements.video.srcObject)
 		{
 			if (this.visible)
 			{
@@ -5233,7 +5295,7 @@
 			{
 				this.elements.video.pause();
 			}
-		}
+		}*/
 	};
 
 	CallUser.prototype._onUserFieldChanged = function(event)
@@ -5384,8 +5446,7 @@
 		if (this.userModel.localUser && this.allowBackgroundItem)
 		{
 			menuItems.push({
-				text: BX.message("IM_CALL_CHANGE_BACKGROUND"),
-				//className: (self.current == user.id ?  "menu-popup-item-accept" : "device-selector-empty"),
+				text: (this.allowMaskItem? BX.message("IM_CALL_CHANGE_BG_MASK"): BX.message("IM_CALL_CHANGE_BACKGROUND")),
 				onclick: function()
 				{
 					this.menu.close();
@@ -5398,9 +5459,10 @@
 			return;
 		}
 
+		let rect =  BX.Dom.getRelativePosition(this.elements.buttonMenu, this.parentContainer)
 		this.menu = BX.PopupMenu.create(
 			'call-view-user-menu-' + this.userModel.id,
-			this.elements.buttonMenu,
+			{left: rect.left, top: rect.top, bottom: rect.bottom}, // this.elements.buttonMenu,
 			menuItems,
 			{
 				targetContainer: this.parentContainer,
@@ -5411,9 +5473,7 @@
 				bindOptions: {
 					position: 'bottom'
 				},
-				angle: {
-					position: "top"
-				},
+				angle: true,
 				overlay: {
 					backgroundColor: 'white',
 					opacity: 0
@@ -5537,8 +5597,12 @@
 		BX.clean(this.elements.panel);
 		if (this.userModel.localUser && this.allowBackgroundItem)
 		{
-			if (width > 250)
+			if (width > 300)
 			{
+				if (this.allowMaskItem)
+				{
+					this.elements.panel.appendChild(this.elements.buttonMask);
+				}
 				this.elements.panel.appendChild(this.elements.buttonBackground);
 			}
 			else
@@ -5579,37 +5643,21 @@
 		}
 		if(this.hasVideo()/* && this.visible*/)
 		{
-			if (this.videoRenderer)
+			if (this.visible)
 			{
-
-				//this.elements.video.srcObject = this.videoRenderer.stream;
-				this.videoRenderer.render(this.elements.video);
-				/*if (!this.elements.video.parentElement)
+				if (this.videoRenderer)
 				{
-					this.elements.videoContainer.appendChild(this.elements.video);
-				}*/
+					this.videoRenderer.render(this.elements.video);
+				}
+				else if (this.elements.video.srcObject != this.stream)
+				{
+					this.elements.video.srcObject = this.stream;
+				}
 			}
-			else if (this.elements.video.srcObject != this.stream)
-			{
-				this.elements.video.srcObject = this.stream;
-			}
+
 			BX.remove(this.elements.avatarContainer);
-			if(this.flipVideo)
-			{
-				this.elements.video.classList.add("bx-messenger-videocall-video-flipped");
-			}
-			else
-			{
-				this.elements.video.classList.remove("bx-messenger-videocall-video-flipped");
-			}
-			if (this.userModel.screenState)
-			{
-				this.elements.video.classList.add("bx-messenger-videocall-video-contain");
-			}
-			else
-			{
-				this.elements.video.classList.remove("bx-messenger-videocall-video-contain");
-			}
+			this.elements.video.classList.toggle("bx-messenger-videocall-video-flipped", this.flipVideo);
+			this.elements.video.classList.toggle("bx-messenger-videocall-video-contain", this.userModel.screenState);
 		}
 		else
 		{
@@ -5914,7 +5962,6 @@
 	{
 		this.releaseStream();
 		clearInterval(this.checkAspectInterval);
-		clearInterval(this.checkResolutionInterval);
 	};
 
 	var CallUserMobile = function(config)
@@ -6837,16 +6884,22 @@
 		this.showLevel = (config.showLevel === true);
 		this.level = config.level || 0;
 
+		this.sideIcon = BX.prop.getString(config, "sideIcon", "");
+
 		this.elements = {
 			root: null,
+			iconContainer: null,
 			icon: null,
 			arrow: null,
 			levelMeter: null,
+			pointer: null,
+			ellipsis: null,
 		};
 
 		this.callbacks = {
-			onClick: BX.type.isFunction(config.onClick) ? config.onClick : BX.DoNothing,
-			onArrowClick: BX.type.isFunction(config.onArrowClick) ? config.onArrowClick : BX.DoNothing,
+			onClick: BX.prop.getFunction(config, "onClick", BX.DoNothing),
+			onArrowClick: BX.prop.getFunction(config, "onArrowClick", BX.DoNothing),
+			onSideIconClick: BX.prop.getFunction(config, "onSideIconClick", BX.DoNothing),
 			onMouseOver: BX.prop.getFunction(config, "onMouseOver", BX.DoNothing),
 			onMouseOut: BX.prop.getFunction(config, "onMouseOut", BX.DoNothing),
 		}
@@ -6860,14 +6913,23 @@
 		}
 
 		this.elements.root = BX.create("div", {
-			props: {className: "bx-messenger-videocall-panel-item-with-arrow" + (this.blocked ? " blocked" : "")},
+			props: {
+				id: "bx-messenger-videocall-panel-item-with-arrow-"+this.class,
+				className: "bx-messenger-videocall-panel-item-with-arrow" + (this.blocked ? " blocked" : "")
+			},
 			children: [
 				BX.create("div", {
 					props: {className: "bx-messenger-videocall-panel-item-with-arrow-left"},
 					children: [
-						this.elements.icon = BX.create("div", {
-							props: {className: this.getIconClass()},
+						this.elements.iconContainer = BX.create("div", {
+							props: {className: "bx-messenger-videocall-panel-item-with-arrow-icon-container"},
+							children: [
+								this.elements.icon = BX.create("div", {
+									props: {className: this.getIconClass()},
+								}),
+							]
 						}),
+
 						BX.create("div", {
 							props: {className: "bx-messenger-videocall-panel-text"},
 							text: this.text
@@ -6932,6 +6994,29 @@
 			}));
 		}
 
+		this.elements.ellipsis = BX.create("div", {
+			props: {className: "bx-messenger-videocall-panel-icon-ellipsis"},
+			events: {
+				click: this.callbacks.onSideIconClick
+			}
+		})
+
+		this.elements.pointer = BX.create("div", {
+			props: {className: "bx-messenger-videocall-panel-icon-pointer"},
+			events: {
+				click: this.callbacks.onSideIconClick
+			}
+		})
+
+		if (this.sideIcon == "pointer")
+		{
+			BX.Dom.insertAfter(this.elements.pointer, this.elements.icon);
+		}
+		else if (this.sideIcon == "ellipsis")
+		{
+			BX.Dom.insertAfter(this.elements.ellipsis, this.elements.icon);
+		}
+
 		return this.elements.root;
 	};
 
@@ -6986,6 +7071,27 @@
 			this.elements.root.classList.remove("blocked");
 		}
 	};
+
+	DeviceButton.prototype.setSideIcon = function (sideIcon)
+	{
+		if (this.sideIcon == sideIcon)
+		{
+			return;
+		}
+		this.sideIcon = sideIcon;
+
+		BX.Dom.remove(this.elements.pointer);
+		BX.Dom.remove(this.elements.ellipsis);
+
+		if (this.sideIcon == "pointer")
+		{
+			BX.Dom.insertAfter(this.elements.pointer, this.elements.icon);
+		}
+		else if (this.sideIcon == "ellipsis")
+		{
+			BX.Dom.insertAfter(this.elements.ellipsis, this.elements.icon);
+		}
+	}
 
 	DeviceButton.prototype.showArrow = function()
 	{
@@ -7508,6 +7614,7 @@
 		this.faceImproveEnabled = BX.prop.getBoolean(config, "faceImproveEnabled", false);
 		this.allowFaceImprove = BX.prop.getBoolean(config, "allowFaceImprove", false);
 		this.allowBackground = BX.prop.getBoolean(config, "allowBackground", true);
+		this.allowMask = BX.prop.getBoolean(config, "allowMask", true);
 		this.allowAdvancedSettings = BX.prop.getBoolean(config, "allowAdvancedSettings", false);
 		this.showCameraBlock = BX.prop.getBoolean(config, "showCameraBlock", true);
 
@@ -7556,6 +7663,7 @@
 		onChangeHdVideo: "onChangeHdVideo",
 		onChangeMicAutoParams: "onChangeMicAutoParams",
 		onChangeFaceImprove: "onChangeFaceImprove",
+		onShow: "onShow",
 		onDestroy: "onDestroy",
 	};
 
@@ -7598,6 +7706,8 @@
 			}
 		);
 		this.popup.show();
+
+		this.eventEmitter.emit(DeviceSelector.Events.onShow, {});
 	};
 
 	DeviceSelector.prototype.render = function()
@@ -7709,7 +7819,7 @@
 								children: [
 									BX.create("span", {
 										props: {className: "bx-call-view-device-selector-bottom-item-action"},
-										text: BX.message("IM_M_CALL_BACKGROUND_CHANGE"),
+										text: this.allowMask? BX.message("IM_M_CALL_BG_MASK_CHANGE"): BX.message("IM_M_CALL_BACKGROUND_CHANGE"),
 										events: {
 											click: function() {
 												BX.Call.Hardware.BackgroundDialog.open();
@@ -8454,6 +8564,7 @@
 
 	BX.Call.View.UiState = UiState;
 	BX.Call.View.Event = EventName;
+	BX.Call.View.RoomState = RoomState;
 
 	BX.Call.View.DeviceSelector = DeviceSelector;
 	BX.Call.View.NotificationManager = NotificationManager;

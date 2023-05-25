@@ -583,7 +583,7 @@ export class Main extends EventEmitter
 			const s = d.createElement('script');
 			const r = 1 * new Date(); s.async = 1; s.src = `${u}?${r}`;
 			const h = d.getElementsByTagName('script')[0]; h.parentNode.insertBefore(s, h);
-		})(rootWindow, rootWindow.document, 'https://landing.bitrix24.ru/bitrix/js/crm/form_loader.js', 'b24formFeedBack');
+		})(rootWindow, rootWindow.document, 'https://product-feedback.bitrix24.com/bitrix/js/crm/form_loader.js', 'b24formFeedBack');
 	}
 
 
@@ -841,11 +841,11 @@ export class Main extends EventEmitter
 	/**
 	 * Adds block from server response
 	 * @param {addBlockResponse} res
-	 * @param {boolean} [preventHistory = false]
 	 * @param {boolean} [withoutAnimation = false]
+	 * @param {boolean} [insertBefore = false]
 	 * @return {Promise<T>}
 	 */
-	addBlock(res, preventHistory, withoutAnimation)
+	addBlock(res, withoutAnimation, insertBefore = false)
 	{
 		if (this.lastBlocks)
 		{
@@ -857,39 +857,6 @@ export class Main extends EventEmitter
 
 		return this.loadBlockDeps(res)
 			.then((blockRes) => {
-				if (!Type.isBoolean(preventHistory) || preventHistory === false)
-				{
-					let lid = null;
-					let id = null;
-
-					if (self.currentBlock)
-					{
-						lid = self.currentBlock.lid;
-						id = self.currentBlock.id;
-					}
-
-					if (self.currentArea)
-					{
-						lid = Dom.attr(self.currentArea, 'data-landing');
-						id = Dom.attr(self.currentArea, 'data-site');
-					}
-
-					// Add history entry
-					BX.Landing.History.getInstance().push(
-						new BX.Landing.History.Entry({
-							block: blockRes.id,
-							selector: `#block${blockRes.id}`,
-							command: 'addBlock',
-							undo: '',
-							redo: {
-								currentBlock: id,
-								lid,
-								code: blockRes.manifest.code,
-							},
-						}),
-					);
-				}
-
 				self.currentBlock = null;
 				self.currentArea = null;
 
@@ -934,14 +901,14 @@ export class Main extends EventEmitter
 	 * @param {?boolean} [preventHistory = false]
 	 * @return {Promise<BX.Landing.Block>}
 	 */
-	onAddBlock(blockCode, restoreId, preventHistory)
+	onAddBlock(blockCode, restoreId, preventHistory: ?boolean  = false)
 	{
 		const id = Text.toNumber(restoreId);
 
 		this.hideBlocksPanel();
 
 		return this.showBlockLoader()
-			.then(this.loadBlock(blockCode, id))
+			.then(this.loadBlock(blockCode, id, preventHistory))
 			.then((res) => {
 				return new Promise((resolve) => {
 					setTimeout(() => {
@@ -951,7 +918,7 @@ export class Main extends EventEmitter
 			})
 			.then((res) => {
 				res.manifest.codeOriginal = blockCode;
-				const p = this.addBlock(res, preventHistory, false);
+				const p = this.addBlock(res, false, this.insertBefore);
 				this.insertBefore = false;
 				this.adjustEmptyAreas();
 				void this.hideBlockLoader();
@@ -1134,9 +1101,10 @@ export class Main extends EventEmitter
 	 * Load new block from server
 	 * @param {string} blockCode
 	 * @param {int} [restoreId]
+	 * @param {boolean} [preventHistory = false]
 	 * @returns {Function}
 	 */
-	loadBlock(blockCode, restoreId)
+	loadBlock(blockCode, restoreId, preventHistory)
 	{
 		return () => {
 			let lid = this.id;
@@ -1157,6 +1125,7 @@ export class Main extends EventEmitter
 			let requestBody = {
 				lid,
 				siteId,
+				preventHistory: preventHistory ? 1 : 0,
 			};
 
 			const fields = {
@@ -1166,13 +1135,19 @@ export class Main extends EventEmitter
 				RETURN_CONTENT: 'Y',
 			};
 
+			if (!Type.isBoolean(preventHistory) || preventHistory === false)
+			{
+				// Change history steps
+				BX.Landing.History.getInstance().push();
+			}
+
 			if (!restoreId)
 			{
 				requestBody.fields = fields;
 				return Backend
 					.getInstance()
 					.action('Landing::addBlock', requestBody, {code: blockCode})
-					.then((result) => {
+					.then(result => {
 						if (this.insertBefore)
 						{
 							return Backend
@@ -1191,30 +1166,16 @@ export class Main extends EventEmitter
 					});
 			}
 
-			requestBody = {
-				undeleete: {
-					action: 'Landing::markUndeletedBlock',
-					data: {
-						lid,
-						block: restoreId,
-					},
-				},
-				getContent: {
-					action: 'Block::getContent',
-					data: {
-						block: restoreId,
-						lid,
-						fields,
-						editMode: 1,
-					},
-				},
-			};
-
 			return BX.Landing.Backend.getInstance()
-				.batch('Landing::addBlock', requestBody, {code: blockCode})
+				.action('Block::getContent', {
+					block: restoreId,
+					lid,
+					fields,
+					editMode: 1,
+				})
 				.then((res) => {
-					res.getContent.result.id = restoreId;
-					return res.getContent.result;
+					res.id = restoreId;
+					return res;
 				});
 		};
 	}

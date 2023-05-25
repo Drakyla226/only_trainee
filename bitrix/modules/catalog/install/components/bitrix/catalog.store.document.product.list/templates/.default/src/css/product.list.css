@@ -3,7 +3,7 @@
 }
 
 .symbol_ruble {
-	font-family: 'rubleBitrix', "Helvetica Neue", Helvetica, Arial, sans-serif
+	font-family: 'rubleBitrix', var(--ui-font-family-primary, var(--ui-font-family-helvetica))
 }
 
 .catalog-document-product-set-item-container {
@@ -63,6 +63,9 @@
 .catalog-document-total-wrapper {
 	padding: 20px;
 	background-color: #fff;
+	border-radius: var(--ui-border-radius-md);
+	border-top-right-radius: 0;
+	border-top-left-radius: 0;
 }
 
 .catalog-document-total-discounts {
@@ -111,7 +114,7 @@
 
 .catalog-document-total-box-row-column {
 	color: #333;
-	font: 13px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 13px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 }
 
 .catalog-document-total-box-row .catalog-document-total-box-row-column:first-child {
@@ -131,7 +134,7 @@
 }
 
 .catalog-document-total-box-row-final .catalog-document-total-box-row-column {
-	font-weight: bold;
+	font-weight: var(--ui-font-weight-bold);
 }
 
 /*region promotion*/
@@ -139,7 +142,8 @@
 	margin-bottom: 6px;
 	color: #535c69;
 	text-transform: uppercase;
-	font: 11px/12px 'OpenSans-Semibold', "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font: 11px/12px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 }
 
 .catalog-document-promotional-code-box {
@@ -172,7 +176,7 @@
 .catalog-document-product-control-discounts-field-description {
 	padding-top: 10px;
 	color: #76888a;
-	font: 12px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 12px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 }
 
 .catalog-document-product-refresh-stub {
@@ -199,6 +203,10 @@
 	width: calc(100% - 80px);
 }
 
+.catalog-document-product-list-wrapper .catalog-product-edit[data-name="BARCODE_INFO"] .catalog-product-field-inner {
+	width: 100%;
+}
+
 .catalog-document-product-list-wrapper .catalog-product-field-no-image .catalog-product-field-inner,
 .catalog-document-product-list-wrapper .catalog-product-field-no-image .catalog-store-field-inner {
 	width: 100%;
@@ -214,6 +222,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	border-radius: var(--ui-border-radius-md);
 }
 
 .catalog-document-product-list-add-block .ui-btn + .ui-btn {
@@ -279,6 +288,7 @@ select.catalog-document-product-control-select-field:hover {
 .catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="STORE_TO_AMOUNT"],
 .catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="PURCHASING_PRICE"],
 .catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="BASE_PRICE"],
+.catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="TOTAL_PRICE"],
 .catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="STORE_FROM_AMOUNT"],
 .catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="STORE_TO_RESERVED"],
 .catalog-document-product-list-wrapper .main-grid-row-edit .main-grid-editor-custom[data-name="STORE_FROM_RESERVED"],
@@ -318,7 +328,7 @@ select.catalog-document-product-control-select-field:hover {
 	color: #333;
 	white-space: nowrap;
 	background: #fff;
-	font: 400 14px/16px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 400 14px/16px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 	min-width: 50px;
 	overflow: hidden;
 	-webkit-box-pack: end;
@@ -351,5 +361,9 @@ select.catalog-document-product-control-select-field:hover {
 
 .main-grid-editor-cell-danger {
 	border-color: var(--ui-field-color-danger) !important;
+}
+
+.main-grid-cell .text--danger {
+	color: var(--ui-color-palette-red-70, #e92f2a);
 }
 

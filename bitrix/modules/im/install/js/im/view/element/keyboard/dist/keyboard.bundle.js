@@ -1,4 +1,4 @@
-(function (exports,ui_vue,im_lib_utils,im_lib_logger) {
+(function (exports,ui_designTokens,ui_vue,im_lib_utils,im_lib_logger) {
 	'use strict';
 
 	/**
@@ -9,12 +9,10 @@
 	 * @subpackage im
 	 * @copyright 2001-2019 Bitrix
 	 */
-
 	var _ButtonType = Object.freeze({
 	  newline: 'NEWLINE',
 	  button: 'BUTTON'
 	});
-
 	ui_vue.BitrixVue.component('bx-im-view-element-keyboard', {
 	  /*
 	   * @emits 'click' {action: string, params: Object}
@@ -56,15 +54,12 @@
 	  methods: {
 	    click: function click(button) {
 	      var _this = this;
-
 	      if (this.isBlocked) {
 	        return false;
 	      }
-
 	      if (button.DISABLED && button.DISABLED === 'Y') {
 	        return false;
 	      }
-
 	      if (button.ACTION && button.ACTION_VALUE.toString()) {
 	        this.$emit('click', {
 	          action: 'ACTION',
@@ -91,7 +86,6 @@
 	        if (button.BLOCK === 'Y') {
 	          this.isBlocked = true;
 	        }
-
 	        button.WAIT = 'Y';
 	        this.$emit('click', {
 	          action: 'COMMAND',
@@ -108,26 +102,21 @@
 	          button.WAIT = 'N';
 	        }, 10000);
 	      }
-
 	      return true;
 	    },
 	    getStyles: function getStyles(button) {
 	      var styles = {};
-
 	      if (button.WIDTH) {
 	        styles['width'] = button.WIDTH + 'px';
 	      } else if (button.DISPLAY === 'BLOCK') {
 	        styles['width'] = '225px';
 	      }
-
 	      if (button.BG_COLOR) {
 	        styles['backgroundColor'] = button.BG_COLOR;
 	      }
-
 	      if (button.TEXT_COLOR) {
 	        styles['color'] = button.TEXT_COLOR;
 	      }
-
 	      return styles;
 	    },
 	    prepareButtons: function prepareButtons(buttons) {
@@ -135,20 +124,17 @@
 	        if (!button.CONTEXT) {
 	          return true;
 	        }
-
 	        if (im_lib_utils.Utils.platform.isBitrixMobile() && button.CONTEXT === 'DESKTOP') {
 	          return false;
 	        }
-
 	        if (!im_lib_utils.Utils.platform.isBitrixMobile() && button.CONTEXT === 'MOBILE') {
-	          return false;
-	        } // TODO activate this buttons
-
-
-	        if (!im_lib_utils.Utils.platform.isBitrixMobile() && (button.ACTION === 'DIALOG' || button.ACTION === 'CALL')) {
 	          return false;
 	        }
 
+	        // TODO activate this buttons
+	        if (!im_lib_utils.Utils.platform.isBitrixMobile() && (button.ACTION === 'DIALOG' || button.ACTION === 'CALL')) {
+	          return false;
+	        }
 	        return true;
 	      });
 	    }
@@ -161,5 +147,5 @@
 	  template: "\n\t\t<div :class=\"['bx-im-element-keyboard', {'bx-im-element-keyboard-mobile': isMobile}]\">\n\t\t\t<template v-for=\"(button, index) in localButtons\">\n\t\t\t\t<div v-if=\"button.TYPE === ButtonType.newline\" class=\"bx-im-element-keyboard-button-separator\"></div>\n\t\t\t\t<span v-else-if=\"button.TYPE === ButtonType.button\" :class=\"[\n\t\t\t\t\t'bx-im-element-keyboard-button', \n\t\t\t\t\t'bx-im-element-keyboard-button-'+button.DISPLAY.toLowerCase(), \n\t\t\t\t\t{\n\t\t\t\t\t\t'bx-im-element-keyboard-button-disabled': isBlocked || button.DISABLED === 'Y',\n\t\t\t\t\t\t'bx-im-element-keyboard-button-progress': button.WAIT === 'Y',\n\t\t\t\t\t}\n\t\t\t\t]\" @click=\"click(button)\">\n\t\t\t\t\t<span class=\"bx-im-element-keyboard-button-text\" :style=\"getStyles(button)\">{{button.TEXT}}</span>\n\t\t\t\t</span>\n\t\t\t</template>\n\t\t</div>\n\t"
 	});
 
-}((this.window = this.window || {}),BX,BX.Messenger.Lib,BX.Messenger.Lib));
+}((this.window = this.window || {}),BX,BX,BX.Messenger.Lib,BX.Messenger.Lib));
 //# sourceMappingURL=keyboard.bundle.js.map

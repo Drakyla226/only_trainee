@@ -726,6 +726,7 @@ class CBitrixComponent
 				"Cannot find '#NAME#' template with page '#PAGE#'"
 			));
 		}
+		$this->__template->__component = null;
 	}
 	/**
 	 * Function initializes the template of the component. Returns true on success.
@@ -1108,7 +1109,7 @@ class CBitrixComponent
 		);
 		if ($this->__template)
 		{
-			$arCache["templateCachedData"] = & $this->__template->getCachedData();
+			$arCache["templateCachedData"] = $this->__template->getCachedData();
 			if ($this->__component_epilog)
 				$arCache["templateCachedData"]["component_epilog"] = $this->__component_epilog;
 		}

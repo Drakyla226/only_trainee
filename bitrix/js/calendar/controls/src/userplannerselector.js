@@ -2,18 +2,16 @@ import {Type, Dom, Event, Runtime, Tag, Loc, Text} from 'main.core';
 import {Util} from 'calendar.util';
 import {EventEmitter, BaseEvent} from 'main.core.events';
 import {Planner} from "calendar.planner";
-import {Popup, MenuManager} from 'main.popup';
 import {Dialog as EntitySelectorDialog} from 'ui.entity-selector';
 import { ControlButton } from 'intranet.control-button';
-import {AttendeesList, Location} from "calendar.controls";
+import {AttendeesList} from "calendar.controls";
 
 export class UserPlannerSelector extends EventEmitter
 {
 	static VIEW_MODE = 'view';
 	static EDIT_MODE = 'edit';
-	static MAX_USER_COUNT = 8; // 8
-	static MAX_USER_COUNT_DISPLAY = 10; // 10
-	static PLANNER_WIDTH = 450;
+	static MAX_USER_COUNT_DISPLAY = 8;
+	static PLANNER_WIDTH = 550;
 	zIndex = 4200;
 	readOnlyMode = true;
 	meetingNotifyValue = true;
@@ -22,6 +20,7 @@ export class UserPlannerSelector extends EventEmitter
 	inlineEditMode = UserPlannerSelector.VIEW_MODE;
 	prevUserList = [];
 	loadedAccessibilityData = {};
+	REFRESH_PLANNER_DELAY = 500;
 
 	constructor(params = {})
 	{
@@ -44,7 +43,7 @@ export class UserPlannerSelector extends EventEmitter
 			hideGuestsWrap: params.hideGuestsWrap,
 			hideGuestsIcon: params.hideGuestsWrap.querySelector('.calendar-hide-members-icon-hidden')
 		};
-		this.refreshPlanner = Runtime.debounce(this.refreshPlannerState, 100, this);
+		this.refreshPlannerStateDebounce = Runtime.debounce(this.refreshPlannerState, this.REFRESH_PLANNER_DELAY, this);
 
 		if (Type.isBoolean(params.readOnlyMode))
 		{
@@ -153,10 +152,6 @@ export class UserPlannerSelector extends EventEmitter
 
 		this.entry = entry;
 		this.entryId = this.entry.id;
-		if (this.attendeesEntityList.length > 1 && !viewMode)
-		{
-			this.showPlanner();
-		}
 
 		this.setEntityList(this.attendeesEntityList);
 		this.setInformValue(notify);
@@ -166,10 +161,34 @@ export class UserPlannerSelector extends EventEmitter
 		{
 			this.displayAttendees(attendees);
 		}
-		this.refreshPlanner();
+		this.refreshPlannerStateDebounce();
 
+		let dateTime = this.getDateTime();
+		if (dateTime)
+		{
+			this.planner.updateSelector(dateTime.from, dateTime.to, dateTime.fullDay);
+		}
 
-		if (BX?.Intranet?.ControlButton
+		if (
+			this.entryId
+			&& this.entry
+			&& this.entry.data['PARENT_ID']
+			&& this.entry.data['EVENT_TYPE'] === '#shared#'
+			&& this.entry.getCurrentStatus() !== false
+		)
+		{
+			Dom.clean(this.DOM.videocallWrap);
+			Dom.removeClass(this.DOM.videocallWrap, 'calendar-videocall-hidden');
+
+			this.conferenceButton = Tag.render`
+				<div class="calendar-text-link --gray">${Loc.getMessage('EC_CONFERENCE_START')}</div>
+			`;
+			Event.bind(this.conferenceButton, 'click', this.handleVideoconferenceButtonClick.bind(this));
+
+			Dom.append(this.conferenceButton, this.DOM.videocallWrap);
+		}
+		else if (
+			BX?.Intranet?.ControlButton
 			&& this.DOM.videocallWrap
 			&& this.entryId
 			&& this.entry.getCurrentStatus() !== false
@@ -209,6 +228,9 @@ export class UserPlannerSelector extends EventEmitter
 	handleUserSelectorChanges()
 	{
 		this.showPlanner();
+		const dateTime = this.getDateTime();
+		this.planner.updateSelector(dateTime.from, dateTime.to, dateTime.fullDay);
+
 		this.setEntityList(this.userSelectorDialog.getSelectedItems().map((item) => {
 			return {
 				entityId: item.entityId,
@@ -216,7 +238,7 @@ export class UserPlannerSelector extends EventEmitter
 				entityType: item.entityType,
 			}}));
 
-		this.refreshPlanner();
+		this.refreshPlannerStateDebounce();
 		this.emit('onUserCodesChange');
 	}
 
@@ -259,11 +281,10 @@ export class UserPlannerSelector extends EventEmitter
 	{
 		const dateTime = this.getDateTime();
 		const entityList = this.getEntityList();
+		this.planner.updateScaleLimitsFromEntry(dateTime.from, dateTime.to);
 
 		this.runPlannerDataRequest({
 			entityList: entityList,
-			from: Util.formatDate(dateTime.from.getTime() - Util.getDayLength() * 3),
-			to: Util.formatDate(dateTime.to.getTime() + Util.getDayLength() * 10),
 			timezone: dateTime.timezoneFrom,
 			location: this.getLocationValue(),
 			entryId: this.entryId
@@ -293,6 +314,15 @@ export class UserPlannerSelector extends EventEmitter
 					const from = this.getDateTime().from;
 					const to = this.getDateTime().to;
 					const preparedData = this.preparedDataAccessibility(response.data.accessibility[this.ownerId]);
+
+					if (!this.planner.currentFromDate)
+					{
+						this.planner.currentFromDate = from;
+					}
+					if (!this.planner.currentToDate)
+					{
+						this.planner.currentToDate = to;
+					}
 
 					const item = this.planner.checkTimePeriod(from, to, preparedData);
 					if (
@@ -324,6 +354,7 @@ export class UserPlannerSelector extends EventEmitter
 					AVATAR: item.avatar,
 					DISPLAY_NAME: item.name,
 					EMAIL_USER: item.emailUser,
+					SHARING_USER: item.sharingUser,
 					STATUS: (item.status || '').toUpperCase(),
 					URL: item.url
 				};
@@ -337,16 +368,11 @@ export class UserPlannerSelector extends EventEmitter
 			let dateTime = this.getDateTime();
 			this.loadPlannerData({
 				entityList: this.getEntityList(),
-				from: Util.formatDate(dateTime.from.getTime() - Util.getDayLength() * 3),
-				to: Util.formatDate(dateTime.to.getTime() + Util.getDayLength() * 10),
 				timezone: dateTime.timezoneFrom,
 				location: this.getLocationValue(),
 				entryId: this.entryId,
 				prevUserList: this.prevUserList
-			})
-				.then((response) => {
-					this.displayAttendees(this.prepareAttendeesForDisplay(response.data.entries || []));
-				});
+			});
 		}
 	}
 
@@ -356,43 +382,34 @@ export class UserPlannerSelector extends EventEmitter
 		return new Promise((resolve) => {
 			this.runPlannerDataRequest(params)
 				.then((response) => {
-						for (let id in response.data.accessibility)
+					for (let id in response.data.accessibility)
+					{
+						if (response.data.accessibility.hasOwnProperty(id))
 						{
-							if (response.data.accessibility.hasOwnProperty(id))
-							{
-								this.loadedAccessibilityData[id] = response.data.accessibility[id];
-							}
+							this.loadedAccessibilityData[id] = response.data.accessibility[id];
 						}
+					}
 
-						if (Type.isArray(response.data.entries))
-						{
-							response.data.entries.forEach((entry) => {
-								if (entry.type === 'user' && !this.prevUserList.includes(parseInt(entry.id)))
-								{
-									this.prevUserList.push(parseInt(entry.id));
-								}
-							});
-						}
-
-						this.planner.hideLoader();
-						let dateTime = this.getDateTime();
-						this.planner.update(
-							response.data.entries,
-							this.loadedAccessibilityData
-						);
-						this.planner.updateSelector(
-							dateTime.from,
-							dateTime.to,
-							dateTime.fullDay,
+					if (Type.isArray(response.data.entries))
+					{
+						response.data.entries.forEach((entry) => {
+							if (entry.type === 'user' && !this.prevUserList.includes(parseInt(entry.id)))
 							{
-								focus: params.focusSelector !== false
+								this.prevUserList.push(parseInt(entry.id));
 							}
-						);
+						});
+					}
 
-						resolve(response);
-					},
-					(response) => {resolve(response);}
-				);
+					this.planner.hideLoader();
+					this.planner.update(
+						response.data.entries,
+						this.loadedAccessibilityData
+					);
+
+					resolve(response);
+				},
+				(response) => {resolve(response);}
+			);
 		});
 	}
 
@@ -405,8 +422,8 @@ export class UserPlannerSelector extends EventEmitter
 				ownerId: this.ownerId,
 				type: this.type,
 				entityList: params.entityList || [],
-				dateFrom: params.from || '',
-				dateTo: params.to || '',
+				dateFrom: Util.formatDate(this.planner.scaleDateFrom),
+				dateTo: Util.formatDate(this.planner.scaleDateTo),
 				timezone: params.timezone || '',
 				location: params.location || '',
 				entries: params.entrieIds || false,
@@ -418,9 +435,23 @@ export class UserPlannerSelector extends EventEmitter
 	setDateTime(dateTime, updatePlaner = false)
 	{
 		this.dateTime = dateTime;
+		this.planner.currentFromDate = dateTime.from;
+		this.planner.currentToDate = dateTime.to;
 		if (this.planner && updatePlaner)
 		{
 			this.planner.updateSelector(dateTime.from, dateTime.to, dateTime.fullDay);
+		}
+		else if (this.planner)
+		{
+			let fromHours = parseInt(dateTime.from.getHours()) + Math.floor(dateTime.from.getMinutes() / 60);
+			let toHours = parseInt(dateTime.to.getHours()) + Math.floor(dateTime.to.getMinutes() / 60);
+			if (
+				(fromHours !== 0 && fromHours <= this.planner.shownScaleTimeFrom)
+				|| (toHours !== 0  && toHours !== 23 && toHours + 1 >= this.planner.shownScaleTimeTo)
+			)
+			{
+				this.planner.updateSelector(dateTime.from, dateTime.to, dateTime.fullDay);
+			}
 		}
 	}
 
@@ -451,14 +482,9 @@ export class UserPlannerSelector extends EventEmitter
 			}
 		}));
 
-		let userLength = this.attendeeList.accepted.length;
+		const userLength = Math.min(this.attendeeList.accepted.length, UserPlannerSelector.MAX_USER_COUNT_DISPLAY);
 		if (userLength > 0)
 		{
-			if (userLength > UserPlannerSelector.MAX_USER_COUNT_DISPLAY)
-			{
-				userLength = UserPlannerSelector.MAX_USER_COUNT;
-			}
-
 			for (let i = 0; i < userLength; i++)
 			{
 				this.attendeeList.accepted[i].shown = true;
@@ -475,7 +501,7 @@ export class UserPlannerSelector extends EventEmitter
 			this.DOM.attendeesLabel.innerHTML = Text.encode(Loc.getMessage('EC_ATTENDEES_LABEL_ONE'));
 		}
 
-		if (userLength < attendees.length)
+		if (attendees.length > 1)
 		{
 			this.DOM.moreLink.innerHTML = Text.encode(Loc.getMessage('EC_ATTENDEES_ALL_COUNT').replace('#COUNT#', attendees.length));
 			Dom.show(this.DOM.moreLink);
@@ -485,9 +511,11 @@ export class UserPlannerSelector extends EventEmitter
 			Dom.hide(this.DOM.moreLink);
 		}
 
-		if (this.hasExternalEmailUsers(attendees)
+		if (
+			this.hasExternalEmailUsers(attendees)
 			&& this.isPlannerDisplayed()
-			&& !this.isReadOnly())
+			&& !this.isReadOnly()
+		)
 		{
 			this.showHideGuestsOption();
 		}
@@ -504,7 +532,16 @@ export class UserPlannerSelector extends EventEmitter
 			img = user.AVATAR || user.SMALL_AVATAR;
 		if (!img || img === "/bitrix/images/1.gif")
 		{
-			imageNode = Tag.render`<div title="${Text.encode(user.DISPLAY_NAME)}" class="ui-icon ${(user.EMAIL_USER ? 'ui-icon-common-user-mail' : 'ui-icon-common-user')}"><i></i></div>`;
+			let defaultAvatarClass = 'ui-icon-common-user';
+			if (user.EMAIL_USER)
+			{
+				defaultAvatarClass = 'ui-icon-common-user-mail';
+			}
+			if (user.SHARING_USER)
+			{
+				defaultAvatarClass += ' ui-icon-common-user-sharing';
+			}
+			imageNode = Tag.render`<div title="${Text.encode(user.DISPLAY_NAME)}" class="ui-icon ${defaultAvatarClass}"><i></i></div>`;
 		}
 		else
 		{
@@ -513,7 +550,7 @@ export class UserPlannerSelector extends EventEmitter
 				title="${Text.encode(user.DISPLAY_NAME)}"
 				class="calendar-member"
 				id="simple_popup_${parseInt(user.ID)}"
-				src="${img}"
+				src="${encodeURI(img)}"
 			>`;
 		}
 		return imageNode;
@@ -645,8 +682,6 @@ export class UserPlannerSelector extends EventEmitter
 				const dateTime = this.getDateTime();
 				this.loadPlannerData({
 					entityList: this.getEntityList(),
-					from: Util.formatDate(data.dateFrom),
-					to: Util.formatDate(data.dateTo),
 					timezone: dateTime.timezoneFrom,
 					location: this.getLocationValue(),
 					entryId: this.entryId,
@@ -654,5 +689,37 @@ export class UserPlannerSelector extends EventEmitter
 				});
 			}
 		}
+	}
+
+	handleVideoconferenceButtonClick()
+	{
+		this.getConferenceChatId();
+	}
+
+	getConferenceChatId()
+	{
+		return this.BX.ajax.runAction('calendar.api.calendarajax.getConferenceChatId', {
+			data: {
+				eventId: this.entry.data['PARENT_ID'],
+			},
+		}).then(
+			(response) => {
+				if (top.window.BXIM && response.data && response.data.chatId)
+				{
+					top.BXIM.openMessenger('chat' + parseInt(response.data.chatId));
+
+					return null;
+				}
+
+				alert(Loc.getMessage('EC_CONFERENCE_ERROR'));
+
+				return null;
+			},
+			(response) => {
+				alert(Loc.getMessage('EC_CONFERENCE_ERROR'));
+
+				return null;
+			}
+		);
 	}
 }

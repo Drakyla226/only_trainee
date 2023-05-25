@@ -1,15 +1,21 @@
 <?php
+
 namespace Bitrix\Bizproc\Automation\Engine;
 
+use Bitrix\Bizproc;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Automation\Target\BaseTarget;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Bizproc\Runtime\Starter\Context;
 
 Loc::loadMessages(__FILE__);
 
 class Runtime
 {
+	use Bizproc\Debugger\Mixins\WriterDebugTrack;
+
 	protected $target;
 	protected static $startedTemplates = [];
 
@@ -37,30 +43,73 @@ class Runtime
 	{
 		$documentType = $this->getTarget()->getDocumentType();
 		$documentId = $this->getTarget()->getDocumentId();
-		$ids = WorkflowInstanceTable::getList(array(
-			'select' => array('ID'),
-			'filter' => array(
-				'=MODULE_ID'             => $documentType[0],
-				'=ENTITY'                => $documentType[1],
-				'=DOCUMENT_ID'           => $documentId,
-				'=STARTED_EVENT_TYPE' => \CBPDocumentEventType::Automation,
+		$ids = WorkflowInstanceTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=MODULE_ID' => $documentType[0],
+				'=ENTITY' => $documentType[1],
+				'=DOCUMENT_ID' => $documentId,
+				'@STARTED_EVENT_TYPE' => [\CBPDocumentEventType::Automation, \CBPDocumentEventType::Debug],
 				'=TEMPLATE.DOCUMENT_TYPE' => $documentType[2],
-			)
-		))->fetchAll();
+			],
+		])->fetchAll();
 
 		return array_column($ids, 'ID');
 	}
 
-	protected function runTemplates($documentStatus)
+	public function getCurrentWorkflowId(): ?string
 	{
-		$template = new Template($this->getTarget()->getDocumentType(), $documentStatus);
+		$documentType = $this->getTarget()->getDocumentType();
+
+		$template = new Template(
+			$documentType,
+			$this->getTarget()->getDocumentStatus()
+		);
 
 		if ($template->getId() > 0)
 		{
-			$errors = array();
-			$trigger = $this->getTarget()->getAppliedTrigger();
+			$filter = [
+				'=DOCUMENT_ID' => $this->getTarget()->getDocumentId(),
+				'=TEMPLATE.ID' => $template->getId(),
+			];
 
-			if (!$template->isExternalModified() && !$trigger && !$template->getRobots())
+			if ($this->isDebug())
+			{
+				$session = Bizproc\Debugger\Session\Manager::getActiveSession();
+				$filter['@ID'] = $session->getWorkflowContexts()->getWorkflowIdList();
+			}
+
+			$row = WorkflowStateTable::getList([
+				'select' => ['ID'],
+				'filter' => $filter,
+				'order' => ['STARTED' => 'DESC'],
+				'limit' => 1,
+			])->fetch();
+
+			return $row ? $row['ID'] : null;
+		}
+
+		return null;
+	}
+
+	protected function runTemplates($documentStatus, string $preGeneratedWorkflowId = null)
+	{
+		$isDebug = $this->isDebug();
+		$template = new Template($this->getTarget()->getDocumentType(), $documentStatus);
+		$workflowId = null;
+
+		if ($template->getId() > 0)
+		{
+			$errors = [];
+			$trigger = $this->getTarget()->getAppliedTrigger();
+			$this->getTarget()->setAppliedTrigger([]);
+
+			if (
+				!$template->isExternalModified()
+				&& !$isDebug
+				&& !$trigger
+				&& !$template->getRobots()
+			)
 			{
 				return false;
 			}
@@ -71,10 +120,12 @@ class Runtime
 
 			$startParameters = [
 				\CBPDocument::PARAM_TAGRET_USER => null, //Started by System
-				\CBPDocument::PARAM_USE_FORCED_TRACKING => !$template->isExternalModified(),
+				\CBPDocument::PARAM_USE_FORCED_TRACKING => $isDebug || !$template->isExternalModified(),
 				\CBPDocument::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT => true,
 				\CBPDocument::PARAM_DOCUMENT_TYPE => $documentType,
-				\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE => \CBPDocumentEventType::Automation,
+				\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE =>
+					$isDebug ? \CBPDocumentEventType::Debug : \CBPDocumentEventType::Automation,
+				\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID => $preGeneratedWorkflowId ?? null,
 			];
 
 			if (isset($trigger['RETURN']) && is_array($trigger['RETURN']))
@@ -91,25 +142,31 @@ class Runtime
 			}
 
 			$this->setStarted($documentType[2], $documentId, $documentStatus);
-			$workflowId = \CBPDocument::startWorkflow(
-				$template->getId(),
-				$documentComplexId,
-				$startParameters,
-				$errors
-			);
+
+			$args = [$template->getId(), $documentComplexId, $startParameters, $errors];
+
+			if ($isDebug)
+			{
+				$session = Bizproc\Debugger\Session\Manager::getActiveSession();
+				$session->addWorkflowContext($preGeneratedWorkflowId, $template);
+			}
+
+			$workflowId = $isDebug
+				? \CBPDocument::startDebugWorkflow(...$args)
+				: \CBPDocument::startWorkflow(...$args)
+			;
 
 			if (!$errors && $workflowId)
 			{
 				if ($trigger)
 				{
 					$this->writeTriggerTracking($workflowId, $trigger);
+					$this->writeTriggerAnalytics($documentComplexId, $trigger);
 				}
-
-				//not today
-				//$this->writeAnalytics($documentComplexId, $documentStatus, $trigger);
 			}
 		}
-		return true;
+
+		return $workflowId;
 	}
 
 	protected function writeTriggerTracking($workflowId, $trigger)
@@ -125,6 +182,15 @@ class Runtime
 			'',
 			$trigger['ID']
 		);
+	}
+
+	protected function writeTriggerAnalytics(array $documentId, array $trigger)
+	{
+		$analyticsService = \CBPRuntime::getRuntime(true)->getAnalyticsService();
+		if ($analyticsService->isEnabled())
+		{
+			$analyticsService->write($documentId, 'trigger_run', $trigger['CODE']);
+		}
 	}
 
 	protected function stopTemplates()
@@ -146,27 +212,70 @@ class Runtime
 
 	/**
 	 * Document creation handler.
-	 * @throws InvalidOperationException
+	 *
 	 * @return void
+	 * @throws InvalidOperationException
 	 */
-	public function onDocumentAdd()
+	public function onDocumentAdd(?Context $context = null)
 	{
-		$status = $this->getTarget()->getDocumentStatus();
-		$documentType = $this->getTarget()->getDocumentType()[2];
-		$documentId = $this->getTarget()->getDocumentId();
+		$preGeneratedWorkflowId = \CBPRuntime::generateWorkflowId();
+		$isManualAdd = $context && $context->isManualOperation();
 
-		if ($status && !$this->isStarted($documentType, $documentId, $status))
+		if (!$isManualAdd && $this->isDebug(true))
 		{
-			$this->runTemplates($status);
+			$debugSession = Bizproc\Debugger\Session\Manager::getActiveSession();
+
+			if ($debugSession->isBeforeDebuggerStartState())
+			{
+				$debugSession->addDocument($this->getTarget()->getDocumentId());
+
+				return;
+			}
+
+			$debugSession->addWorkflowContext($preGeneratedWorkflowId, []);
+
+			$status = $this->getTarget()->getDocumentStatus();
+			$this->writeSessionLegendTrack($preGeneratedWorkflowId);
+			$this->writeStatusTracking($preGeneratedWorkflowId, $status);
+			$this->writeCategoryTracking($preGeneratedWorkflowId);
 		}
+
+		$this->runDocumentStatus($preGeneratedWorkflowId);
 	}
 
 	/**
 	 * Document status changed handler.
-	 * @throws InvalidOperationException
+	 *
 	 * @return void
+	 * @throws InvalidOperationException
 	 */
 	public function onDocumentStatusChanged()
+	{
+		$preGeneratedWorkflowId = \CBPRuntime::generateWorkflowId();
+		if ($this->isDebug())
+		{
+			$debugSession = Bizproc\Debugger\Session\Manager::getActiveSession();
+
+			if ($debugSession->isBeforeDebuggerStartState())
+			{
+				return;
+			}
+
+			$debugSession->addWorkflowContext($preGeneratedWorkflowId, []);
+
+			$status = $this->getTarget()->getDocumentStatus();
+			$documentType = $this->getTarget()->getDocumentType()[2];
+			$documentId = $this->getTarget()->getDocumentId();
+			if (!$this->isStarted($documentType, $documentId, $status))
+			{
+				$this->onDocumentStatusChangedDebug($preGeneratedWorkflowId, $status);
+			}
+		}
+
+		$this->runDocumentStatus($preGeneratedWorkflowId);
+	}
+
+	public function runDocumentStatus(string $preGeneratedWorkflowId = null): ?string
 	{
 		$status = $this->getTarget()->getDocumentStatus();
 		$documentType = $this->getTarget()->getDocumentType()[2];
@@ -175,12 +284,58 @@ class Runtime
 		if ($status && !$this->isStarted($documentType, $documentId, $status))
 		{
 			$this->stopTemplates();
-			$this->runTemplates($status);
+
+			return $this->runTemplates($status, $preGeneratedWorkflowId);
 		}
+
+		return null;
+	}
+
+	protected function isDebug(bool $isOnDocumentAdd = false): bool
+	{
+		$debugSession = Bizproc\Debugger\Session\Manager::getActiveSession();
+		if (!$debugSession)
+		{
+			return false;
+		}
+
+		$documentType = $this->getTarget()->getDocumentType();
+		if (!$debugSession->isStartedInDocumentType($documentType))
+		{
+			return false;
+		}
+
+		$documentId = $this->getTarget()->getComplexDocumentId();
+		if (!$isOnDocumentAdd || $debugSession->isExperimentalMode() || $debugSession->isFixed())
+		{
+			return $debugSession->isSessionDocument($documentId);
+		}
+
+		$documentCategoryId = $this->getTarget()->getDocumentCategory();
+
+		return $documentCategoryId === $debugSession->getDocumentCategoryId();
+	}
+
+	protected function onDocumentStatusChangedDebug(?string $workflowId, string $status)
+	{
+		if ($workflowId)
+		{
+			$trigger = $this->getTarget()->getAppliedTrigger();
+			if ($trigger)
+			{
+				$trigger['APPLIED_RULE_LOG'] = $this->getTarget()->getAppliedTriggerConditionResults();
+				$this->writeAppliedTriggerTrack($workflowId, $trigger);
+			}
+
+			$this->writeStatusTracking($workflowId, $status);
+		}
+
+		Bizproc\Debugger\Listener::getInstance()->onDocumentStatusChanged($status);
 	}
 
 	/**
 	 * Document moving handler.
+	 *
 	 * @return void
 	 */
 	public function onDocumentMove()
@@ -188,34 +343,64 @@ class Runtime
 		$this->stopTemplates();
 	}
 
+	public function onFieldsChanged(array $changes)
+	{
+		if ($this->isDebug() && $changes)
+		{
+			$debugSession = Bizproc\Debugger\Session\Manager::getActiveSession();
+			if ($debugSession->isBeforeDebuggerStartState())
+			{
+				return;
+			}
+
+			$target = $this->getTarget();
+
+			if ($target->getDocumentCategoryCode() && in_array($target->getDocumentCategoryCode(), $changes))
+			{
+				$session = Bizproc\Debugger\Session\Manager::getActiveSession();
+				$sessionWorkflows = $session->getWorkflowContexts()->getWorkflowIdList();
+				if (!empty($sessionWorkflows))
+				{
+					$lastWorkflowId = $sessionWorkflows[array_key_last($sessionWorkflows)];
+					$this->writeCategoryTracking($lastWorkflowId);
+				}
+			}
+
+			Bizproc\Debugger\Listener::getInstance()->onDocumentUpdated($changes);
+		}
+	}
+
 	private function setStarted($documentType, $documentId, $status)
 	{
-		$key = $documentType .'_'. $documentId;
-		static::$startedTemplates[$key] = (string) $status;
+		$key = $documentType . '_' . $documentId;
+		static::$startedTemplates[$key] = (string)$status;
 		return $this;
 	}
 
 	private function isStarted($documentType, $documentId, $status)
 	{
-		$key = $documentType .'_'. $documentId;
+		$key = $documentType . '_' . $documentId;
 		return (
 			isset(static::$startedTemplates[$key])
-			&& (string) $status === static::$startedTemplates[$key]
+			&& (string)$status === static::$startedTemplates[$key]
 		);
 	}
 
-	private function writeAnalytics($documentComplexId, $documentStatus, $trigger)
+	private function writeStatusTracking($workflowId, string $status): ?int
 	{
-		$analytics = \CBPRuntime::getRuntime(true)->getAnalyticsService();
+		$statuses = $this->getTarget()->getDocumentStatusList();
+		$status = $statuses[$status] ?? [];
 
-		if ($analytics && $analytics->isEnabled())
-		{
-			$analytics->write($documentComplexId, 'automation_run', $documentStatus);
+		return $this->writeDocumentStatusTrack($workflowId, $status);
+	}
 
-			if ($trigger)
-			{
-				$analytics->write($documentComplexId, 'trigger_applied', $trigger['CODE']);
-			}
-		}
+	private function writeCategoryTracking($workflowId): ?int
+	{
+		$documentService = \CBPRuntime::GetRuntime(true)->getDocumentService();
+		$categories = $documentService->getDocumentCategories($this->target->getDocumentType());
+
+		$categoryName = $categories[$this->target->getDocumentCategory()]['name'];
+
+		return $this->writeDocumentCategoryTrack($workflowId, $categoryName);
 	}
 }

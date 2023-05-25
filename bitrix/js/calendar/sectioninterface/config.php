@@ -11,11 +11,14 @@ return [
 	],
 	'js' => 'dist/sectioninterface.bundle.js',
 	'rel' => [
+		'calendar.sync.interface',
 		'main.popup',
 		'main.core.events',
 		'ui.entity-selector',
 		'main.core',
 		'calendar.util',
+		'calendar.sectionmanager',
+		'ui.dialogs.messagebox',
 	],
 	'skip_core' => false,
 	'lang' => '/bitrix/modules/calendar/classes/general/calendar_js.php'

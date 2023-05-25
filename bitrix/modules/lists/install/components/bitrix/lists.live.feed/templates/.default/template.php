@@ -15,7 +15,18 @@
 use Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Page\Asset;
 
-CJSCore::Init(['lists', 'ui.design-tokens']);
+\Bitrix\Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
+	'lists',
+]);
+
+Asset::getInstance()->addJs('/bitrix/components/bitrix/ui.tile.selector/templates/.default/script.js');
+Asset::getInstance()->addCss('/bitrix/components/bitrix/ui.tile.selector/templates/.default/style.css');
+Asset::getInstance()->addJs('/bitrix/components/bitrix/intranet.user.selector.new/templates/.default/users.js');
+Asset::getInstance()->addCss('/bitrix/components/bitrix/intranet.user.selector.new/templates/.default/style.css');
+Asset::getInstance()->addJs('/bitrix/components/bitrix/crm.field.element/templates/main.edit/script.js');
+Asset::getInstance()->addJs('/bitrix/components/bitrix/main.user.selector/templates/.default/script.js');
 
 Asset::getInstance()->addJs($this->GetFolder().'/right.js');
 ?>
@@ -47,7 +58,7 @@ Asset::getInstance()->addJs($this->GetFolder().'/right.js');
 		BX.Lists['LiveFeedClass_<?= $arResult['RAND_STRING']?>'] = new BX.Lists.LiveFeedClass({
 			socnetGroupId: '<?= $arResult['SOCNET_GROUP_ID'] ?>',
 			randomString: '<?= $arResult['RAND_STRING'] ?>',
-			listData: <?= \Bitrix\Main\Web\Json::encode($arResult['LIST_DATA']) ?>
+			listData: <?= \Bitrix\Main\Web\Json::encode($arResult['LIST_DATA'] ?? null) ?>
 		});
 		BX.bind(BX('bx-lists-settings-btn'), 'click', function(e) {
 			BX.Lists['LiveFeedClass_<?= $arResult['RAND_STRING']?>'].createSettingsDropdown(e);

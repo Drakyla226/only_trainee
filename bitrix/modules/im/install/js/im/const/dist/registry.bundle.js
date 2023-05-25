@@ -11,6 +11,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var DateFormat = Object.freeze({
 	  groupTitle: 'groupTitle',
 	  message: 'message',
@@ -29,6 +30,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var DeviceType = Object.freeze({
 	  mobile: 'mobile',
 	  desktop: 'desktop'
@@ -46,6 +48,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var MutationType = Object.freeze({
 	  none: 'none',
 	  add: 'delete',
@@ -68,6 +71,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var RestMethod = Object.freeze({
 	  imMessageAdd: 'im.message.add',
 	  imMessageUpdate: 'im.message.update',
@@ -124,8 +128,10 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var EventType = Object.freeze({
 	  dialog: {
+	    open: 'IM.Dialog:open',
 	    newMessage: 'EventType.dialog.newMessage',
 	    scrollOnStart: 'IM.Dialog:scrollOnStart',
 	    scrollToBottom: 'IM.Dialog:scrollToBottom',
@@ -138,6 +144,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	    clickOnUserName: 'IM.Dialog:clickOnUserName',
 	    clickOnMessageMenu: 'IM.Dialog:clickOnMessageMenu',
 	    clickOnMessageRetry: 'IM.Dialog:clickOnMessageRetry',
+	    doubleClickOnMessage: 'IM.Dialog:doubleClickOnMessage',
 	    clickOnUploadCancel: 'IM.Dialog:clickOnUploadCancel',
 	    clickOnReadList: 'IM.Dialog:clickOnReadList',
 	    setMessageReaction: 'IM.Dialog:setMessageReaction',
@@ -160,7 +167,11 @@ this.BX.Messenger = this.BX.Messenger || {};
 	    sendMessage: 'IM.Textarea:sendMessage',
 	    fileSelected: 'IM.Textarea:fileSelected',
 	    startWriting: 'IM.Textarea:startWriting',
+	    stopWriting: 'IM.Textarea:stopWriting',
 	    appButtonClick: 'IM.Textarea:appButtonClick'
+	  },
+	  uploader: {
+	    addMessageWithFile: 'IM.Uploader:addMessageWithFile'
 	  },
 	  conference: {
 	    setPasswordFocus: 'IM.Conference:setPasswordFocus',
@@ -172,6 +183,13 @@ this.BX.Messenger = this.BX.Messenger || {};
 	  },
 	  notification: {
 	    updateState: 'IM.Notifications:restoreConnection'
+	  },
+	  mobile: {
+	    textarea: {
+	      setText: 'IM.Mobile.Textarea:setText',
+	      setFocus: 'IM.Mobile.Textarea:setFocus'
+	    },
+	    openUserList: 'IM.Mobile:openUserList'
 	  }
 	});
 
@@ -183,6 +201,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var DialogType = Object.freeze({
 	  "private": 'private',
 	  chat: 'chat',
@@ -227,6 +246,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var FileStatus = Object.freeze({
 	  upload: 'upload',
 	  wait: 'wait',
@@ -248,6 +268,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var MessageType = Object.freeze({
 	  self: 'self',
 	  opponent: 'opponent',
@@ -262,6 +283,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var ConferenceFieldState = Object.freeze({
 	  view: 'view',
 	  edit: 'edit',
@@ -290,8 +312,9 @@ this.BX.Messenger = this.BX.Messenger || {};
 	  chat: 'chat',
 	  users: 'users',
 	  split: 'split'
-	}); //BX.Call.UserState sync
+	});
 
+	//BX.Call.UserState sync
 	var ConferenceUserState = Object.freeze({
 	  Idle: 'Idle',
 	  Busy: 'Busy',
@@ -312,6 +335,7 @@ this.BX.Messenger = this.BX.Messenger || {};
 	 * @subpackage im
 	 * @copyright 2001-2020 Bitrix
 	 */
+
 	var ChatTypes = {
 	  chat: 'chat',
 	  open: 'open',

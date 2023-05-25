@@ -236,12 +236,12 @@ class RestService extends \IRestService
 
 		$params['AUTH_USER_ID'] = isset($params['AUTH_USER_ID'])? (int) $params['AUTH_USER_ID'] : 0;
 		$params['IS_ROBOT'] = $isRobot ? 'Y' : 'N';
-		$params['USE_PLACEMENT'] = ($params['USE_PLACEMENT'] === 'Y') ? 'Y' : 'N';
+		$params['USE_PLACEMENT'] = (isset($params['USE_PLACEMENT']) && $params['USE_PLACEMENT'] === 'Y') ? 'Y' : 'N';
 
 		if ($params['USE_PLACEMENT'] === 'Y')
 		{
-			self::validateActivityHandler($params['PLACEMENT_HANDLER'], $server);
-			self::upsertAppPlacement($appId, $params['CODE'], $params['PLACEMENT_HANDLER']);
+			self::validateActivityHandler($params['PLACEMENT_HANDLER'] ?? null, $server);
+			self::upsertAppPlacement($appId, $params['CODE'], $params['PLACEMENT_HANDLER'] ?? null);
 		}
 
 		$result = RestActivityTable::add($params);
@@ -471,7 +471,7 @@ class RestService extends \IRestService
 
 		if (isset($fields['PLACEMENT_HANDLER']))
 		{
-			self::validateActivityHandler($params['PLACEMENT_HANDLER'], $server);
+			self::validateActivityHandler($fields['PLACEMENT_HANDLER'], $server);
 			self::upsertAppPlacement(self::getAppId($params['APP_ID']), $params['CODE'], $fields['PLACEMENT_HANDLER']);
 		}
 
@@ -480,7 +480,15 @@ class RestService extends \IRestService
 			self::deleteAppPlacement(self::getAppId($params['APP_ID']), $params['CODE']);
 		}
 
-		RestActivityTable::update($result['ID'], $toUpdate);
+		$updateResult = RestActivityTable::update($result['ID'], $toUpdate);
+
+		if (!$updateResult->isSuccess())
+		{
+			throw new RestException(
+				implode('; ', $updateResult->getErrorMessages()),
+				self::ERROR_ACTIVITY_VALIDATION_FAILURE
+			);
+		}
 
 		return true;
 	}
@@ -1653,21 +1661,26 @@ class RestService extends \IRestService
 
 	private static function getDocumentId($documentId): ?array
 	{
-		if (is_array($documentId))
+		$documentId = \CBPHelper::parseDocumentId($documentId);
+		$documentService = \CBPRuntime::getRuntime(true)->getDocumentService();
+		$documentId = $documentService->normalizeDocumentId($documentId);
+
+		if (!$documentService->getDocument($documentId))
 		{
-			$runtime = \CBPRuntime::getRuntime(true);
-			$documentService = $runtime->getDocumentService();
-			return $documentService->normalizeDocumentId($documentId);
+			return null;
 		}
-		return null;
+
+		return $documentId;
 	}
 
 	private static function getDocumentType(array $documentId): ?array
 	{
 		try
 		{
+			$documentId = \CBPHelper::parseDocumentId($documentId);
 			$runtime = \CBPRuntime::getRuntime(true);
 			$documentService = $runtime->getDocumentService();
+
 			return $documentService->getDocumentType($documentId);
 		}
 		catch (\CBPArgumentNullException $e) {}

@@ -3,6 +3,8 @@
 use Bitrix\Mail\Helper\MailContact;
 use Bitrix\Main\Application;
 use Bitrix\Main\Text\BinaryString;
+use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Config\Ini;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -232,7 +234,7 @@ class CAllMailBox
 	public $new_mess_count = 0;
 	public $deleted_mess_count = 0;
 
-	public static function GetList($arOrder=Array(), $arFilter=Array())
+	public static function GetList($arOrder=[], $arFilter=[])
 	{
 		global $DB;
 		$strSql =
@@ -242,13 +244,21 @@ class CAllMailBox
 				"WHERE MB.LID=L.LID AND C.ID=L.CULTURE_ID";
 
 		if(!is_array($arFilter))
-			$arFilter = Array();
-		$arSqlSearch = Array();
+		{
+			$arFilter = [];
+		}
+
+		$arSqlSearch = [];
 		$filter_keys = array_keys($arFilter);
 		for($i = 0, $n = count($filter_keys); $i < $n; $i++)
 		{
 			$val = $arFilter[$filter_keys[$i]];
-			if ($val === '') continue;
+
+			if (is_null($val) || $val === '')
+			{
+				continue;
+			}
+
 			$key = mb_strtoupper($filter_keys[$i]);
 
 			$strNegative = false;
@@ -1115,7 +1125,7 @@ class CMailHeader
 		else
 			$str = quoted_printable_decode(str_replace("_", " ", $str));
 
-		$str = \Bitrix\Main\Text\Emoji::encode($str);
+		$str = Emoji::encode($str);
 		$str = CMailUtil::ConvertCharset($str, $encoding, $charset);
 
 		return $str;
@@ -1287,6 +1297,8 @@ class CMailMessageDBResult extends CDBResult
 ///////////////////////////////////////////////////////////////////////////////////
 class CAllMailMessage
 {
+	public const MAX_LENGTH_MESSAGE_BODY = 200000;
+
 	public static function GetList($arOrder = Array(), $arFilter = Array(), $bCnt = false)
 	{
 		global $DB;
@@ -1514,7 +1526,7 @@ class CAllMailMessage
 		{
 			if (preg_match('/plain|html|text/', $content_type) && !preg_match('/x-vcard|csv/', $content_type))
 			{
-				$body = \Bitrix\Main\Text\Emoji::encode($body);
+				$body = Emoji::encode($body);
 				$body = CMailUtil::convertCharset($body, $header->charset, $charset);
 			}
 		}
@@ -1529,7 +1541,7 @@ class CAllMailMessage
 
 	public static function parseMessage($message, $charset)
 	{
-		$headerP = \CUtil::binStrpos($message, "\r\n\r\n");
+		$headerP = strpos($message, "\r\n\r\n");
 
 		if (false === $headerP)
 		{
@@ -1538,8 +1550,8 @@ class CAllMailMessage
 		}
 		else
 		{
-			$rawHeader = \CUtil::binSubstr($message, 0, $headerP);
-			$body      = \CUtil::binSubstr($message, $headerP+4);
+			$rawHeader = substr($message, 0, $headerP);
+			$body      = substr($message, $headerP+4);
 		}
 
 		$header = \CMailMessage::parseHeader($rawHeader, $charset);
@@ -1555,10 +1567,10 @@ class CAllMailMessage
 			$startRegex = sprintf('/(^|\r\n)--%s\r\n/', preg_quote($header->getBoundary(), '/'));
 			if (preg_match($startRegex, $body, $matches, PREG_OFFSET_CAPTURE))
 			{
-				$startP = $matches[0][1] + \CUtil::binStrlen($matches[0][0]);
+				$startP = $matches[0][1] + strlen($matches[0][0]);
 			}
 
-			$endP = \CUtil::binStrlen($body);
+			$endP = strlen($body);
 			$endRegex = sprintf('/\r\n--%s--(\r\n|$)/', preg_quote($header->getBoundary(), '/'));
 			if (preg_match($endRegex, $body, $matches, PREG_OFFSET_CAPTURE))
 			{
@@ -1570,14 +1582,14 @@ class CAllMailMessage
 				$startP = 0;
 			}
 
-			$data = \CUtil::binSubstr($body, $startP, $endP-$startP);
+			$data = substr($body, $startP, $endP-$startP);
 
 			$isHtml = false;
 			$rawParts = preg_split(sprintf('/\r\n--%s\r\n/', preg_quote($header->getBoundary(), '/')), $data);
 			$tmpParts = array();
 			foreach ($rawParts as $part)
 			{
-				if (CUtil::binSubstr($part, 0, 2) == "\r\n")
+				if (substr($part, 0, 2) == "\r\n")
 					$part = "\r\n" . $part;
 
 				[, $subHtml, $subText, $subParts] = CMailMessage::parseMessage($part, $charset);
@@ -1636,10 +1648,15 @@ class CAllMailMessage
 		else
 		{
 			$bodyPart = CMailMessage::decodeMessageBody($header, $body, $charset);
+			$contentType = mb_strtolower($bodyPart['CONTENT-TYPE']);
 
-			if (!$bodyPart['FILENAME'] && mb_strpos(mb_strtolower($bodyPart['CONTENT-TYPE']), 'text/') === 0 && mb_strtolower($bodyPart['CONTENT-TYPE']) !== 'text/calendar')
+			if (
+				!$bodyPart['FILENAME']
+				&& (mb_strpos($contentType, 'text/') === 0)
+				&& ($contentType !== 'text/calendar')
+			)
 			{
-				if (mb_strtolower($bodyPart['CONTENT-TYPE']) == 'text/html')
+				if ($contentType == 'text/html')
 				{
 					$htmlBody = $bodyPart['BODY'];
 					$textBody = html_entity_decode(htmlToTxt($bodyPart['BODY']), ENT_QUOTES | ENT_HTML401, $charset);
@@ -1675,6 +1692,22 @@ class CAllMailMessage
 		$message_body = &$bodyText;
 		$arMessageParts = &$attachments;
 
+		$isStrippedTagsToBody = false;
+
+		if (self::isLongMessageBody($message_body))
+		{
+			[$message_body, $message_body_html] = self::prepareLongMessage($message_body, $message_body_html);
+		}
+
+		if (
+			(mb_strlen($message_body_html) > 0)
+			&& empty(trim(strip_tags($message_body_html)))
+		)
+		{
+			$message_body_html = '';
+			$isStrippedTagsToBody = true;
+		}
+
 		$arFields = array(
 			"MAILBOX_ID" => $mailbox_id,
 			"HEADER" => $obHeader->strHeader,
@@ -1692,8 +1725,17 @@ class CAllMailMessage
 			"BODY" => rtrim($message_body),
 			'OPTIONS' => array(
 				'attachments' => count($arMessageParts),
+				'isStrippedTags' => $isStrippedTagsToBody,
 			),
 		);
+
+		if (
+			($arFields['OPTIONS']['attachments'] <= 0)
+			&& (empty($message_body) || empty($message_body_html))
+		)
+		{
+			$arFields['OPTIONS']['isEmptyBody'] = 'Y';
+		}
 
 		$inReplyTo = trim($obHeader->GetHeader("IN-REPLY-TO"), " <>");
 
@@ -1764,7 +1806,8 @@ class CAllMailMessage
 			if (!(isset($params['replaces']) && $params['replaces'] > 0))
 			{
 				/**
-				 * Create a chain of communication between the message and itself
+				 * By default, a chain is created for each new message that links the message to itself.
+				 * If the parents are not found for the message in the future, then the chain will remain like this.
 				 * */
 				$DB->query(sprintf(
 					'INSERT IGNORE INTO b_mail_message_closure (MESSAGE_ID, PARENT_ID) VALUES (%1$u, %1$u)',
@@ -1772,8 +1815,9 @@ class CAllMailMessage
 				));
 
 				/**
-				 * Create chains of links to parent messages based on the fact
-				 * that the given message is a response
+				 * We find the parents(in the standard case there should be one) of this message and create a chain.
+				 * If the id of the parent (IN_REPLY_TO) matches the id of the message itself(MSG_ID),
+				 * then nothing will happen(INSERT IGNORE), since such a chain was created in the step above.
 				 * */
 				if ($arFields['IN_REPLY_TO'])
 				{
@@ -1787,26 +1831,6 @@ class CAllMailMessage
 						$message_id,
 						$mailbox_id,
 						$DB->forSql($arFields['IN_REPLY_TO'])
-					));
-				}
-
-				/**
-				 * Finding and creating (if any) a chain of links to child messages based on that fact
-				 * */
-				if ($arFields['MSG_ID'])
-				{
-					$DB->query(sprintf(
-						"INSERT IGNORE INTO b_mail_message_closure (MESSAGE_ID, PARENT_ID)
-						(
-							SELECT DISTINCT C.MESSAGE_ID, P.PARENT_ID
-							FROM b_mail_message M
-								INNER JOIN b_mail_message_closure C ON M.ID = C.PARENT_ID
-								INNER JOIN b_mail_message_closure P ON P.MESSAGE_ID = %u
-							WHERE M.MAILBOX_ID = %u AND M.IN_REPLY_TO = '%s'
-						)",
-						$message_id,
-						$mailbox_id,
-						$DB->forSql($arFields['MSG_ID'])
 					));
 				}
 
@@ -1855,8 +1879,8 @@ class CAllMailMessage
 
 			if ($message_body_html)
 			{
-				CUtil::AdjustPcreBacktrackLimit($message_body_html);
-				
+				Ini::adjustPcreBacktrackLimit(strlen($message_body_html)*2);
+
 				$msg = array(
 					'html'        => $message_body_html,
 					'attachments' => array(),
@@ -1929,7 +1953,7 @@ class CAllMailMessage
 				{
 					if(!empty($arFieldsForFilter[$key]))
 					{
-						$arFieldsForFilter[$key] = \Bitrix\Main\Text\Emoji::decode($arFieldsForFilter[$key]);
+						$arFieldsForFilter[$key] = Emoji::decode($arFieldsForFilter[$key]);
 					}
 				}
 
@@ -2022,7 +2046,13 @@ class CAllMailMessage
 
 	private static function saveForDeferredDownload($ID, $arFields, $mailboxID)
 	{
-		if ($mailboxID !== false && is_set($arFields, 'BODY_HTML') && $arFields['BODY_HTML'] === '' && (!is_set($arFields, 'BODY') || $arFields['BODY'] === ''))
+		if (
+			$mailboxID !== false
+			&& is_set($arFields, 'BODY_HTML')
+			&& $arFields['BODY_HTML'] === ''
+			&& (!is_set($arFields, 'BODY') || $arFields['BODY'] === '')
+			&& !$arFields['OPTIONS']['isStrippedTags']
+		)
 		{
 			\Bitrix\Mail\Internals\MailEntityOptionsTable::add([
 				'MAILBOX_ID' => $mailboxID,
@@ -2263,7 +2293,7 @@ class CAllMailMessage
 		}
 
 		if(is_set($arFields, "FILE_DATA") && !is_set($arFields, "FILE_SIZE"))
-			$arFields["FILE_SIZE"] = CUtil::BinStrlen($arFields["FILE_DATA"]);
+			$arFields["FILE_SIZE"] = strlen($arFields["FILE_DATA"]);
 
 		$file = array(
 			'name'      => md5($arFields['FILE_NAME']),
@@ -2307,6 +2337,205 @@ class CAllMailMessage
 
 		return $ID;
 	}
+
+	/**
+	 * @param string|null $messageBody
+	 * @return bool
+	 */
+	private static function isLongMessageBody(?string &$messageBody): bool
+	{
+		if (!$messageBody)
+		{
+			return false;
+		}
+
+		return mb_strlen($messageBody) > self::MAX_LENGTH_MESSAGE_BODY;
+	}
+
+	/**
+	 * @param string|null $messageBodyHtml
+	 * @param string|null $messageBody
+	 * @return string
+	 */
+	private static function getClearBody(string $body): string
+	{
+		//todo merge with \Bitrix\Main\Mail\Mail::convertBodyHtmlToText
+		// get <body> inner html if exists
+		$innerBody = trim(preg_replace('/(.*?<body[^>]*>)(.*?)(<\/body>.*)/is', '$2', $body));
+		$body = $innerBody ?: $body;
+
+		// modify links to text version
+		$body = preg_replace_callback(
+			"%<a[^>]*?href=(['\"])(?<href>[^\1]*?)(?1)[^>]*?>(?<text>.*?)<\/a>%ims",
+			function ($matches)
+			{
+				$href = $matches['href'];
+				$text = trim($matches['text']);
+				if (!$href)
+				{
+					return $matches[0];
+				}
+				$text = strip_tags($text);
+				return ($text ? "$text:" : '') ."\n$href\n";
+			},
+			$body
+		);
+
+		// change <br> to new line
+		$body = preg_replace('/\<br(\s*)?\/?\>/i', "\n", $body);
+
+		$body = preg_replace('|(<style[^>]*>)(.*?)(<\/style>)|isU', '', $body);
+		$body = preg_replace('|(<script[^>]*>)(.*?)(<\/script>)|isU', '', $body);
+
+		// remove tags
+		$body = strip_tags($body);
+
+		// format text to the left side
+		$lines = [];
+		foreach (explode("\n", trim($body)) as $line)
+		{
+			$lines[] = trim($line);
+		}
+
+		// remove redundant new lines
+		$body = preg_replace("/[\\n]{2,}/", "\n\n", implode("\n", $lines));
+
+		// remove redundant spaces
+		$body = preg_replace("/[ \\t]{2,}/", "  ", $body);
+
+		// decode html-entities
+		return html_entity_decode($body);
+	}
+
+	/**
+	 * @param string $body
+	 * @return string[]
+	 */
+	protected static function getTextHtmlBlock(string &$body): array
+	{
+		$messageBody = '';
+		$messageBodyHtml = '';
+
+		$boundaryMatches = [];
+		preg_match('/content-type: multipart\/mixed; [\s\n\t]*boundary=\"(?<boundary>[\w+-]+)\"/i', $body, $boundaryMatches);
+		if (is_string($boundaryMatches['boundary']))
+		{
+			$parts = explode('--'. $boundaryMatches['boundary'][0], $body);
+			if (count($parts) > 1)
+			{
+				foreach ($parts as $part)
+				{
+					preg_match('/content-type: (?<contentType>text\/[html|plain]+); *charset="(?<charset>\w+-\d)"/i', $part, $contentTypeMatches);
+					if (isset($contentTypeMatches['contentType']))
+					{
+						preg_match('/content-transfer-encoding: (?<encode>[\w]+)/i', $part, $encodeMatches);
+
+						$partBody = self::getPartBody($part);
+						if ($partBody === null)
+						{
+							continue;
+						}
+
+						if ($encodeMatches['encode'] === 'base64')
+						{
+							$partBody = base64_decode($partBody);
+						}
+
+						if ($contentTypeMatches['contentType'] === 'text/plain')
+						{
+							$messageBody = $partBody;
+						}
+
+						if ($contentTypeMatches['contentType'] === 'text/html')
+						{
+							$messageBodyHtml = $partBody;
+						}
+					}
+				}
+			}
+		}
+
+		return [$messageBody, $messageBodyHtml];
+	}
+
+	/**
+	 * @param $messageBody
+	 * @param $messageBodyHtml
+	 * @return array
+	 */
+	public static function prepareLongMessage(&$messageBody, &$messageBodyHtml): array
+	{
+		if (mb_stripos($messageBody, '--- Below this line is a copy of the message'))
+		{
+			$mainBodyHtml = $mainBody = explode('--- Below this line is a copy of the message', $messageBody)[0];
+		}
+		elseif (mb_stripos($messageBodyHtml, htmlspecialcharsbx('<blockquote>')))
+		{
+			$mainBody = $mainBodyHtml = self::cutBlockHtmlQuote($messageBodyHtml);
+		}
+		elseif (mb_stripos($messageBody, '<blockquote>'))
+		{
+			$mainBody = $mainBodyHtml = self::cutBlockQuote($messageBody);
+		}
+		else
+		{
+			[$mainBody, $mainBodyHtml] = self::getTextHtmlBlock($messageBody);
+		}
+
+		$mainBody = self::getClearBody($mainBody);
+
+		return [$mainBody, $mainBodyHtml];
+	}
+
+	/**
+	 * @param $part
+	 * @return string
+	 */
+	protected static function getPartBody(&$part): ?string
+	{
+		$itemParts = explode("\r\n\r\n", $part);
+		if (!is_array($itemParts) && (count($itemParts) < 2))
+		{
+			$itemParts = explode("\n\n", $part);
+		}
+
+		if (!is_array($itemParts) && (count($itemParts) < 2))
+		{
+			$itemParts = explode("\r\n\n\r\n", $part);
+		}
+
+		if (!is_array($itemParts) && (count($itemParts) < 2))
+		{
+			$itemParts = explode("\n\n\n", $part);
+		}
+
+		if (is_array($itemParts) && (count($itemParts) >= 2))
+		{
+			return $itemParts[1];
+		}
+
+		return null;
+	}
+
+	/**
+	 * @param $messageBodyHtml
+	 * @return array|string|string[]|null
+	 */
+	private static function cutBlockQuote(&$messageBodyHtml)
+	{
+		return preg_replace('|(<blockquote>)(.*?)(<\/blockquote>)|isU', '', $messageBodyHtml);
+	}
+
+	/**
+	 * @param $messageBodyHtml
+	 * @return string
+	 */
+	private static function cutBlockHtmlQuote(&$messageBodyHtml): string
+	{
+		$messageBody = htmlspecialcharsback($messageBodyHtml);
+
+		return htmlspecialcharsbx(self::cutBlockQuote($messageBody));
+	}
 }
 
 
@@ -2322,7 +2551,16 @@ class _CMailAttachmentDBRes extends CDBResult
 		if (($res = parent::fetch()) && $res['FILE_ID'] > 0)
 		{
 			if ($file = \CFile::makeFileArray($res['FILE_ID']))
-				$res['FILE_DATA'] = file_get_contents($file['tmp_name']);
+			{
+				if (!empty($file['tmp_name']) && \Bitrix\Main\IO\File::isFileExists($file['tmp_name']))
+				{
+					$res['FILE_DATA'] = \Bitrix\Main\IO\File::getFileContents($file['tmp_name']);
+				}
+				else
+				{
+					$res['FILE_DATA'] = false;
+				}
+			}
 		}
 
 		return $res;
@@ -2479,7 +2717,12 @@ class CMailAttachment
 			if ($attachment['FILE_ID'] > 0)
 			{
 				if ($file = \CFile::makeFileArray($attachment['FILE_ID']))
-					return file_get_contents($file['tmp_name']);
+				{
+					return (!empty($file['tmp_name'])
+						&& \Bitrix\Main\IO\File::isFileExists($file['tmp_name']))
+							? \Bitrix\Main\IO\File::getFileContents($file['tmp_name'])
+							: false;
+				}
 			}
 		}
 
@@ -2516,7 +2759,7 @@ class CAllMailUtil
 				/x', $escape, $str);
 			}
 
-			if ($result = Bitrix\Main\Text\Encoding::convertEncoding($str, $from, $to, $error))
+			if ($result = Bitrix\Main\Text\Encoding::convertEncoding($str, $from, $to))
 				$str = $result;
 			else
 				addMessage2Log(sprintf('Failed to convert email part. (%s -> %s : %s)', $from, $to, $error));
@@ -2753,10 +2996,10 @@ class CAllMailUtil
 			$key = COption::GetOptionString("main", "pwdhashadd", "");
 		$key1 = CMailUtil::BinMD5($key);
 		$str = base64_decode($str);
-		while (\CUtil::binStrlen($str) > 0)
+		while (strlen($str) > 0)
 		{
-			$m = CUtil::BinSubstr($str, 0, 16);
-			$str = CUtil::BinSubstr($str, 16);
+			$m = substr($str, 0, 16);
+			$str = substr($str, 16);
 			$m = CMailUtil::ByteXOR($m, $key1, 16);
 			$res .= $m;
 			$key1 = CMailUtil::BinMD5($key.$key1.$m);
@@ -2770,10 +3013,10 @@ class CAllMailUtil
 		if($key===false)
 			$key = COption::GetOptionString("main", "pwdhashadd", "");
 		$key1 = CMailUtil::BinMD5($key);
-		while (\CUtil::binStrlen($str) > 0)
+		while (strlen($str) > 0)
 		{
-			$m = CUtil::BinSubstr($str, 0, 16);
-			$str = CUtil::BinSubstr($str, 16);
+			$m = substr($str, 0, 16);
+			$str = substr($str, 16);
 			$res .= CMailUtil::ByteXOR($m, $key1, 16);
 			$key1 = CMailUtil::BinMD5($key.$key1.$m);
 		}

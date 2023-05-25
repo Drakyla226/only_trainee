@@ -16,7 +16,9 @@ class Domain extends \Bitrix\Landing\Internals\BaseTable
 		'bitrix24.shop',
 		'bitrix24site.by',
 		'bitrix24shop.by',
-		'bitrix24site.ua'
+		'bitrix24site.ua',
+		'bitrix24site.ru',
+		'bitrix24shop.ru',
 	];
 
 	/**
@@ -65,6 +67,8 @@ class Domain extends \Bitrix\Landing\Internals\BaseTable
 
 	/**
 	 * Returns postfix for bitrix24.site.
+	 *
+	 * @use self::getBitrix24Subdomain
 	 * @param string $type Site type.
 	 * @return string
 	 */
@@ -74,19 +78,12 @@ class Domain extends \Bitrix\Landing\Internals\BaseTable
 		$postfix = '.bitrix24.site';
 		$type = mb_strtoupper($type);
 
-		if ($type == 'STORE')
+		// local domain
+		if (in_array($zone, ['ru', 'by', 'ua']))
 		{
-			$postfix = ($zone == 'by')
-				? '.bitrix24shop.by'
-				: '.bitrix24.shop';
-		}
-		else if ($zone == 'by')
-		{
-			$postfix = '.bitrix24site.by';
-		}
-		else if ($zone == 'ua')
-		{
-			$postfix = '.bitrix24site.ua';
+			$postfix = '.';
+			$postfix .= ($type === 'STORE') ? 'bitrix24shop' : 'bitrix24site';
+			$postfix .= '.' . $zone;
 		}
 
 		return $postfix;
@@ -137,7 +134,7 @@ class Domain extends \Bitrix\Landing\Internals\BaseTable
 		$res = self::getList(array(
 			'filter' => array(
 				'=ACTIVE' => 'Y',
-				'DOMAIN' => self::getDomainName()
+				'=DOMAIN' => self::getDomainName()
 			)
 		));
 		if ($row = $res->fetch())

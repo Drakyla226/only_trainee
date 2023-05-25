@@ -1,17 +1,19 @@
-import {Dom, Event, Loc, Reflection, Tag, Text, Type} from 'main.core';
+import {Dom, Event, Loc, Reflection, Tag, Type} from 'main.core';
 import {type BaseEvent, EventEmitter} from 'main.core.events'
 import './entity-card.css';
-import TabManager from './tab/manager';
 import 'ui.entity-editor';
 import 'ui.notification';
+import 'ui.feedback.form';
 import 'ui.hint';
+import 'ui.design-tokens';
+import 'ui.fonts.opensans';
 import FieldsFactory from './fields-factory'
 import ControllersFactory from './controllers-factory'
 import IblockFieldConfigurationManager from './field-configurator/iblock-field-configuration-manager'
 import GridFieldConfigurationManager from './field-configurator/grid-field-configuration-manager';
 import {Popup} from "main.popup";
 import {BaseCard} from "./base-card/base-card";
-import {DialogDisable, Slider, EventType} from 'catalog.store-use'
+import {Slider} from 'catalog.store-use'
 
 class EntityCard extends BaseCard
 {
@@ -22,6 +24,7 @@ class EntityCard extends BaseCard
 		super(id, settings);
 
 		this.cardSettings = settings.cardSettings || [];
+		this.hiddenFields = settings.hiddenFields || [];
 		this.feedbackUrl = settings.feedbackUrl || '';
 		this.variationGridId = settings.variationGridId;
 		this.productStoreGridId = settings.productStoreGridId || null;
@@ -31,8 +34,11 @@ class EntityCard extends BaseCard
 
 		this.componentName = settings.componentName || null;
 		this.componentSignedParams = settings.componentSignedParams || null;
+		this.variationGridComponentName = (settings.variationGridComponentName || 'BX.Catalog.VariationGrid') + '.Instance';
 
 		this.isSimpleProduct = settings.isSimpleProduct || false;
+		this.isWithOrdersMode = settings.isWithOrdersMode || false;
+		this.isInventoryManagementUsed = settings.isInventoryManagementUsed || false;
 
 		this.registerFieldsFactory();
 		this.registerControllersFactory();
@@ -121,11 +127,12 @@ class EntityCard extends BaseCard
 	}
 
 	/**
-	 * @returns {BX.Catalog.VariationGrid|null}
+	 * @returns {BX.Catalog.VariationGrid|BX.Catalog.ProductServiceGrid|null}
 	 */
 	getVariationGridComponent()
 	{
-		return Reflection.getClass('BX.Catalog.VariationGrid.Instance');
+		//return Reflection.getClass('BX.Catalog.VariationGrid.Instance');
+		return Reflection.getClass(this.variationGridComponentName);
 	}
 
 	reloadVariationGrid()
@@ -214,7 +221,9 @@ class EntityCard extends BaseCard
 		const [popup] = event.getCompatData();
 		if (popup && popup.getId() === 'popupFM' && popup.onApplyFlag)
 		{
-			this.showNotification(Loc.getMessage('CATALOG_ENTITY_CARD_FILE_CLOSE_NOTIFICATION'), {
+			this.showNotification(Loc.getMessage('CATALOG_ENTITY_CARD_FILE_CLOSE_NOTIFICATION_2'), {
+				id: 'fileCloseNotification',
+				blinkOnUpdate: false,
 				autoHideDelay: 5000
 			});
 		}
@@ -337,6 +346,11 @@ class EntityCard extends BaseCard
 		{
 			eventArgs.configurationFieldManager = this.initializeVariationPropertyConfigurationManager(eventArgs);
 		}
+
+		if (eventArgs.id === 'service_grid')
+		{
+			eventArgs.configurationFieldManager = this.initializeServicePropertyConfigurationManager(eventArgs);
+		}
 	}
 
 	initializeIblockFieldConfigurationManager(eventArgs)
@@ -355,6 +369,11 @@ class EntityCard extends BaseCard
 		return configurationManager;
 	}
 
+	initializeServicePropertyConfigurationManager(eventArgs)
+	{
+		return GridFieldConfigurationManager.create(this.id, eventArgs);
+	}
+
 	showNotification(content, options)
 	{
 		options = options || {};
@@ -366,11 +385,10 @@ class EntityCard extends BaseCard
 
 		BX.UI.Notification.Center.notify({
 			content: content,
-			stack: options.stack || null,
 			position: 'top-right',
 			width: 'auto',
-			category: options.category || null,
-			autoHideDelay: options.autoHideDelay || 3000
+			autoHideDelay: 3000,
+			...options
 		});
 	}
 
@@ -394,15 +412,21 @@ class EntityCard extends BaseCard
 
 	openFeedbackPanel()
 	{
-		if (!Reflection.getClass('BX.SidePanel.Instance') || !Type.isStringFilled(this.feedbackUrl))
-		{
-			return;
-		}
+		EntityCard.openFeedbackPanelStatic();
+	}
 
-		BX.SidePanel.Instance.open(this.feedbackUrl, {
-			cacheable: false,
-			allowChangeHistory: false,
-			width: 580
+	static openFeedbackPanelStatic()
+	{
+		BX.UI.Feedback.Form.open({
+			id: 'catalog-product-card-feedback',
+			forms: [
+				{'id': 269, 'lang': 'ru', 'sec': 'mqerov', 'zones': ['ru', 'by', 'kz']},
+				{'id': 347, 'lang': 'en', 'sec': 'lxfji8', 'zones': ['en']},
+				{'id': 349, 'lang': 'es', 'sec': 'gdf9i1', 'zones': ['es']},
+				{'id': 355, 'lang': 'de', 'sec': 'x8k56n', 'zones': ['de']},
+				{'id': 357, 'lang': 'ua', 'sec': '2z19xl', 'zones': ['ua']},
+				{'id': 353, 'lang': 'com.br', 'sec': '5cleqn', 'zones': ['com.br']},
+			],
 		});
 	}
 
@@ -498,17 +522,7 @@ class EntityCard extends BaseCard
 
 	showCardSettingsPopup()
 	{
-		const okCallback = () => this.getCardSettingsPopup().show();
-		const variationGridInstance = Reflection.getClass('BX.Catalog.VariationGrid.Instance');
-
-		if (variationGridInstance)
-		{
-			variationGridInstance.askToLossGridData(okCallback);
-		}
-		else
-		{
-			okCallback();
-		}
+		this.getCardSettingsPopup().show();
 	}
 
 	prepareCardSettingsContent()
@@ -526,12 +540,17 @@ class EntityCard extends BaseCard
 
 	getSettingItem(item)
 	{
-		const input = Tag.render`
-			<input type="checkbox">
-		`;
-		input.checked = item.checked;
-		input.disabled = item.disabled ?? false;
-		input.dataset.settingId = item.id;
+		let input = '';
+		if (!item.disabledCheckbox)
+		{
+			input = Tag.render`
+				<input type="checkbox">
+			`;
+
+			input.checked = item.checked;
+			input.disabled = item.disabled ?? false;
+			input.dataset.settingId = item.id;
+		}
 
 		const hintNode = (
 			Type.isStringFilled(item.hint)
@@ -559,6 +578,20 @@ class EntityCard extends BaseCard
 				.then(() => {
 					this.reloadGrid();
 					this.getCardSettingsPopup().close();
+				});
+			})
+		}
+		else if(item.id === 'SEO')
+		{
+			Event.bind(setting, 'click', (event) =>
+			{
+				BX.SidePanel.Instance.open(item.url, {
+					cacheable: false,
+					allowChangeHistory: false,
+					data: {
+						'ELEMENT_ID': this.entityId
+					},
+					width: 1000
 				});
 			})
 		}
@@ -701,18 +734,18 @@ class EntityCard extends BaseCard
 		const popupContainer = this.getCardSettingsPopup().getContentContainer();
 
 		this.cardSettings
-			.filter(item => item.action === 'grid' && Type.isArray(item.columns))
+			.filter(item => item.action === 'grid' && Type.isArray(item.columns?.ITEMS))
 			.forEach(item => {
-				let allColumnsExist = true;
 
-				item.columns.forEach(columnName => {
+				let allColumnsExist = true;
+				item.columns.ITEMS.forEach(columnName => {
 					if (!this.getVariationGrid().getColumnHeaderCellByName(columnName))
 					{
 						allColumnsExist = false;
 					}
 				})
 
-				let checkbox = popupContainer.querySelector('input[data-setting-id="' + item.id + '"]');
+				const checkbox = popupContainer.querySelector('input[data-setting-id="' + item.id + '"]');
 				if (Type.isDomNode(checkbox))
 				{
 					checkbox.checked = allColumnsExist;

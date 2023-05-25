@@ -38,8 +38,6 @@ class Notification extends Base
 		'PUSH' => 4,
 	];
 
-	private const CHUNK_LENGTH = 1000;
-
 	/**
 	 * @param string $module
 	 * @param string $name
@@ -73,6 +71,11 @@ class Notification extends Base
 	 */
 	public function isAllowed(int $userId, string $type): bool
 	{
+		if (!General::allowedUserBySimpleNotificationSettings($userId, $type))
+		{
+			return false;
+		}
+
 		$encodedSetting = self::encodeName($this->module, $this->name, $type);
 
 		$defaultSettings = self::getDefaultSettings();
@@ -153,6 +156,12 @@ class Notification extends Base
 			return [];
 		}
 
+		$userList = General::filterAllowedUsersBySimpleNotificationSettings($userList, $type);
+		if (empty($userList))
+		{
+			return [];
+		}
+
 		$encodedSetting = self::encodeName($this->module, $this->name, $type);
 
 		$defaultSettings = self::getDefaultSettings();
@@ -173,7 +182,7 @@ class Notification extends Base
 		}
 		else
 		{
-			$chunkList = array_chunk($userList, self::CHUNK_LENGTH);
+			$chunkList = array_chunk($userList, static::CHUNK_LENGTH);
 			foreach ($chunkList as $chunk)
 			{
 				$filteredUsers = array_merge($filteredUsers, $this->filterChunk($chunk, $encodedSetting, $value));
@@ -250,7 +259,13 @@ class Notification extends Base
 	 */
 	public function checkDisableFeature(string $feature): bool
 	{
-		return (bool)self::getDefaultSettings()[$this->module]['NOTIFY'][$this->name]['DISABLED'][mb_strtoupper($feature)];
+		$defaultSettings = self::getDefaultSettings();
+		if (isset($defaultSettings[$this->module]['NOTIFY'][$this->name]['DISABLED'][mb_strtoupper($feature)]))
+		{
+			return (bool)$defaultSettings[$this->module]['NOTIFY'][$this->name]['DISABLED'][mb_strtoupper($feature)];
+		}
+
+		return false;
 	}
 
 	public function getDefaultFeature(string $feature): bool
@@ -372,7 +387,7 @@ class Notification extends Base
 					$config['XMPP'] = !isset($config['XMPP']) || $config['XMPP'] == 'Y';
 					$config['PUSH'] = isset($config['PUSH']) && $config['PUSH'] == 'Y';
 
-					$config['LIFETIME'] = (int)$config['LIFETIME'];
+					$config['LIFETIME'] = isset($config['LIFETIME']) ? (int)$config['LIFETIME'] : 0;
 
 					self::$defaultSettings[$moduleId]['NOTIFY'][$notifyEvent] = $config;
 				}
@@ -756,7 +771,7 @@ class Notification extends Base
 	 */
 	private static function getPostfix(string $type): ?int
 	{
-		return self::$types[mb_strtoupper($type)];
+		return self::$types[mb_strtoupper($type)] ?? null;
 	}
 
 	/**

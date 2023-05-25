@@ -1,13 +1,18 @@
-import {ConfirmDeleteDialog} from "calendar.controls";
 import {Util} from 'calendar.util';
 import {EntryManager} from "./entrymanager";
-import { Type, Dom } from 'main.core';
+import { Type } from 'main.core';
 
 export {EntryManager};
 
 export class Entry
 {
 	FULL_DAY_LENGTH = 86400;
+
+	static CAL_TYPES = {
+		'user': 'user',
+		'group': 'group',
+		'company': 'company_calendar',
+	};
 	constructor(options = {})
 	{
 		this.prepareData(options.data);
@@ -24,7 +29,6 @@ export class Entry
 	prepareData(data)
 	{
 		this.data = data;
-		// this.id = this.data.ID || 0;
 		this.id = parseInt(this.data.ID || 0);
 		this.parentId = parseInt(this.data.PARENT_ID || 0);
 
@@ -52,8 +56,10 @@ export class Entry
 			this.data.DT_LENGTH = this.FULL_DAY_LENGTH;
 		}
 
-		if (!Type.isString(this.data.DATE_FROM) && !Type.isString(this.data.DATE_TO)
-			&& Type.isDate(this.data.dateFrom) && Type.isDate(this.data.dateTo))
+		if (
+			!Type.isString(this.data.DATE_FROM) && !Type.isString(this.data.DATE_TO)
+			&& Type.isDate(this.data.dateFrom) && Type.isDate(this.data.dateTo)
+		)
 		{
 			this.from = this.data.dateFrom;
 			this.to = this.data.dateTo;
@@ -69,7 +75,7 @@ export class Entry
 			else
 			{
 				this.from = new Date(this.from.getTime() - (parseInt(this.data['~USER_OFFSET_FROM']) || 0) * 1000);
-				this.to = new Date(this.from.getTime() + (this.data.DT_LENGTH - (this.fullDay ? 1 : 0)) * 1000);
+				this.to = new Date(this.to.getTime() - (parseInt(this.data['~USER_OFFSET_TO']) || 0) * 1000);
 			}
 		}
 		else
@@ -82,11 +88,7 @@ export class Entry
 			else
 			{
 				this.from = BX.parseDate(this.data.DATE_FROM) || new Date();
-				// if (this.data.DT_SKIP_TIME !== "Y")
-				// {
-				// 	this.from = new Date(this.from.getTime() - (parseInt(this.data['~USER_OFFSET_FROM']) || 0) * 1000);
-				// }
-				this.to = new Date(this.from.getTime() + (this.data.DT_LENGTH - (this.fullDay ? 1 : 0)) * 1000);
+				this.to = BX.parseDate(this.data.DATE_TO) || this.from;
 			}
 		}
 
@@ -242,6 +244,11 @@ export class Entry
 		return !!this.data.IS_MEETING;
 	}
 
+	isPrivate()
+	{
+		return this.private;
+	}
+
 	isResourcebooking()
 	{
 		return this.data.EVENT_TYPE === '#resourcebooking#';
@@ -250,6 +257,16 @@ export class Entry
 	isTask()
 	{
 		return this.data['~TYPE'] === 'tasks';
+	}
+
+	isSharingEvent()
+	{
+		return this.data['EVENT_TYPE'] === '#shared#';
+	}
+
+	isInvited()
+	{
+		return this.getCurrentStatus() === 'Q';
 	}
 
 	isLocation()
@@ -325,6 +342,11 @@ export class Entry
 	isRecursive()
 	{
 		return !!this.data.RRULE;
+	}
+
+	isFirstInstance()
+	{
+		return this.data.RRULE && this.data.RINDEX === 0;
 	}
 
 	getMeetingHost()
@@ -542,9 +564,9 @@ export class Entry
 		return Math.round((to.getTime() - from.getTime()) / Util.getDayLength()) + 1;
 	}
 
-	getName()
+	getName(): string
 	{
-		return this.name || this.defaultNewName;
+		return (this.name || '');
 	}
 
 	getColor()
@@ -574,7 +596,7 @@ export class Entry
 		else
 		{
 			// Broadcast event
-			BX.onCustomEvent('BX.Calendar.Entry:beforeDelete', [{entryId: this.id, recursionMode: recursionMode}]);
+			BX.onCustomEvent('BX.Calendar.Entry:beforeDelete', [{entryId: this.id, recursionMode: recursionMode, entryData: this.data}]);
 
 			EntryManager.showDeleteEntryNotification(this);
 			this.deleteParts(recursionMode);
@@ -606,7 +628,7 @@ export class Entry
 		let recursionMode = 'this';
 		if (this.isRecursive())
 		{
-			BX.onCustomEvent('BX.Calendar.Entry:beforeDelete', [{entryId: this.id, recursionMode: recursionMode}]);
+			BX.onCustomEvent('BX.Calendar.Entry:beforeDelete', [{entryId: this.id, recursionMode: recursionMode, entryData: this.data}]);
 
 			EntryManager.showDeleteEntryNotification(this);
 			this.deleteParts(recursionMode);
@@ -691,6 +713,7 @@ export class Entry
 			if (deleteTimeoutData)
 			{
 				EntryManager.unregisterDeleteTimeout(deleteTimeoutData);
+				BX.onCustomEvent('BX.Calendar.Entry:cancelDelete', [{entryId: this.id, entryData: this.data}]);
 				this.delayTimeoutMap.delete(this.delayTimeoutMap);
 			}
 			clearTimeout(this.deleteTimeout);

@@ -1,6 +1,7 @@
 <?
 /** @global CMain $APPLICATION */
 /** @global CDatabase $DB */
+
 use Bitrix\Main\Loader,
 	Bitrix\Main,
 	Bitrix\Iblock;
@@ -124,7 +125,7 @@ foreach($arFilter as $key => $value)
 if (isset($arFilter['=PROPERTY_TYPE']))
 {
 	if (!isset($simpleTypeList[$arFilter['=PROPERTY_TYPE']]))
-		list($arFilter['=PROPERTY_TYPE'], $arFilter['=USER_TYPE']) = explode(':', $arFilter['=PROPERTY_TYPE'], 2);
+		[$arFilter['=PROPERTY_TYPE'], $arFilter['=USER_TYPE']] = explode(':', $arFilter['=PROPERTY_TYPE'], 2);
 	else
 		$arFilter['=USER_TYPE'] = null;
 }
@@ -133,7 +134,6 @@ if($lAdmin->EditAction())
 {
 	foreach($_REQUEST['FIELDS'] as $ID => $arFields)
 	{
-		$DB->StartTransaction();
 		$ID = (int)$ID;
 
 		if(!$lAdmin->IsUpdated($ID))
@@ -143,8 +143,10 @@ if($lAdmin->EditAction())
 		{
 			$arFields["USER_TYPE"] = false;
 			if (!isset($simpleTypeList[$arFields['PROPERTY_TYPE']]))
-				list($arFields["PROPERTY_TYPE"], $arFields["USER_TYPE"]) = explode(':', $arFields["PROPERTY_TYPE"], 2);
+				[$arFields["PROPERTY_TYPE"], $arFields["USER_TYPE"]] = explode(':', $arFields["PROPERTY_TYPE"], 2);
 		}
+
+		$DB->StartTransaction();
 
 		$ibp = new CIBlockProperty;
 		if(!$ibp->Update($ID, $arFields))
@@ -152,7 +154,10 @@ if($lAdmin->EditAction())
 			$lAdmin->AddUpdateError(GetMessage("IBP_ADM_SAVE_ERROR", array("#ID#"=>$ID, "#ERROR_TEXT#"=>$ibp->LAST_ERROR)), $ID);
 			$DB->Rollback();
 		}
-		$DB->Commit();
+		else
+		{
+			$DB->Commit();
+		}
 	}
 }
 
@@ -300,8 +305,7 @@ $lAdmin->AddHeaders($arHeader);
 
 $selectFields = array_fill_keys($lAdmin->GetVisibleHeaderColumns(), true);
 $selectFields['ID'] = true;
-$selectFieldsMap = array_fill_keys(array_keys($arHeader), false);
-$selectFieldsMap = array_merge($selectFieldsMap, $selectFields);
+$selectFieldsMap = $selectFields;
 
 global $by, $order;
 if (!isset($by))
@@ -344,35 +348,59 @@ while ($property = $propertyIterator->Fetch())
 
 	$row = &$lAdmin->AddRow($property['ID'], $property, $urlEdit);
 	$row->AddViewField('ID', $property['ID']);
-	if ($selectFieldsMap['NAME'])
+	if (isset($selectFieldsMap['NAME']))
 	{
 		$row->AddInputField('NAME', array('size' => 50, 'maxlength' => 255));
 		$row->AddViewField('NAME', '<a href="'.$urlEdit.'">'.htmlspecialcharsex($property['NAME']).'</a>');
 	}
-	if ($selectFieldsMap['CODE'])
-		$row->AddInputField('CODE', array('size' => 20, 'maxlength' => 50));
-	if ($selectFieldsMap['SORT'])
-		$row->AddInputField('SORT', array('size' => 5));
-	if ($selectFieldsMap['ACTIVE'])
+	if (isset($selectFieldsMap['CODE']))
+	{
+		$row->AddInputField('CODE', ['size' => 20, 'maxlength' => 50]);
+	}
+	if (isset($selectFieldsMap['SORT']))
+	{
+		$row->AddInputField('SORT', ['size' => 5]);
+	}
+	if (isset($selectFieldsMap['ACTIVE']))
+	{
 		$row->AddCheckField('ACTIVE');
-	if ($selectFieldsMap['MULTIPLE'])
+	}
+	if (isset($selectFieldsMap['MULTIPLE']))
+	{
 		$row->AddCheckField('MULTIPLE');
-	if ($selectFieldsMap['XML_ID'])
+	}
+	if (isset($selectFieldsMap['XML_ID']))
+	{
 		$row->AddInputField('XML_ID');
-	if ($selectFieldsMap['WITH_DESCRIPTION'])
+	}
+	if (isset($selectFieldsMap['WITH_DESCRIPTION']))
+	{
 		$row->AddCheckField('WITH_DESCRIPTION');
-	if ($selectFieldsMap['SEARCHABLE'])
+	}
+	if (isset($selectFieldsMap['SEARCHABLE']))
+	{
 		$row->AddCheckField('SEARCHABLE');
-	if ($selectFieldsMap['FILTRABLE'])
+	}
+	if (isset($selectFieldsMap['FILTRABLE']))
+	{
 		$row->AddCheckField('FILTRABLE');
-	if ($selectFieldsMap['FILTRABLE'])
+	}
+	if (isset($selectFieldsMap['FILTRABLE']))
+	{
 		$row->AddCheckField('FILTRABLE');
-	if ($selectFieldsMap['IS_REQUIRED'])
+	}
+	if (isset($selectFieldsMap['IS_REQUIRED']))
+	{
 		$row->AddCheckField('IS_REQUIRED');
-	if ($selectFieldsMap['HINT'])
+	}
+	if (isset($selectFieldsMap['HINT']))
+	{
 		$row->AddInputField('HINT');
-	if ($selectFieldsMap['PROPERTY_TYPE'])
+	}
+	if (isset($selectFieldsMap['PROPERTY_TYPE']))
+	{
 		$row->AddSelectField('PROPERTY_TYPE', $arPropType);
+	}
 
 	$arActions = array(
 		array(

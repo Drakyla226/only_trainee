@@ -14,7 +14,7 @@ Extension::load([
 	'ui.buttons',
 	'ui.common',
 	'ui.opensans',
-	'sender.rc_editor'
+	'sender.personalization_selector'
 ]);
 
 

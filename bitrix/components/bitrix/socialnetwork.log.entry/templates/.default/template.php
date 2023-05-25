@@ -16,6 +16,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\UI;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 UI\Extension::load([
 	'ui.animations',
@@ -53,7 +54,10 @@ else
 	{
 		$arEvent = &$arResult['Event'];
 
-		?><div class="feed-item-wrap" data-livefeed-id="<?= (int)$arEvent["EVENT"]["ID"] ?>"><?php
+		?><div
+		 class="feed-item-wrap"
+		 data-livefeed-id="<?= (int)$arEvent["EVENT"]["ID"] ?>"
+		 bx-content-view-key-signed="<?= htmlspecialcharsbx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"><?php
 
 		if (!defined("SONET_LOG_JS"))
 		{
@@ -242,17 +246,48 @@ else
 			}
 		}
 
+		$hasNotEmptyProperty = (
+			isset($arEvent['EVENT_FORMATTED']['UF'])
+			&& is_array($arEvent['EVENT_FORMATTED']['UF'])
+			&& array_reduce($arEvent['EVENT_FORMATTED']['UF'], static function ($val, $propertyData) {
+				return $val || (
+						$propertyData['VALUE'] !== null
+						&& $propertyData['VALUE'] !== false
+						&& $propertyData['VALUE'] !== []
+						&& !(
+							$propertyData['VALUE'] === '0'
+							&& $propertyData['USER_TYPE']['BASE_TYPE'] === 'int'
+						)
+					);
+			}, false)
+		);
+
+		if (
+			$hasNotEmptyProperty
+			|| (
+				$arEvent['EVENT']['EVENT_ID'] !== 'tasks'
+				&& !empty($arEvent['TAGS'])
+				&& is_array($arEvent['TAGS'])
+			)
+		)
+		{
+			$classNameList[] = 'feed-post-block-has-bottom';
+		}
+
 		?><div
 			 class="<?=implode(' ', $classNameList)?>"
 			 id="log-entry-<?=$arEvent["EVENT"]["ID"]?>"
 			 ondragenter="BX('feed_comments_block_<?=$arEvent["EVENT"]["ID"]?>').style.display = 'block'"
 			 data-livefeed-id="<?=(int)$arEvent["EVENT"]["ID"]?>"
+			 bx-content-view-key-signed="<?= htmlspecialcharsbx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"
 			 data-menu-id="post-menu-<?=$ind?>"
 			<?php
 			if (isset($pinned))
 			{
 				?>
 				 data-livefeed-post-pinned="<?=($pinned ? 'Y' : 'N')?>"
+				 data-security-entity-pin="<?= (int)$arEvent['EVENT']['ID'] ?>"
+				 data-security-token-pin="<?= htmlspecialcharsbx($arResult['LOG_ID_TOKEN']) ?>"
 				<?php
 			}
 			?>
@@ -309,7 +344,7 @@ else
 					$avatar = $arEvent["AVATAR_SRC"];
 				}
 
-				$style = ($avatar ? "background: url('" . $avatar . "'); background-size: cover;" : "");
+				$style = ($avatar ? "background: url('" . Uri::urnEncode($avatar) . "'); background-size: cover;" : "");
 
 				?><div class="ui-icon ui-icon-common-user feed-user-avatar"><i style="<?= $style ?>"></i></div><?php
 
@@ -652,7 +687,9 @@ else
 						'feed-post-block-important'
 					];
 
-					?><div class="<?=implode(' ', $classNameList)?>"><?php
+					$outerBlockId = 'log_entry_outer_' . $arEvent['EVENT']['ID'];
+
+					?><div class="<?=implode(' ', $classNameList)?>" id="<?= $outerBlockId ?>"><?php
 
 						$classNameList = [ 'feed-post-contentview' ];
 						if ($arParams["FROM_LOG"] === "Y")
@@ -660,11 +697,16 @@ else
 							$classNameList[] = 'feed-post-text-block-inner';
 						}
 
+						$contentViewBlockId = (
+							!empty($arResult['CONTENT_ID'])
+								? 'feed-post-contentview-' . $arResult['CONTENT_ID']
+								: ''
+						);
+
 						?><div
 						 class="<?=implode(' ', $classNameList)?>"
-						 id="<?=(!empty($arResult["CONTENT_ID"]) ? "feed-post-contentview-".htmlspecialcharsBx($arResult["CONTENT_ID"]) : "")?>"
+						 id="<?= htmlspecialcharsbx($contentViewBlockId) ?>"
 						 bx-content-view-xml-id="<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
-						 bx-content-view-key="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY']) ?>"
 						 bx-content-view-key-signed="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"><?php
 							?><div class="feed-post-text-block-inner-inner" id="log_entry_body_<?=$arEvent["EVENT"]["ID"]?>"><?php
 
@@ -692,20 +734,7 @@ else
 
 						if ($arParams["FROM_LOG"] === 'Y')
 						{
-							?><div class="feed-post-text-more" onclick="BX.UI.Animations.expand({
-									moreButtonNode: this,
-									type: 'post',
-									classBlock: 'feed-post-text-block',
-									classOuter: 'feed-post-text-block-inner',
-									classInner: 'feed-post-text-block-inner-inner',
-									heightLimit: 300,
-									callback: function(textBlock) {
-										if (!BX.type.isUndefined(BX.Livefeed))
-										{
-											BX.Livefeed.MoreButton.expand(textBlock);
-										}
-									}.bind(BX.Livefeed.MoreButton),
-								})" id="log_entry_more_<?= $arEvent['EVENT']['ID'] ?>"><?php
+							?><div class="feed-post-text-more" id="log_entry_more_<?= $arEvent['EVENT']['ID'] ?>"><?php
 								?><div class="feed-post-text-more-but"></div><?php
 							?></div><?php
 							?><script>
@@ -718,10 +747,14 @@ else
 										return;
 									}
 
-									BX.Livefeed.FeedInstance.addMoreButton({
-										bodyBlockID: 'log_entry_body_<?= $arEvent['EVENT']['ID'] ?>',
-										informerBlockID: 'log_entry_inform_<?= $arEvent['EVENT']['ID'] ?>'
-									});
+									BX.Livefeed.FeedInstance.addMoreButton(
+										'log_entry_<?= $arEvent['EVENT']['ID'] ?>',
+										{
+											outerBlockID: '<?= CUtil::JSEscape($outerBlockId) ?>',
+											bodyBlockID: 'log_entry_body_<?= $arEvent['EVENT']['ID'] ?>',
+											informerBlockID: 'log_entry_inform_<?= $arEvent['EVENT']['ID'] ?>',
+										}
+									);
 								});
 							</script><?php
 						}
@@ -737,7 +770,6 @@ else
 					 class="feed-post-item feed-post-contentview"
 					 id="<?=(!empty($arResult["CONTENT_ID"]) ? "feed-post-contentview-".htmlspecialcharsBx($arResult["CONTENT_ID"]) : "")?>"
 					 bx-content-view-xml-id="<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
-					 bx-content-view-key="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY']) ?>"
 					 bx-content-view-key-signed="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"><?php
 
 						?><?=$title24_2?><?php
@@ -953,7 +985,6 @@ else
 					 class="feed-post-info-block-wrap feed-post-contentview"
 					 id="feed-post-contentview-<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
 					 bx-content-view-xml-id="<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
-					 bx-content-view-key="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY']) ?>"
 					 bx-content-view-key-signed="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"><?php
 
 						?><?=$title24_2?><?php
@@ -968,7 +999,6 @@ else
 					 class="feed-post-text-block feed-post-contentview"
 					 id="feed-post-contentview-<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
 					 bx-content-view-xml-id="<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
-					 bx-content-view-key="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY']) ?>"
 					 bx-content-view-key-signed="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"><?php
 
 						?><?=$title24_2?><?php
@@ -978,7 +1008,7 @@ else
 				}
 				elseif ($arEvent["EVENT_FORMATTED"]["MESSAGE"] <> '') // all other events
 				{
-					?><div class="feed-post-text-block"><?php
+					?><div class="feed-post-text-block" id="log_entry_outer_<?= $arEvent['EVENT']['ID'] ?>"><?php
 
 						$classNameList = [ 'feed-post-contentview' ];
 						if ($arParams["FROM_LOG"] === "Y")
@@ -992,7 +1022,6 @@ else
 							 class="<?=implode(' ', $classNameList)?>"
 							 id="feed-post-text-contentview-<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
 							 bx-content-view-xml-id="<?=htmlspecialcharsBx($arResult["CONTENT_ID"])?>"
-							 bx-content-view-key="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY']) ?>"
 							 bx-content-view-key-signed="<?= htmlspecialcharsBx($arResult['CONTENT_VIEW_KEY_SIGNED']) ?>"><?php
 								?><div class="feed-post-text-block-inner-inner" id="log_entry_body_<?=$arEvent["EVENT"]["ID"]?>"><?php
 
@@ -1016,20 +1045,7 @@ else
 
 						if ($arParams["FROM_LOG"] === 'Y')
 						{
-							?><div class="feed-post-text-more" id="log_entry_more_<?=$arEvent["EVENT"]["ID"]?>" onclick="BX.UI.Animations.expand({
-									moreButtonNode: this,
-									type: 'post',
-									classBlock: 'feed-post-text-block',
-									classOuter: 'feed-post-text-block-inner',
-									classInner: 'feed-post-text-block-inner-inner',
-									heightLimit: 300,
-									callback: function(textBlock) {
-										if (!BX.type.isUndefined(BX.Livefeed))
-										{
-											BX.Livefeed.MoreButton.expand(textBlock);
-										}
-									}.bind(BX.Livefeed.MoreButton),
-								})"><?php
+							?><div class="feed-post-text-more" id="log_entry_more_<?=$arEvent["EVENT"]["ID"]?>"><?php
 								?><div class="feed-post-text-more-but"></div><?php
 							?></div><?php
 							?><script>
@@ -1042,10 +1058,14 @@ else
 										return;
 									}
 
-									BX.Livefeed.FeedInstance.addMoreButton({
-										bodyBlockID : 'log_entry_body_<?= $arEvent["EVENT"]["ID"] ?>',
-										informerBlockID: 'log_entry_inform_<?= $arEvent["EVENT"]["ID"] ?>'
-									});
+									BX.Livefeed.FeedInstance.addMoreButton(
+										'log_entry_<?= $arEvent['EVENT']['ID'] ?>',
+										{
+											outerBlockID : 'log_entry_outer_<?= $arEvent['EVENT']['ID'] ?>',
+											bodyBlockID : 'log_entry_body_<?= $arEvent['EVENT']['ID'] ?>',
+											informerBlockID: 'log_entry_inform_<?= $arEvent['EVENT']['ID'] ?>',
+										}
+									);
 								});
 							</script><?php
 						}
@@ -1086,7 +1106,7 @@ else
 				}
 
 				if (
-					$arEvent["EVENT"]["EVENT_ID"] !== 'tasks'
+					!in_array($arEvent["EVENT"]["EVENT_ID"], [ 'tasks', 'crm_activity_add' ], true)
 					&& !empty($arEvent["TAGS"])
 					&& is_array($arEvent["TAGS"])
 				)
@@ -1425,6 +1445,7 @@ else
 								|| in_array((int)$arComment['EVENT']['ID'], $arParams['UNREAD_COMMENTS_ID_LIST'], true)
 							)
 						);
+
 						$arRecords[$commentId] = [
 							"ID" => $commentId,
 							'NEW' => ($isNew ? 'Y' : 'N'),
@@ -1577,7 +1598,7 @@ else
 					);
 				}
 
-				$commentUrl = (new \Bitrix\Main\Web\Uri($commentUrl))->deleteParams([
+				$commentUrl = (new Uri($commentUrl))->deleteParams([
 					'sessid',
 					'AJAX_POST',
 					'ENTITY_XML_ID',
@@ -1672,9 +1693,6 @@ else
 							'entityId' => $arEvent['EVENT']['ID'],
 						],
 						'FORM_ID' => ($canComment ? $arParams['FORM_ID'] : ''),
-
-						'CONTENT_VIEW_KEY' => $arResult['CONTENT_VIEW_KEY'],
-						'CONTENT_VIEW_KEY_SIGNED' => $arResult['CONTENT_VIEW_KEY_SIGNED'],
 					),
 					$this->__component
 				);

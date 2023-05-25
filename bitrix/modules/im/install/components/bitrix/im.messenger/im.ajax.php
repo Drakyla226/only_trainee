@@ -109,7 +109,20 @@ if (isset($_POST['desktop_action']) && $_POST['desktop_action'] == 'Y')
 	CIMMessenger::SetDesktopStatusOnline();
 }
 
-if ($_POST['IM_AVATAR_UPDATE'] == 'Y')
+if (!function_exists('isImPostRequest'))
+{
+	function isImPostRequest(string $method): bool
+	{
+		if (!$_POST || !isset($_POST[$method]) || $_POST[$method] !== 'Y')
+		{
+			return false;
+		}
+
+		return true;
+	}
+}
+
+if (isImPostRequest('IM_AVATAR_UPDATE'))
 {
 	$userId = $USER->GetId();
 	$chatId = intval($_POST['CHAT_ID']);
@@ -134,7 +147,7 @@ if ($_POST['IM_AVATAR_UPDATE'] == 'Y')
 		}
 	}
 }
-else if ($_POST['IM_FILE_UPLOAD'] == 'Y')
+else if (isImPostRequest('IM_FILE_UPLOAD'))
 {
 	CUtil::decodeURIComponent($_POST);
 	$uploader = new \Bitrix\Main\UI\Uploader\Uploader(array(
@@ -153,7 +166,7 @@ else if ($_POST['IM_FILE_UPLOAD'] == 'Y')
 		));
 	}
 }
-else if ($_POST['IM_FILE_REGISTER'] == 'Y')
+else if (isImPostRequest('IM_FILE_REGISTER'))
 {
 	$errorMessage = '';
 	CUtil::decodeURIComponent($_POST);
@@ -186,7 +199,7 @@ else if ($_POST['IM_FILE_REGISTER'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_FILE_UNREGISTER'] == 'Y')
+else if (isImPostRequest('IM_FILE_UNREGISTER'))
 {
 	$_POST['FILES'] = CUtil::JsObjectToPhp($_POST['FILES']);
 	$_POST['MESSAGES'] = CUtil::JsObjectToPhp($_POST['MESSAGES']);
@@ -197,7 +210,7 @@ else if ($_POST['IM_FILE_UNREGISTER'] == 'Y')
 		'ERROR' => !$result? 'ERROR': ''
 	));
 }
-else if ($_POST['IM_FILE_DELETE'] == 'Y')
+else if (isImPostRequest('IM_FILE_DELETE'))
 {
 	$result = CIMDisk::DeleteFile($_POST['CHAT_ID'], $_POST['FILE_ID']);
 
@@ -207,7 +220,7 @@ else if ($_POST['IM_FILE_DELETE'] == 'Y')
 		'ERROR' => !$result? 'ERROR': ''
 	));
 }
-else if ($_POST['IM_FILE_SAVE_TO_DISK'] == 'Y')
+else if (isImPostRequest('IM_FILE_SAVE_TO_DISK'))
 {
 	$result = CIMDisk::SaveToLocalDisk($_POST['FILE_ID']);
 
@@ -218,7 +231,7 @@ else if ($_POST['IM_FILE_SAVE_TO_DISK'] == 'Y')
 		'ERROR' => !$result? 'ERROR': ''
 	));
 }
-else if ($_POST['IM_FILE_UPLOAD_FROM_DISK'] == 'Y')
+else if (isImPostRequest('IM_FILE_UPLOAD_FROM_DISK'))
 {
 	$errorMessage = '';
 
@@ -243,10 +256,10 @@ else if ($_POST['IM_FILE_UPLOAD_FROM_DISK'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_HISTORY_FILES_LOAD'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_FILES_LOAD'))
 {
 	$chatId = intval($_POST['CHAT_ID']);
-	$historyPage = intval($_POST['PAGE_ID']);
+	$historyPage = isset($_POST['PAGE_ID']) ? intval($_POST['PAGE_ID']) : 0;
 	$historyPage = $historyPage>0? $historyPage: 1;
 
 	$arFiles = CIMDisk::GetHistoryFiles($chatId, $historyPage);
@@ -258,7 +271,7 @@ else if ($_POST['IM_HISTORY_FILES_LOAD'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_HISTORY_FILES_SEARCH'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_FILES_SEARCH'))
 {
 	CUtil::decodeURIComponent($_POST);
 
@@ -271,10 +284,7 @@ else if ($_POST['IM_HISTORY_FILES_SEARCH'] == 'Y')
 		'ERROR' => ''
 	));
 }
-elseif (
-	$_POST['IM_UPDATE_STATE'] == 'Y'
-	|| $_POST['IM_UPDATE_STATE_LIGHT'] == 'Y'
-)
+else if (isImPostRequest('IM_UPDATE_STATE') || isImPostRequest('IM_UPDATE_STATE_LIGHT'))
 {
 	$arResult['LAST_UPDATE'] = (new \Bitrix\Main\Type\DateTime())->format(DateTimeInterface::RFC3339);
 
@@ -372,7 +382,7 @@ elseif (
 	];
 	echo \Bitrix\Im\Common::objectEncode($arSend, true);
 }
-else if ($_POST['IM_NOTIFY_LOAD'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_LOAD'))
 {
 	$CIMNotify = new CIMNotify();
 	$arNotify = $CIMNotify->GetUnreadNotify(Array('SPEED_CHECK' => 'N', 'USE_TIME_ZONE' => 'N'));
@@ -396,7 +406,7 @@ else if ($_POST['IM_NOTIFY_LOAD'] == 'Y')
 	}
 	echo \Bitrix\Im\Common::objectEncode($arSend);
 }
-else if ($_POST['IM_NOTIFY_HISTORY_LOAD_MORE'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_HISTORY_LOAD_MORE'))
 {
 	if (CIMMessenger::IsBitrix24UserRestricted())
 	{
@@ -417,7 +427,7 @@ else if ($_POST['IM_NOTIFY_HISTORY_LOAD_MORE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_SEND_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_SEND_MESSAGE'))
 {
 	if (
 		CIMMessenger::IsBitrix24UserRestricted()
@@ -484,9 +494,9 @@ else if ($_POST['IM_SEND_MESSAGE'] == 'Y')
 	}
 
 	$message = CIMMessenger::GetById($insertID, Array('WITH_FILES' => 'Y'));
-	$arMessages[$insertID]['params'] = $message['PARAMS'];
+	$arMessages[$insertID]['params'] = $message['PARAMS'] ?? null;
 
-	$arMessages = CIMMessageLink::prepareShow($arMessages, Array($insertID => $message['PARAMS']));
+	$arMessages = CIMMessageLink::prepareShow($arMessages, Array($insertID => $message['PARAMS'] ?? null));
 
 	$ar['MESSAGE'] = trim(str_replace(Array('[BR]', '[br]'), "\n", $_POST['MESSAGE']));
 	$ar['MESSAGE'] = preg_replace("/\[DISK\=([0-9]+)\]/i", "", $ar['MESSAGE']);
@@ -495,11 +505,11 @@ else if ($_POST['IM_SEND_MESSAGE'] == 'Y')
 	$arResult = Array(
 		'TMP_ID' => $_POST['ID'],
 		'ID' => $insertID,
-		'CHAT_ID' => $message['CHAT_ID'],
+		'CHAT_ID' => $message['CHAT_ID'] ?? null,
 		'SEND_DATE' => new \Bitrix\Main\Type\DateTime(),
 		'SEND_MESSAGE' => \Bitrix\Im\Text::parse($ar['MESSAGE']),
 		'SEND_MESSAGE_PARAMS' => $arMessages[$insertID]['params'],
-		'SEND_MESSAGE_FILES' => $message['FILES'],
+		'SEND_MESSAGE_FILES' => $message['FILES'] ?? null,
 		'SENDER_ID' => intval($USER->GetID()),
 		'RECIPIENT_ID' => $_POST['CHAT'] == 'Y'? htmlspecialcharsbx($_POST['RECIPIENT_ID']): intval($_POST['RECIPIENT_ID']),
 		'OL_SILENT' => $_POST['OL_SILENT'],
@@ -516,7 +526,7 @@ else if ($_POST['IM_SEND_MESSAGE'] == 'Y')
 
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_BOT_COMMAND'] == 'Y')
+else if (isImPostRequest('IM_BOT_COMMAND'))
 {
 	CUtil::decodeURIComponent($_POST);
 
@@ -565,7 +575,7 @@ else if ($_POST['IM_BOT_COMMAND'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_EDIT_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_EDIT_MESSAGE'))
 {
 	CUtil::decodeURIComponent($_POST);
 
@@ -580,7 +590,7 @@ else if ($_POST['IM_EDIT_MESSAGE'] == 'Y')
 		$userTzOffset = isset($_POST['USER_TZ_OFFSET'])? intval($_POST['USER_TZ_OFFSET']): CTimeZone::GetOffset();
 
 		$arResult = Array(
-			'ID' => $insertID,
+			'ID' => $insertID ?? 0,
 			'MESSAGE' => \Bitrix\Im\Text::parse($_POST['MESSAGE']),
 			'DATE' => new \Bitrix\Main\Type\DateTime(),
 			'ERROR' => ''
@@ -589,7 +599,7 @@ else if ($_POST['IM_EDIT_MESSAGE'] == 'Y')
 
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_DELETE_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_DELETE_MESSAGE'))
 {
 	$errorMessage = '';
 	if(!CIMMessenger::Delete($_POST['ID']))
@@ -602,7 +612,7 @@ else if ($_POST['IM_DELETE_MESSAGE'] == 'Y')
 	);
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_SHARE_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_SHARE_MESSAGE'))
 {
 	$errorMessage = '';
 	if(!CIMMessenger::Share($_POST['ID'], $_POST['TYPE'], $_POST['DATE']))
@@ -614,7 +624,7 @@ else if ($_POST['IM_SHARE_MESSAGE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_URL_ATTACH_DELETE'] == 'Y')
+else if (isImPostRequest('IM_URL_ATTACH_DELETE'))
 {
 	$errorMessage = '';
 
@@ -625,7 +635,7 @@ else if ($_POST['IM_URL_ATTACH_DELETE'] == 'Y')
 	);
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_LINES_VOTE_SEND'] == 'Y')
+else if (isImPostRequest('IM_LINES_VOTE_SEND'))
 {
 	CIMMessenger::LinesSessionVote($_POST['DIALOG_ID'], $_POST['MESSAGE_ID'], $_POST['RATING']);
 
@@ -634,7 +644,7 @@ else if ($_POST['IM_LINES_VOTE_SEND'] == 'Y')
 	);
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_LIKE_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_LIKE_MESSAGE'))
 {
 	$errorMessage = '';
 	$result = CIMMessenger::Like($_POST['ID'], $_POST['ACTION']);
@@ -647,7 +657,7 @@ else if ($_POST['IM_LIKE_MESSAGE'] == 'Y')
 	);
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_READ_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_READ_MESSAGE'))
 {
 	if (CIMMessenger::IsBitrix24UserRestricted())
 	{
@@ -676,7 +686,7 @@ else if ($_POST['IM_READ_MESSAGE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_UNREAD_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_UNREAD_MESSAGE'))
 {
 	$errorMessage = "";
 	if (mb_substr($_POST['USER_ID'], 0, 4) == 'chat')
@@ -694,7 +704,7 @@ else if ($_POST['IM_UNREAD_MESSAGE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_LOAD_LAST_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_LOAD_LAST_MESSAGE'))
 {
 	if (CIMMessenger::IsBitrix24UserRestricted())
 	{
@@ -811,7 +821,15 @@ else if ($_POST['IM_LOAD_LAST_MESSAGE'] == 'Y')
 				$orm = \Bitrix\Im\Model\ChatTable::getById($chatId);
 				$chatData = $orm->fetch();
 
-				$diskFolderId = (int)$chatData['DISK_FOLDER_ID'];
+				if ($chatData === false)
+				{
+					$chatData = [
+						'DISK_FOLDER_ID' => null,
+						'ENTITY_TYPE' => null,
+						'ENTITY_ID' => null,
+					];
+				}
+				$diskFolderId = (int)($chatData['DISK_FOLDER_ID']);
 				$entityType = $chatData['ENTITY_TYPE'];
 				$entityId = $chatData['ENTITY_ID'];
 			}
@@ -860,11 +878,11 @@ else if ($_POST['IM_LOAD_LAST_MESSAGE'] == 'Y')
 		'FILES' => isset($arMessage['files'])? $arMessage['files']: Array(),
 		'LINES' => isset($arMessage['lines'])? $arMessage['lines']: Array(),
 		'OPENLINES' => isset($arMessage['openlines'])? $arMessage['openlines']: Array(),
-		'NETWORK_ID' => $networkUserId? $networkUserId: '',
+		'NETWORK_ID' => isset($networkUserId) && $networkUserId ? $networkUserId : '',
 		'ERROR' => $error
 	));
 }
-else if ($_POST['IM_USER_DATA_LOAD'] == 'Y')
+else if (isImPostRequest('IM_USER_DATA_LOAD'))
 {
 	$error = '';
 	$arMessage = Array();
@@ -897,7 +915,7 @@ else if ($_POST['IM_USER_DATA_LOAD'] == 'Y')
 		'ERROR' => $error
 	));
 }
-else if ($_POST['IM_HISTORY_LOAD'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_LOAD'))
 {
 	$arMessage = Array();
 	$chatId = 0;
@@ -946,7 +964,7 @@ else if ($_POST['IM_HISTORY_LOAD'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_HISTORY_LOAD_MORE'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_LOAD_MORE'))
 {
 	$arMessage = Array();
 
@@ -985,7 +1003,7 @@ else if ($_POST['IM_HISTORY_LOAD_MORE'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_LOAD_MESSAGE_BY_DATE'] == 'Y')
+else if (isImPostRequest('IM_LOAD_MESSAGE_BY_DATE'))
 {
 	$history = new \CIMHistory();
 	$arMessage = $history->GetMessagesByDate($_POST['CHAT_ID'], $_POST['LAST_LOAD'], $_POST['FIRST_MESSAGE_ID'], false);
@@ -1007,7 +1025,7 @@ else if ($_POST['IM_LOAD_MESSAGE_BY_DATE'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_LOAD_CONTEXT_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_LOAD_CONTEXT_MESSAGE'))
 {
 	if (isset($_POST['PREVIOUS']))
 	{
@@ -1040,7 +1058,7 @@ else if ($_POST['IM_LOAD_CONTEXT_MESSAGE'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_HISTORY_REMOVE_ALL'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_REMOVE_ALL'))
 {
 	$errorMessage = "";
 
@@ -1055,7 +1073,7 @@ else if ($_POST['IM_HISTORY_REMOVE_ALL'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_HISTORY_REMOVE_MESSAGE'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_REMOVE_MESSAGE'))
 {
 	$errorMessage = "";
 
@@ -1067,7 +1085,7 @@ else if ($_POST['IM_HISTORY_REMOVE_MESSAGE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_HISTORY_SEARCH'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_SEARCH'))
 {
 	CUtil::decodeURIComponent($_POST);
 
@@ -1099,7 +1117,7 @@ else if ($_POST['IM_HISTORY_SEARCH'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_HISTORY_DATE_SEARCH'] == 'Y')
+else if (isImPostRequest('IM_HISTORY_DATE_SEARCH'))
 {
 	$CIMHistory = new CIMHistory();
 	if (mb_substr($_POST['USER_ID'], 0, 4) == 'chat')
@@ -1129,7 +1147,7 @@ else if ($_POST['IM_HISTORY_DATE_SEARCH'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_CONTACT_LIST_SEARCH'] == 'Y')
+else if (isImPostRequest('IM_CONTACT_LIST_SEARCH'))
 {
 	$enabled = false;
 	if (!IsModuleInstalled('b24network'))
@@ -1169,7 +1187,7 @@ else if ($_POST['IM_CONTACT_LIST_SEARCH'] == 'Y')
 		echo \Bitrix\Im\Common::objectEncode(Array('ERROR' => 'DISABLED_FUNCTION'));
 	}
 }
-else if ($_POST['IM_CONTACT_LIST'] == 'Y')
+else if (isImPostRequest('IM_CONTACT_LIST'))
 {
 	$CIMContactList = new CIMContactList();
 	$arContactList = $CIMContactList->GetList([
@@ -1186,7 +1204,7 @@ else if ($_POST['IM_CONTACT_LIST'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_RECENT_LIST'] == 'Y')
+else if (isImPostRequest('IM_RECENT_LIST'))
 {
 	$ar = CIMContactList::GetRecentList(Array(
 		'USE_TIME_ZONE' => 'N',
@@ -1231,7 +1249,7 @@ else if ($_POST['IM_RECENT_LIST'] == 'Y')
 	));
 
 }
-else if ($_POST['IM_NOTIFY_READ'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_READ'))
 {
 	$errorMessage = "";
 
@@ -1242,7 +1260,7 @@ else if ($_POST['IM_NOTIFY_READ'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_NOTIFY_VIEW'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_VIEW'))
 {
 	$errorMessage = "";
 
@@ -1260,7 +1278,7 @@ else if ($_POST['IM_NOTIFY_VIEW'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_NOTIFY_CONFIRM'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_CONFIRM'))
 {
 	$errorMessage = "";
 
@@ -1274,7 +1292,7 @@ else if ($_POST['IM_NOTIFY_CONFIRM'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_NOTIFY_ANSWER'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_ANSWER'))
 {
 	CUtil::decodeURIComponent($_POST);
 
@@ -1288,7 +1306,7 @@ else if ($_POST['IM_NOTIFY_ANSWER'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_NOTIFY_BLOCK_TYPE'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_BLOCK_TYPE'))
 {
 	$errorMessage = "";
 
@@ -1303,7 +1321,7 @@ else if ($_POST['IM_NOTIFY_BLOCK_TYPE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_NOTIFY_REMOVE'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_REMOVE'))
 {
 	$errorMessage = "";
 
@@ -1315,7 +1333,7 @@ else if ($_POST['IM_NOTIFY_REMOVE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_NOTIFY_GROUP_REMOVE'] == 'Y')
+else if (isImPostRequest('IM_NOTIFY_GROUP_REMOVE'))
 {
 	$errorMessage = "";
 
@@ -1328,7 +1346,7 @@ else if ($_POST['IM_NOTIFY_GROUP_REMOVE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_RECENT_HIDE'] == 'Y')
+else if (isImPostRequest('IM_RECENT_HIDE'))
 {
 	\CIMContactList::DialogHide($_POST['DIALOG_ID']);
 
@@ -1337,7 +1355,7 @@ else if ($_POST['IM_RECENT_HIDE'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_CHAT_ADD'] == 'Y')
+else if (isImPostRequest('IM_CHAT_ADD'))
 {
 	$_POST['USERS'] = CUtil::JsObjectToPhp($_POST['USERS']);
 
@@ -1364,6 +1382,11 @@ else if ($_POST['IM_CHAT_ADD'] == 'Y')
 			$entityType = 'VIDEOCONF';
 		}
 
+		if (\Bitrix\Im\User::getInstance()->isExtranet())
+		{
+			$_POST['USERS'] = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($_POST['USERS']);
+		}
+
 		$CIMChat = new CIMChat();
 		$chatId = $CIMChat->Add(Array(
 			'TYPE' => $type,
@@ -1371,7 +1394,7 @@ else if ($_POST['IM_CHAT_ADD'] == 'Y')
 			'TITLE' => $_POST['TITLE'],
 			'MESSAGE' => $_POST['MESSAGE'],
 			'ENTITY_TYPE' => $entityType,
-			'SEARCH_MARK' => $_POST['SEARCH_MARK']
+			'SEARCH_MARK' => $_POST['SEARCH_MARK'] ?? null
 		));
 		if ($chatId)
 		{
@@ -1393,7 +1416,7 @@ else if ($_POST['IM_CHAT_ADD'] == 'Y')
 		'ERROR' => $errorMessage
 	]);
 }
-else if ($_POST['IM_CHAT_EXTEND'] == 'Y')
+else if (isImPostRequest('IM_CHAT_EXTEND'))
 {
 	$_POST['USERS'] = CUtil::JsObjectToPhp($_POST['USERS']);
 
@@ -1406,6 +1429,11 @@ else if ($_POST['IM_CHAT_EXTEND'] == 'Y')
 	}
 	else
 	{
+		if (\Bitrix\Im\User::getInstance()->isExtranet())
+		{
+			$_POST['USERS'] = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($_POST['USERS']);
+		}
+
 		$CIMChat = new CIMChat();
 		$result = $CIMChat->AddUser($_POST['CHAT_ID'], $_POST['USERS'], $_POST['HISTORY'] != 'Y');
 		if (!$result)
@@ -1418,17 +1446,17 @@ else if ($_POST['IM_CHAT_EXTEND'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_CHAT_JOIN'] == 'Y')
+else if (isImPostRequest('IM_CHAT_JOIN'))
 {
 	$CIMChat = new CIMChat();
 	$result = $CIMChat->Join($_POST['CHAT_ID']);
 }
-else if ($_POST['IM_PARENT_CHAT_JOIN'] == 'Y')
+else if (isImPostRequest('IM_PARENT_CHAT_JOIN'))
 {
 	$CIMChat = new CIMChat();
 	$result = $CIMChat->JoinParent($_POST['CHAT_ID'], $_POST['MESSAGE_ID']);
 }
-else if ($_POST['IM_CHAT_LEAVE'] == 'Y')
+else if (isImPostRequest('IM_CHAT_LEAVE'))
 {
 	$userId = $USER->GetId();
 	$chatId = intval($_POST['CHAT_ID']);
@@ -1448,7 +1476,7 @@ else if ($_POST['IM_CHAT_LEAVE'] == 'Y')
 		'ERROR' => $result? '': 'ACCESS_ERROR'
 	));
 }
-else if ($_POST['IM_CHAT_MUTE'] == 'Y')
+else if (isImPostRequest('IM_CHAT_MUTE'))
 {
 	$result = false;
 
@@ -1463,7 +1491,7 @@ else if ($_POST['IM_CHAT_MUTE'] == 'Y')
 		'ERROR' => $result? '': 'ACCESS_ERROR'
 	));
 }
-else if ($_POST['IM_CHAT_RENAME'] == 'Y')
+else if (isImPostRequest('IM_CHAT_RENAME'))
 {
 	$userId = $USER->GetId();
 	$chatId = intval($_POST['CHAT_ID']);
@@ -1486,7 +1514,7 @@ else if ($_POST['IM_CHAT_RENAME'] == 'Y')
 		'ERROR' => $error
 	));
 }
-else if ($_POST['IM_CRM_SELECTOR'] == 'Y')
+else if (isImPostRequest('IM_CRM_SELECTOR'))
 {
 	if (CModule::IncludeModule('crm'))
 	{
@@ -1514,7 +1542,7 @@ else if ($_POST['IM_CRM_SELECTOR'] == 'Y')
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 
 }
-else if ($_POST['IM_CHAT_DATA_LOAD'] == 'Y')
+else if (isImPostRequest('IM_CHAT_DATA_LOAD'))
 {
 	CUtil::decodeURIComponent($_POST);
 
@@ -1549,7 +1577,7 @@ else if ($_POST['IM_CHAT_DATA_LOAD'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_GET_EXTERNAL_DATA'] == 'Y')
+else if (isImPostRequest('IM_GET_EXTERNAL_DATA'))
 {
 	$error = '';
 	$arResult = Array(
@@ -1617,6 +1645,7 @@ else if ($_POST['IM_GET_EXTERNAL_DATA'] == 'Y')
 						"bitrix:player",
 						"",
 						Array(
+							"PROVIDER" => "sound",
 							"PLAYER_TYPE" => "flv",
 							"CHECK_FILE" => "N",
 							"USE_PLAYLIST" => "N",
@@ -1684,7 +1713,7 @@ else if ($_POST['IM_GET_EXTERNAL_DATA'] == 'Y')
 
 	echo \Bitrix\Im\Common::objectEncode($arResult);
 }
-else if ($_POST['IM_CALL'] == 'Y')
+else if (isImPostRequest('IM_CALL'))
 {
 	$userId = intval($USER->GetId());
 	$chatId = intval($_POST['CHAT_ID']) ?: CIMMessage::GetChatId($userId, intval($_POST['USER_ID']));
@@ -1819,7 +1848,7 @@ else if ($_POST['IM_CALL'] == 'Y')
 		));
 	}
 }
-else if ($_POST['IM_SHARING'] == 'Y' && intval($_POST['USER_ID']) > 0)
+else if (isImPostRequest('IM_SHARING') && intval($_POST['USER_ID']) > 0)
 {
 	if (!CModule::IncludeModule("pull"))
 		return false;
@@ -1852,18 +1881,18 @@ else if ($_POST['IM_SHARING'] == 'Y' && intval($_POST['USER_ID']) > 0)
 		));
 	}
 }
-else if ($_POST['IM_PHONE'] == 'Y' && CModule::IncludeModule('voximplant'))
+else if (isImPostRequest('IM_PHONE') && CModule::IncludeModule('voximplant'))
 {
 	require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/voximplant/ajax_hit.php");
 }
-else if (($_POST['IM_OPEN_LINES'] == 'Y' || $_POST['IM_OPEN_LINES_CLIENT'] == 'Y') && CModule::IncludeModule('imopenlines'))
+else if ((isImPostRequest('IM_OPEN_LINES') || isImPostRequest('IM_OPEN_LINES_CLIENT')) && CModule::IncludeModule('imopenlines'))
 {
 	$_POST['IM_OPEN_LINES_CLIENT'] = $_POST['IM_OPEN_LINES'] == 'Y'? 'N': 'Y';
 	$_POST['IM_OPEN_LINES'] = $_POST['IM_OPEN_LINES_CLIENT'] == 'Y'? 'N': 'Y';
 
 	require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/imopenlines/handlers/ajax.php");
 }
-else if ($_POST['IM_IDLE'] == 'Y')
+else if (isImPostRequest('IM_IDLE'))
 {
 	$errorMessage = "";
 	CIMStatus::SetIdle($USER->GetId(), $_POST['IDLE'] == 'Y', $_POST['MANUAL'] == 'Y'? 1: 10);
@@ -1872,7 +1901,7 @@ else if ($_POST['IM_IDLE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_OPEN_REST_TOKEN'] == 'Y')
+else if (isImPostRequest('IM_OPEN_REST_TOKEN'))
 {
 	$errorMessage = "";
 
@@ -1886,7 +1915,7 @@ else if ($_POST['IM_OPEN_REST_TOKEN'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_GET_TEXTAREA_ICONS'] == 'Y')
+else if (isImPostRequest('IM_GET_TEXTAREA_ICONS'))
 {
 	$errorMessage = "";
 
@@ -1895,7 +1924,7 @@ else if ($_POST['IM_GET_TEXTAREA_ICONS'] == 'Y')
 		'ERROR' => ''
 	));
 }
-else if ($_POST['IM_START_WRITING'] == 'Y')
+else if (isImPostRequest('IM_START_WRITING'))
 {
 	$errorMessage = "";
 	CIMMessenger::StartWriting($_POST['DIALOG_ID'], false, "", false, $_POST['OL_SILENT'] == 'Y');
@@ -1904,7 +1933,7 @@ else if ($_POST['IM_START_WRITING'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_DESKTOP_LOGOUT'] == 'Y')
+else if (isImPostRequest('IM_DESKTOP_LOGOUT'))
 {
 	$errorMessage = "";
 
@@ -1915,7 +1944,7 @@ else if ($_POST['IM_DESKTOP_LOGOUT'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_SET_COLOR'] == 'Y')
+else if (isImPostRequest('IM_SET_COLOR'))
 {
 	$errorMessage = "";
 
@@ -1945,7 +1974,7 @@ else if ($_POST['IM_SET_COLOR'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_GET_MOBILE_CHAT_AVATAR'] == 'Y')
+else if (isImPostRequest('IM_GET_MOBILE_CHAT_AVATAR'))
 {
 	$avatar = "";
 	$errorMessage = "";
@@ -1971,7 +2000,7 @@ else if ($_POST['IM_GET_MOBILE_CHAT_AVATAR'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_SETTING_SAVE'] == 'Y')
+else if (isImPostRequest('IM_SETTING_SAVE'))
 {
 	$errorMessage = "";
 
@@ -1983,7 +2012,7 @@ else if ($_POST['IM_SETTING_SAVE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_SETTINGS_SAVE'] == 'Y')
+else if (isImPostRequest('IM_SETTINGS_SAVE'))
 {
 	$errorMessage = "";
 
@@ -2013,7 +2042,7 @@ else if ($_POST['IM_SETTINGS_SAVE'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_SETTINGS_NOTIFY_LOAD'] == 'Y')
+else if (isImPostRequest('IM_SETTINGS_NOTIFY_LOAD'))
 {
 	$errorMessage = "";
 
@@ -2026,7 +2055,7 @@ else if ($_POST['IM_SETTINGS_NOTIFY_LOAD'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_SETTINGS_SIMPLE_NOTIFY_LOAD'] == 'Y')
+else if (isImPostRequest('IM_SETTINGS_SIMPLE_NOTIFY_LOAD'))
 {
 	$errorMessage = "";
 
@@ -2039,7 +2068,7 @@ else if ($_POST['IM_SETTINGS_SIMPLE_NOTIFY_LOAD'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_DISK_ACTIVATE_PUBLIC_LINK'] == 'Y')
+else if (isImPostRequest('IM_DISK_ACTIVATE_PUBLIC_LINK'))
 {
 	CIMDisk::SetEnabledExternalLink($_POST['STATUS'] == 'Y');
 
@@ -2047,7 +2076,7 @@ else if ($_POST['IM_DISK_ACTIVATE_PUBLIC_LINK'] == 'Y')
 		'ERROR' => $errorMessage
 	));
 }
-else if ($_POST['IM_CREATE_ZOOM_CONF'] === 'Y')
+else if (isImPostRequest('IM_CREATE_ZOOM_CONF'))
 {
 	$chatId = \Bitrix\Im\Dialog::getChatId($_POST['CHAT_ID']);
 	$userId = $USER->GetId();

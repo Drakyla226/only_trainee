@@ -239,7 +239,7 @@ class CIMNotify
 			CIMMessenger::SpeedFileCreate($this->user_id, array('counter' => $arNotify['countNotify'], 'maxId' => $arNotify['maxNotify']), IM_SPEED_NOTIFY);
 
 			$arUsers = CIMContactList::GetUserData(Array('ID' => $arGetUsers, 'DEPARTMENT' => 'N', 'USE_CACHE' => 'Y', 'CACHE_TTL' => 86400));
-			$arGetUsers = $arUsers['users'];
+			$arGetUsers = $arUsers['users'] ?? null;
 
 			$counters = self::GetCounters($arChatId);
 
@@ -247,6 +247,11 @@ class CIMNotify
 			{
 				$value['FROM_USER_DATA'] = $arGetUsers;
 				$value['COUNTER'] = $counters[$value['CHAT_ID']];
+				if (!$bTimeZone)
+				{
+					$dateTime = \Bitrix\Main\Type\DateTime::createFromTimestamp($value['DATE_CREATE']);
+					$value['DATE_CREATE'] = $dateTime->toUserTime()->getTimestamp();
+				}
 				$arNotify['notify'][$id] = self::GetFormatNotify($value);
 			}
 
@@ -295,6 +300,24 @@ class CIMNotify
 		CTimeZone::Disable();
 		while ($arResRelation = $dbResRelation->Fetch())
 		{
+			$orm = \Bitrix\Im\Model\MessageTable::getList(array(
+				'select' => ['ID'],
+				'filter' => [
+					'=CHAT_ID' => intval($arResRelation['CHAT_ID']),
+					'>ID' => $arResRelation['LAST_SEND_ID'],
+				],
+				'order' => [
+					'CHAT_ID' => 'ASC',
+					'ID' => 'DESC'
+				],
+				'limit' => 200
+			));
+			$ids = array_map(fn ($item) => $item['ID'], $orm->fetchAll());
+			if (empty($ids))
+			{
+				continue;
+			}
+
 			$strSql ="
 				SELECT
 					M.ID,
@@ -318,10 +341,9 @@ class CIMNotify
 					U2.EXTERNAL_AUTH_ID FROM_EXTERNAL_AUTH_ID
 				FROM b_im_message M
 				LEFT JOIN b_user U2 ON U2.ID = M.AUTHOR_ID
-				WHERE M.ID > ".intval($arResRelation['LAST_SEND_ID'])." AND M.CHAT_ID = ".intval($arResRelation['CHAT_ID'])."
+				WHERE M.ID IN (".implode(", ", $ids).")
 				ORDER BY M.ID DESC
 			";
-			$strSql = $DB->TopSql($strSql, 200);
 			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 
 			while ($arRes = $dbRes->Fetch())
@@ -376,15 +398,15 @@ class CIMNotify
 			'id' => $arFields['ID'],
 			'type' => $arFields['NOTIFY_TYPE'],
 			'date' => \Bitrix\Main\Type\DateTime::createFromTimestamp($arFields['DATE_CREATE']),
-			'silent' => $arFields['NOTIFY_SILENT'] ? 'Y' : 'N',
-			'onlyFlash' => (bool)$arFields['NOTIFY_ONLY_FLASH'],
-			'link' => (string)$arFields['NOTIFY_LINK'],
+			'silent' => ($arFields['NOTIFY_SILENT'] ?? null) ? 'Y' : 'N',
+			'onlyFlash' => (bool)($arFields['NOTIFY_ONLY_FLASH'] ?? false),
+			'link' => (string)($arFields['NOTIFY_LINK'] ?? ''),
 			'text_converted' => $messageText,
 			'text' => $textInBbCode,
 			'tag' => $arFields['NOTIFY_TAG'] != '' ? md5($arFields['NOTIFY_TAG']): '',
 			'originalTag' => $arFields['NOTIFY_TAG'],
 			'original_tag' => $arFields['NOTIFY_TAG'],
-			'read' => $arFields['NOTIFY_READ'],
+			'read' => $arFields['NOTIFY_READ'] ?? null,
 			'settingName' => $arFields['NOTIFY_MODULE'] . '|' . $arFields['NOTIFY_EVENT'],
 			'params' => $arFields['PARAMS'] ?? [],
 			'counter' => isset($arFields['COUNTER']) ? (int)$arFields['COUNTER'] : 0,
@@ -392,14 +414,14 @@ class CIMNotify
 		if (!isset($arFields["FROM_USER_DATA"]))
 		{
 			$arUsers = CIMContactList::GetUserData(Array('ID' => $arFields['FROM_USER_ID'], 'DEPARTMENT' => 'N', 'USE_CACHE' => 'Y', 'CACHE_TTL' => 86400));
-			$arFields["FROM_USER_DATA"] = $arUsers['users'];
+			$arFields["FROM_USER_DATA"] = $arUsers['users'] ?? null;
 		}
 
 		$arNotify['userId'] = $arFields["FROM_USER_ID"];
-		$arNotify['userName'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['name'];
-		$arNotify['userColor'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['color'];
-		$arNotify['userAvatar'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['avatar'];
-		$arNotify['userLink'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['profile'];
+		$arNotify['userName'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['name'] ?? null;
+		$arNotify['userColor'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['color'] ?? null;
+		$arNotify['userAvatar'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['avatar'] ?? null;
+		$arNotify['userLink'] = $arFields["FROM_USER_DATA"][$arFields["FROM_USER_ID"]]['profile'] ?? null;
 
 		if ($arFields['NOTIFY_TYPE'] == IM_NOTIFY_CONFIRM)
 		{
@@ -460,15 +482,19 @@ class CIMNotify
 
 		$messages = array();
 
-		$filterId = ($setThisAndHigher? '>=': '=').'ID';
+		$filter = [
+			'=CHAT_ID' => $chatId,
+			'=NOTIFY_READ' => 'N',
+			'!=NOTIFY_TYPE' => IM_NOTIFY_CONFIRM,
+		];
+		if ($id > 0)
+		{
+			$filterId = ($setThisAndHigher? '>=': '=').'ID';
+			$filter[$filterId] = $id;
+		}
 		$orm = \Bitrix\Im\Model\MessageTable::getList(Array(
-			'select' => Array('ID', 'CHAT_ID', 'NOTIFY_TAG'),
-			'filter' => Array(
-				'=CHAT_ID' => $chatId,
-				'=NOTIFY_READ' => 'N',
-				'!=NOTIFY_TYPE' => IM_NOTIFY_CONFIRM,
-				$filterId => $id,
-			)
+			'select' => ['ID', 'CHAT_ID', 'NOTIFY_TAG'],
+			'filter' => $filter
 		));
 		while ($row = $orm->fetch())
 		{

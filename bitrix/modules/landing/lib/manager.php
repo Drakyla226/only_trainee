@@ -447,14 +447,20 @@ class Manager
 	}
 
 	/**
-	 * Add some content to some marker.
-	 * @param string $marker Marker.
+	 * Adds content in specific area named by marker.
+	 *
+	 * @param string $marker Marker name.
 	 * @param string $content Content.
+	 * @param bool $skipTrim If true content will not be trimmed.
 	 * @return void
 	 */
-	public static function setPageView($marker, $content)
+	public static function setPageView(string $marker, string $content, bool $skipTrim = false): void
 	{
-		$content = trim($content);
+		if (!$skipTrim)
+		{
+			$content = trim($content);
+		}
+
 		if ($content)
 		{
 			$application = self::getApplication();
@@ -638,11 +644,24 @@ class Manager
 			$file = \CFile::makeFileArray($tempPath);
 		}
 
-		// post array or file from prev. steps
-		if (\CFile::checkImageFile($file, 0, 0, 0, array('IMAGE')) === null)
+		$isSvg = false;
+		$isImage = \CFile::checkImageFile($file, 0, 0, 0, array('IMAGE')) === null;
+
+		if (!$isImage && (Manager::getOption('allow_svg_content') === 'Y'))
 		{
-			// resize if need
+			$extension = \getFileExtension(mb_strtolower($file['name']));
+			if ($extension === 'svg')
+			{
+				$isSvg = true;
+			}
+		}
+
+		// post array or file from prev. steps
+		if ($isImage || $isSvg)
+		{
+			// resize if needed
 			if (
+				$isImage &&
 				isset($params['width']) &&
 				isset($params['height'])
 			)
@@ -876,7 +895,8 @@ class Manager
 			'sc' => 'zh-Hans',
 			'tc' => 'zh-Hant',
 			'vn' => 'vi',
-			'ua' => 'uk'
+			'ua' => 'uk',
+			'in' => 'hi',
 		];
 
 		return $transform[LANGUAGE_ID] ?? LANGUAGE_ID;
@@ -887,7 +907,7 @@ class Manager
 	 * @param string $zone Zone code.
 	 * @return bool
 	 */
-	public static function availableOnlyForZone($zone)
+	public static function availableOnlyForZone(string $zone): bool
 	{
 		static $available = null;
 
@@ -898,9 +918,9 @@ class Manager
 
 		$available = true;
 
-		if ($zone == 'ru')
+		if ($zone === 'ru')
 		{
-			if (!in_array(Manager::getZone(), array('ru', 'by', 'kz')))
+			if (!in_array(self::getZone(), ['ru', 'by', 'kz']))
 			{
 				$available = false;
 			}
@@ -1178,16 +1198,16 @@ class Manager
 				$bad = true;
 				$value = $sanitizer->getFilteredValue();
 				$value = str_replace(
-					[' bxstyle="', '<sv g ', '<?', '?>'],
-					[' style="', '<svg ', '< ?', '? >'],
+					[' bxstyle="', '<sv g ', '<?', '?>', '<fo rm '],
+					[' style="', '<svg ', '< ?', '? >', '<form '],
 					$value
 				);
 			}
 			else
 			{
 				$value = str_replace(
-					[' bxstyle="', '<sv g ', '<?', '?>'],
-					[' style="', '<svg ', '< ?', '? >'],
+					[' bxstyle="', '<sv g ', '<?', '?>', '<fo rm '],
+					[' style="', '<svg ', '< ?', '? >', '<form '],
 					$value
 				);
 			}
@@ -1285,6 +1305,19 @@ class Manager
 		}
 	}
 
+	/**
+	 * Clear cache in cloud only for one site
+	 * @param int $siteId
+	 */
+	public static function clearCacheForSite(int $siteId): void
+	{
+		if (!self::isB24())
+		{
+			return;
+		}
+
+		Site::update($siteId, []);
+	}
 	/**
 	 * Clear cache in cloud only for one site by landing ID
 	 * @param int $lid

@@ -1178,6 +1178,21 @@
 	    return this.response;
 	  };
 	  /**
+	   * Returns a grid container
+	   * @return {?Element}
+	   */
+
+
+	  BX.Grid.Data.prototype.getContainer = function () {
+	    var className = this.getParent().settings.get('classContainer');
+
+	    if (BX.Dom.hasClass(this.getResponse(), className)) {
+	      return this.getResponse();
+	    }
+
+	    return BX.Grid.Utils.getByClass(this.getResponse(), className, true);
+	  };
+	  /**
 	   * Gets head rows of grid from server response
 	   * @return {?HTMLTableRowElement[]}
 	   */
@@ -1562,7 +1577,12 @@
 	      }
 
 	      this.toggleValue(value);
-	      BX.firstChild(this.dropdown).innerText = this.getValueText();
+
+	      if (this.dropdown.dataset['htmlEntity'] === 'true') {
+	        BX.firstChild(this.dropdown).innerHTML = this.getValueText();
+	      } else {
+	        BX.firstChild(this.dropdown).innerText = this.getValueText();
+	      }
 	    },
 	    selectItem: function selectItem(node) {
 	      var self = this;
@@ -2209,6 +2229,17 @@
 	          panelNode.appendChild(panelChild);
 	        }
 	      }
+	    }
+	  };
+	  /**
+	   * Updates a grid container
+	   * @param {?HTMLElement} container
+	   */
+
+
+	  BX.Grid.Updater.prototype.updateContainer = function (container) {
+	    if (BX.Type.isDomNode(container)) {
+	      this.getParent().getContainer().className = container.className;
 	    }
 	  };
 	})();
@@ -7221,9 +7252,26 @@
 	    getLabel: function getLabel() {
 	      if (this.label === null) {
 	        this.label = BX.Grid.Utils.getByTag(this.getNode(), 'label', true);
+	        BX.Event.bind(this.label, 'paste', this.onLabelPaste.bind(this));
+	        BX.Event.bind(this.label, 'keydown', this.onLabelKeydown.bind(this));
 	      }
 
 	      return this.label;
+	    },
+	    onLabelPaste: function onLabelPaste(event) {
+	      event.preventDefault();
+
+	      if (event.clipboardData && event.clipboardData.getData) {
+	        var sourceText = event.clipboardData.getData("text/plain");
+	        var encodedText = BX.Text.encode(sourceText);
+	        var formattedHtml = encodedText.trim().replace(new RegExp('\t', 'g'), " ").replace(new RegExp('\n', 'g'), " ").replace(/ +(?= )/g, '');
+	        document.execCommand("insertHTML", false, formattedHtml);
+	      }
+	    },
+	    onLabelKeydown: function onLabelKeydown(event) {
+	      if (event.keyCode === 13) {
+	        event.preventDefault();
+	      }
 	    },
 
 	    /**
@@ -8092,10 +8140,6 @@
 	    this.init(containerId, arParams, userOptions, userOptionsActions, userOptionsHandlerUrl, panelActions, panelTypes, editorTypes, messageTypes);
 	  };
 
-	  BX.Main.grid.isNeedResourcesReady = function (container) {
-	    return BX.hasClass(container, 'main-grid-load-animation');
-	  };
-
 	  BX.Main.grid.prototype = {
 	    init: function init(containerId, arParams, userOptions, userOptionsActions, userOptionsHandlerUrl, panelActions, panelTypes, editorTypes, messageTypes) {
 	      this.baseUrl = window.location.pathname + window.location.search;
@@ -8442,6 +8486,7 @@
 
 	          self.getRows().reset();
 	          var bodyRows = this.getBodyRows();
+	          self.getUpdater().updateContainer(this.getContainer());
 	          self.getUpdater().updateHeadRows(this.getHeadRows());
 	          self.getUpdater().updateBodyRows(bodyRows);
 	          self.getUpdater().updateFootRows(this.getFootRows());
@@ -8648,8 +8693,10 @@
 	          BX.style(this.getTable(), 'min-height', gridRect.height + Math.abs(diff) - panelsHeight - paddingOffset + 'px');
 	        }
 
+	        BX.Dom.addClass(this.getContainer(), 'main-grid-empty-stub');
+
 	        if (this.getCurrentPage() <= 1) {
-	          BX.Dom.hide(this.getPanels());
+	          this.hidePanels();
 	        }
 	      } else {
 	        BX.style(this.getTable(), 'min-height', ''); // Chrome hack for 0116845 bug. @todo refactoring
@@ -8658,7 +8705,8 @@
 	        requestAnimationFrame(function () {
 	          BX.style(this.getTable(), 'height', '1px');
 	        }.bind(this));
-	        BX.Dom.show(this.getPanels());
+	        this.showPanels();
+	        BX.Dom.removeClass(this.getContainer(), 'main-grid-empty-stub');
 	      }
 	    },
 	    reloadTable: function reloadTable(method, data, callback, url) {
@@ -8683,6 +8731,7 @@
 	        BX.onCustomEvent(window, 'BX.Main.Grid:onBeforeReload', [self]);
 	        self.getRows().reset();
 	        bodyRows = this.getBodyRows();
+	        self.getUpdater().updateContainer(this.getContainer());
 	        self.getUpdater().updateHeadRows(this.getHeadRows());
 	        self.getUpdater().updateBodyRows(bodyRows);
 	        self.getUpdater().updateFootRows(this.getFootRows());
@@ -9718,9 +9767,10 @@
 
 	      if (stub) {
 	        BX.Dom.attr(stub, 'hidden', null);
+	        BX.Dom.addClass(this.getContainer(), 'main-grid-empty-stub');
 
 	        if (this.getCurrentPage() <= 1) {
-	          BX.Dom.hide(this.getPanels());
+	          this.hidePanels();
 	        }
 	      }
 	    },
@@ -9733,9 +9783,29 @@
 
 	      if (stub) {
 	        BX.Dom.attr(stub, 'hidden', true);
+	        BX.Dom.removeClass(this.getContainer(), 'main-grid-empty-stub');
 	        BX.Dom.style(this.getTable(), 'min-height', null);
-	        BX.Dom.show(this.getPanels());
+	        this.showPanels();
 	      }
+	    },
+
+	    /**
+	     * @private
+	     */
+	    showPanels: function showPanels() {
+	      BX.Dom.show(this.getPanels());
+
+	      if (this.getPanels().offsetHeight > 0) {
+	        BX.Dom.removeClass(this.getContainer(), 'main-grid-empty-footer');
+	      }
+	    },
+
+	    /**
+	     * @private
+	     */
+	    hidePanels: function hidePanels() {
+	      BX.Dom.hide(this.getPanels());
+	      BX.Dom.addClass(this.getContainer(), 'main-grid-empty-footer');
 	    },
 
 	    /**

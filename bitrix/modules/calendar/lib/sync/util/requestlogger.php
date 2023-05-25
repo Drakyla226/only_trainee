@@ -3,54 +3,77 @@
 namespace Bitrix\Calendar\Sync\Util;
 
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Diag\FileLogger;
 use Bitrix\Main;
+use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 
-class RequestLogger
+class RequestLogger extends AbstractLogger
 {
-	protected const DEFAULT_LOG_FILE = "bitrix/modules/calendar_sync.log";
-	protected const MAX_LOG_SIZE = 1000000;
+	private const OPTION_KEY = 'calendar_logger_enable';
+
 	/**
 	 * @var string
 	 */
-	protected $serviceName;
+	protected string $serviceName;
+
 	/**
 	 * @var int
 	 */
-	protected $endTimeTimestamp;
-	/**
-	 * @var int
-	 */
-	protected $userId;
+	protected int $userId;
+
 	/**
 	 * @var LoggerInterface|null
 	 */
-	private $logger;
+	private ?LoggerInterface $logger;
 
-	public function __construct(int $userId, string $serviceName, LoggerInterface $logger = null)
+	/**
+	 * @param int $ttl
+	 * @return void
+	 * @throws Main\ArgumentOutOfRangeException
+	 */
+	public static function enable(int $ttl = 0): void
 	{
-		$this->userId = $userId;
-		$this->serviceName = $serviceName;
-		$this->logger = $logger;
+		$dateEnd = 0;
+		if ($ttl)
+		{
+			$dateEnd = (time() + $ttl);
+		}
+
+		Option::set('calendar', self::OPTION_KEY, $dateEnd, '-');
 	}
 
 	/**
-	 * @param array $options
-	 * @return FileLogger
+	 * @return bool
 	 */
-	private function getFileLogger(): FileLogger
+	public static function isEnabled(): bool
 	{
-		$logFile = Main\Application::getDocumentRoot()."/".self::DEFAULT_LOG_FILE;
-		$maxLogSize = static::MAX_LOG_SIZE;
+		$value = Option::get('calendar', self::OPTION_KEY, null, '-');
+		if ($value === null)
+		{
+			return false;
+		}
 
-		return new FileLogger($logFile, $maxLogSize);
+		$value = (int) $value;
+		if (
+			$value === 0
+			|| $value > time()
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 
-	private function getDatabaseLogger()
+	/**
+	 * @param int $userId
+	 * @param string $serviceName
+	 */
+	public function __construct(int $userId, string $serviceName)
 	{
-		return new DatabaseLogger();
+		$this->userId = $userId;
+		$this->serviceName = $serviceName;
 	}
 
 	/**
@@ -62,78 +85,80 @@ class RequestLogger
 	 *  - statusCode
 	 *  - response
 	 *  - error
-	 * @param array $context
+	 * @param array $context{
+		requestParams: array,
+		url: string,
+		method: string,
+		statusCode: string,
+		response: string,
+		error: string,
+		host: string,
+	}
 	 * @return void
+	 *
 	 * @throws Main\LoaderException
 	 */
 	public function write(array $context): void
 	{
-		if ($this->logger === null)
+		$context['serviceName'] = $this->serviceName;
+		$context['userId'] = $this->userId;
+		$logger = $this->getLogger();
+		if (is_a($logger, DatabaseLogger::class))
 		{
-			if (Main\Loader::includeModule('bitrix24'))
-			{
-				$this->logger = $this->getDatabaseLogger();
-			}
-			else
-			{
-				$this->logger = $this->getFileLogger();
-			}
+			$logger->logToDatabase($context);
 		}
-
-		$message = "{date} HOST: {host},
-			REQUEST_PARAMS: {requestParams}, 
-			URL: {url},
-			METHOD: {method},
-			STATUS_CODE: {statusCode},
-			RESPONSE: {response},
-			ERROR: {error}
-		";
-
-		$this->logger->log(LogLevel::DEBUG, $message, $context);
+		else
+		{
+			$logger->log(LogLevel::DEBUG, $this->prepareMessage(), $context);
+		}
 	}
 
 	/**
-	 * @param int $target
-	 * @param int $duration
-	 * @param string $serviceName
+	 * @param $level
+	 * @param $message
+	 * @param array $context{
+		requestParams: array,
+		url: string,
+		method: string,
+		statusCode: string,
+		response: string,
+		error: string,
+		host: string,
+		}
+	 *
 	 * @return void
-	 * @throws Main\ArgumentOutOfRangeException
+	 *
+	 * @throws Main\LoaderException
 	 */
-	public static function setTargetParams(int $target, int $duration = 1800, string $serviceName = 'google'): void
+	public function log($level, $message, array $context = [])
 	{
-		$endTime = time() + $duration;
-		Option::set('calendar', 'calendar_sync_debug_options', "{$target}_{$endTime}_{$serviceName}");
+		$context['serviceName'] = $this->serviceName;
+		$context['userId'] = $this->userId;
+		$logger = $this->getLogger();
+		if (is_a($logger, DatabaseLogger::class))
+		{
+			$logger->logToDatabase($context);
+		}
+		else
+		{
+			$logger->log($level, $this->prepareMessage(), $context);
+		}
 	}
 
 	/**
-	 * @param int $userId
-	 * @param string $serviceName
-	 * @return bool
-	 * @throws Main\ArgumentNullException
+	 * @return LoggerInterface
 	 */
-	public static function isWriteToLogForSyncRequest(int $userId, string $serviceName = ''): bool
+	private function getLogger(): LoggerInterface
 	{
-		$data = Option::get('calendar', 'calendar_sync_debug_options', false);
-		if (!$data)
+		if (empty($this->logger))
 		{
-			return false;
+			$this->logger = $this->getDatabaseLogger();
 		}
+		return $this->logger;
+	}
 
-		$options = explode("_", $data);
-		if (isset($options[1]) && time() > (int)$options[1])
-		{
-			Option::delete('calendar', ['name' => 'calendar_sync_debug_options']);
-
-			return false;
-		}
-
-		if (count($options) === 3)
-		{
-			return (int)$options[0] === $userId
-				|| $serviceName === $options[2]
-			;
-		}
-
-		return false;
+	private function getDatabaseLogger(): DatabaseLogger
+	{
+		return new DatabaseLogger();
 	}
 }

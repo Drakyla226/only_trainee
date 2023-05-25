@@ -8,6 +8,11 @@
 		return (property.Multiple === true)
 	};
 
+	const isSelectable = function(property)
+	{
+		return (property.AllowSelection !== false)
+	};
+
 	var toMultipleValue = function(value)
 	{
 		if (!BX.type.isArray(value))
@@ -19,6 +24,13 @@
 
 	var normalizeDateValue = function(value)
 	{
+		if (BX.Type.isArray(value))
+		{
+			return value.map((dateValue) => {
+				return dateValue ? dateValue.replace(/(\s\[-?[0-9]+\])$/, '') : ''
+			});
+		}
+
 		return value ? value.replace(/(\s\[-?[0-9]+\])$/, '') : '';
 	};
 
@@ -39,6 +51,28 @@
 	}
 
 	var FieldType = {
+		isBaseType: function(type)
+		{
+			switch (type)
+			{
+				case 'bool':
+				case 'UF:boolean':
+				case 'select':
+				case 'internalselect':
+				case 'date':
+				case 'UF:date':
+				case 'datetime':
+				case 'text':
+				case 'int':
+				case 'double':
+				case 'string':
+				case 'user':
+				case 'time':
+					return true;
+			}
+
+			return false;
+		},
 		renderControl: function (documentType, property, fieldName, value, renderMode) {
 			if (!renderMode || renderMode === 'public')
 			{
@@ -52,11 +86,15 @@
 			return BX.create('div', {text: 'incorrect render mode'});
 		},
 
-		renderControlPublic: function (documentType, property, fieldName, value)
+		renderControlPublic: function (documentType, property, fieldName, value, needInit)
 		{
 			var node,
-				renderer = this.getRenderFunctionName(property),
+				renderer = this.getRenderFunctionName(property);
+
+			if (!BX.Type.isBoolean(needInit))
+			{
 				needInit = true;
+			}
 
 			if (BX.type.isString(documentType))
 			{
@@ -72,14 +110,14 @@
 					toMultipleValue(value).forEach(function(v)
 					{
 						subNodes.push(
-							me[renderer](property, fieldName, v)
+							me[renderer](property, fieldName, v, documentType)
 						);
 					});
 
 					if (subNodes.length <= 0)
 					{
 						subNodes.push(
-							me[renderer](property, fieldName)
+							me[renderer](property, fieldName, null, documentType)
 						);
 					}
 
@@ -88,41 +126,38 @@
 				else
 				{
 					node = BX.create('div', {
-						children: [this[renderer](property, fieldName, value)]
+						children: [this[renderer](property, fieldName, value, documentType)]
 					});
 				}
 			}
 			else
 			{
 				node = BX.create('div', {text: '...'});
+				needInit = false;
 
-				BX.ajax.post(
-					'/bitrix/tools/bizproc_get_field.php',
+				BX.ajax.runAction(
+					'bizproc.fieldtype.renderControl',
 					{
-						'DocumentType' : documentType,
-						'Field' : {Field: fieldName, Form: 'sfa_form'},
-						'Value' : (value || ''),
-						'Type' : property,
-						'Als' : 0,
-						'rnd' : Math.random(),
-						'Mode' : '',
-						'Func' : '',
-						'sessid' : BX.bitrix_sessid(),
-						'RenderMode': 'public'
-					},
-					function(v) {
-						if (v)
-						{
-							node.innerHTML = v;
-							this.initControl(node, property);
+						data: {
+							documentType,
+							property,
+							params: {
+								Field: {Field: fieldName, Form: 'sfa_form'},
+								Value: (value || ''),
+								Als: 0,
+								RenderMode: 'public',
+							}
 						}
-					}.bind(this)
-				);
-
-				if (property['Type'] === 'user')
-				{
-					needInit = false;
-				}
+					}
+				).then(
+					(response) => {
+						BX.Runtime.html(node, response.data.html).then(() => {
+							this.initControl(node, property);
+						});
+					},
+					(response) => {
+						BX.UI.Dialogs.MessageBox.alert(response.errors[0].message);
+					});
 			}
 
 			if (needInit && node)
@@ -136,38 +171,38 @@
 		{
 			var node = BX.create('div', {text: '...'});
 
-			BX.ajax.post(
-				'/bitrix/tools/bizproc_get_field.php',
+			BX.ajax.runAction(
+				'bizproc.fieldtype.renderControl',
 				{
-					DocumentType: documentType,
-					Field: {Field: fieldName, Form: 'sfa_form'},
-					Value: (value || ''),
-					Type: property,
-					Als: 1,
-					rnd: Math.random(),
-					Mode: '',
-					Func: '',
-					sessid: BX.bitrix_sessid(),
-					RenderMode: 'designer',
-				},
-				function (valueNode) {
-					if (valueNode)
-					{
-						node.innerHTML = valueNode;
-
+					data: {
+						documentType,
+						property,
+						params: {
+							Field: {Field: fieldName, Form: 'sfa_form'},
+							Value: (value || ''),
+							Als: 1,
+							RenderMode: 'designer',
+						}
+					}
+				}
+			).then(
+				(response) => {
+					BX.Runtime.html(node, response.data.html).then(() => {
 						if (typeof BX.Bizproc.Selector !== 'undefined')
 						{
 							BX.Bizproc.Selector.initSelectors(node);
 						}
-					}
-				}
-			);
+					});
+				},
+				(response) => {
+					BX.UI.Dialogs.MessageBox.alert(response.errors[0].message);
+				});
 
 			return node;
 		},
 		formatValuePrintable: function(property, value)
 		{
-			var result;
+			let result;
 			switch (property['Type'])
 			{
 				case 'bool':
@@ -205,26 +240,67 @@
 				case 'int':
 				case 'double':
 				case 'string':
-					result = value;
+					result = value.toString();
 					break;
 				case 'user':
 					result = [];
 					var i, name, pair, matches, pairs = BX.Type.isArray(value) ? value : value.split(',');
+
+					const isExpressionProperty = (expression, property) => {
+						return (
+							property.BaseType === 'user'
+							&& (
+								property.Expression === expression
+								|| property.SystemExpression === expression
+							)
+						);
+					};
 
 					for (i = 0; i < pairs.length; ++i)
 					{
 						pair = BX.util.trim(pairs[i]);
 						if (matches = pair.match(/(.*)\[([A-Z]{0,2}\d+)\]/))
 						{
-							name =  BX.util.trim(matches[1]);
+							name = BX.util.trim(matches[1]);
 							result.push(name);
 						}
 						else
 						{
-							result.push(pair);
+							const expression = pair;
+
+							let field = this.getDocumentFields()
+								.find((property) => isExpressionProperty(expression, property))
+							;
+							if (!BX.Type.isNil(field))
+							{
+								result.push(field.Name || expression);
+
+								continue;
+							}
+
+							field = this.getGlobals().find((property) => isExpressionProperty(expression, property));
+							if (!BX.Type.isNil(field))
+							{
+								result.push(field.Name || expression);
+
+								continue;
+							}
+
+							result.push(expression);
 						}
 					}
 					result = result.join(', ');
+					break;
+				case 'UF:address':
+					let address = value;
+					const addressMatches = address.match(/(.*)\|[\d.]*;[\d.]*\|?\d*/); // address|0;0|1
+					if (addressMatches)
+					{
+						address = String(addressMatches[1]).trim();
+					}
+
+					result = address;
+
 					break;
 				default:
 					if (BX.type.isString(value))
@@ -289,6 +365,10 @@
 				case 'F':
 				case 'file':
 					renderer = 'createFileNode';
+					break;
+
+				case 'time':
+					renderer = 'createTimeNode';
 					break;
 			}
 			return renderer;
@@ -475,7 +555,7 @@
 				attrs: {
 					className: 'bizproc-type-control bizproc-type-control-' + type
 						+ (isMultiple(property) ? ' bizproc-type-control-multiple' : ''),
-					'data-role': 'inline-selector-target',
+					'data-role': isSelectable(property) ? 'inline-selector-target' : '',
 					'data-selector-type': type,
 					placeholder: getPlaceholder(property),
 				},
@@ -486,7 +566,8 @@
 				}
 			});
 
-			var dlg = BX.Bizproc.Automation && BX.Bizproc.Automation.Designer.getRobotSettingsDialog();
+			var designer = BX.getClass('BX.Bizproc.Automation.Designer') && BX.Bizproc.Automation.Designer.getInstance();
+			var dlg = designer && (designer.getRobotSettingsDialog() || designer.getTriggerSettingsDialog());
 			if (!dlg)
 			{
 				var img = BX.create('img', {
@@ -543,13 +624,13 @@
 				attrs: {
 					className: 'bizproc-type-control bizproc-type-control-int'
 						+ (isMultiple(property) ? ' bizproc-type-control-multiple' : ''),
-					'data-role': 'inline-selector-target',
+					'data-role': isSelectable(property) ? 'inline-selector-target' : '',
 					placeholder: getPlaceholder(property),
 				},
 				props: {
 					type: 'text',
 					name: fieldName + (isMultiple(property) ? '[]' : ''),
-					value: (value || '')
+					value: BX.Type.isNil(value) ? '' : value.toString(),
 				}
 			});
 		},
@@ -559,7 +640,7 @@
 				attrs: {
 					className: 'bizproc-type-control bizproc-type-control-string'
 						+ (isMultiple(property) ? ' bizproc-type-control-multiple' : ''),
-					'data-role': 'inline-selector-target',
+					'data-role': isSelectable(property) ? 'inline-selector-target' : '',
 					placeholder: getPlaceholder(property),
 				},
 				props: {
@@ -571,7 +652,8 @@
 		},
 		createFileNode: function(property, fieldName, value)
 		{
-			var dlg = BX.Bizproc.Automation && BX.Bizproc.Automation.Designer.getRobotSettingsDialog();
+			var designer = BX.getClass('BX.Bizproc.Automation.Designer') && BX.Bizproc.Automation.Designer.getInstance();
+			var dlg = designer && designer.getRobotSettingsDialog();
 			if (!dlg)
 			{
 				var input = BX.create('input', {
@@ -618,7 +700,7 @@
 				attrs: {
 					className: 'bizproc-type-control bizproc-type-control-file-selectable'
 						+ (isMultiple(property) ? ' bizproc-type-control-multiple' : ''),
-					'data-role': 'inline-selector-target',
+					'data-role': isSelectable(property) ? 'inline-selector-target' : '',
 					'data-selector-type': 'file'
 				},
 				props: {
@@ -634,7 +716,7 @@
 				attrs: {
 					className: 'bizproc-type-control bizproc-type-control-text'
 						+ (isMultiple(property) ? ' bizproc-type-control-multiple' : ''),
-					'data-role': 'inline-selector-target',
+					'data-role': isSelectable(property) ? 'inline-selector-target' : '',
 					rows: 5,
 					cols: 40,
 					placeholder: getPlaceholder(property),
@@ -645,7 +727,7 @@
 				},
 			});
 		},
-		createSelectNode: function(property, fieldName, value)
+		createSelectNode: function(property, fieldName, value, documentType)
 		{
 			var isEqual = function(needle, haystack)
 			{
@@ -676,7 +758,7 @@
 			{
 				return BX.create('option', {
 					props: { value: '' },
-					text: BX.message('BIZPROC_JS_BP_FIELD_TYPE_NOT_SELECTED')
+					text: property.EmptyValueText || BX.message('BIZPROC_JS_BP_FIELD_TYPE_NOT_SELECTED')
 				});
 			}
 
@@ -692,72 +774,159 @@
 			}
 			node.appendChild(option);
 
+			const renderOptions = (options) =>
+			{
+				options.forEach((optionValue, i) => {
+
+					let currentValue = i;
+					let text = optionValue;
+
+					if (BX.Type.isPlainObject(optionValue))
+					{
+						currentValue = optionValue.value;
+						text = optionValue.name;
+					}
+
+					const optionElement = BX.create('option', {
+						props: {value: currentValue},
+						text: BX.Text.decode(text)
+					});
+
+					if (isEqual(currentValue, value))
+					{
+						optionElement.setAttribute('selected', 'selected');
+					}
+
+					node.appendChild(optionElement);
+				});
+			}
+
 			if (BX.type.isPlainObject(property['Options']))
 			{
-				for (var key in property['Options'])
+				const options = [];
+				for (const key in property['Options'])
 				{
 					if (!property['Options'].hasOwnProperty(key))
 					{
 						continue;
 					}
-
-					option = BX.create('option', {
-						props: {value: key},
-						text: BX.Text.decode(property['Options'][key])
-					});
-
-					if (isEqual(key, value))
-					{
-						option.setAttribute('selected', 'selected');
-					}
-
-					node.appendChild(option);
+					options.push({value: key, name: property['Options'][key]});
 				}
+				renderOptions(options);
 			}
 			else if (BX.type.isArray(property['Options']))
 			{
-				for (var i = 0; i < property['Options'].length; ++i)
-				{
-					option = BX.create('option', {
-						props: {value: i},
-						text: BX.Text.decode(property['Options'][i])
-					});
+				renderOptions(property['Options']);
+			}
+			else if (
+				property.Settings
+				&& property.Settings.OptionsLoader
+				&& property.Settings.OptionsLoader.type === 'component'
+			)
+			{
+				const loaderConfig = property.Settings.OptionsLoader;
+				const loadOption = BX.create('option', {
+					props: { value: '...' },
+					text: '...',
+				});
+				node.appendChild(loadOption);
 
-					if (isEqual(i, value))
+				BX.ajax.runComponentAction(
+					loaderConfig.component,
+					loaderConfig.action,
 					{
-						option.setAttribute('selected', 'selected');
+						mode: loaderConfig.mode || undefined,
+						data: {
+							documentType,
+							property,
+						}
 					}
-
-					node.appendChild(option);
-				}
+				).then(
+					(response) =>
+					{
+						if (BX.Type.isArray(response.data.options))
+						{
+							BX.Dom.remove(loadOption);
+							renderOptions(response.data.options);
+						}
+					}
+				);
 			}
 
 			return node;
 		},
+		createTimeNode: function(property, fieldName, value)
+		{
+			const input = BX.Dom.create('INPUT', {
+				attrs: {
+					type: 'text',
+					autocomplete: 'off',
+					'data-role': isSelectable(property) ? 'inline-selector-target' : '',
+					'data-selector-type': 'time'
+				},
+				props: {
+					className: 'bizproc-type-control bizproc-type-control-time' + (isMultiple(property) ? ' bizproc-type-control-multiple' : ''),
+					name: fieldName + (isMultiple(property) ? '[]' : ''),
+					value: value || '',
+				}
+			});
+
+			return BX.Dom.create('DIV', {children: [input]})
+		},
 		initControl: function(controlNode, property)
 		{
+			var designer = BX.getClass('BX.Bizproc.Automation.Designer') && BX.Bizproc.Automation.Designer.getInstance();
 			var dlg;
-			if (dlg = BX.Bizproc.Automation && BX.Bizproc.Automation.Designer.getRobotSettingsDialog())
+			var childControlNodes = controlNode.querySelectorAll('[data-role]');
+			if (designer && designer.getRobotSettingsDialog())
 			{
+				dlg = designer.getRobotSettingsDialog();
 				dlg.template.initRobotSettingsControls(dlg.robot, controlNode);
 			}
-			else if (dlg = BX.Bizproc.Automation && BX.Bizproc.Automation.Designer.getTriggerSettingsDialog())
+			else if (designer && designer.getTriggerSettingsDialog())
 			{
-				dlg.component.triggerManager.initSettingsDialogControls(controlNode);
+				dlg = designer.getTriggerSettingsDialog();
+				dlg.triggerManager.initSettingsDialogControls(controlNode);
 			}
 			else if (property && property['Type'] === 'user' && BX.Bizproc.UserSelector)
 			{
 				BX.Bizproc.UserSelector.decorateNode(controlNode.querySelector('[data-role="user-selector"]'));
 			}
+			else if (childControlNodes.length > 0)
+			{
+				var context = BX.Bizproc.Automation && BX.Bizproc.Automation.tryGetGlobalContext();
+				if (context)
+				{
+					childControlNodes.forEach(function(node)
+					{
+						var selector = BX.Bizproc.Automation.SelectorManager.createSelectorByRole(
+							node.getAttribute('data-role'),
+							{
+								context: new BX.Bizproc.Automation.SelectorContext({
+									fields: BX.clone(context.document.getFields()),
+									useSwitcherMenu: context.get('showTemplatePropertiesMenuOnSelecting'),
+									rootGroupTitle: context.document.title,
+									userOptions: context.userOptions
+								})
+							},
+						);
+						if (selector && node.parentNode)
+						{
+							node.parentNode.replaceChild(selector.renderWith(node), node);
+						}
+					});
+				}
+			}
 		},
 		getDocumentFields: function()
 		{
-			const component = BX.Bizproc.Automation && BX.Bizproc.Automation.Designer.component;
+			const designer = BX.getClass('BX.Bizproc.Automation.Designer') && BX.Bizproc.Automation.Designer.getInstance();
+			const component = designer && designer.component;
 			if (component)
 			{
 				return component.data['DOCUMENT_FIELDS'];
 			}
-			if (BX.Bizproc.Automation && BX.Bizproc.Automation.API.documentFields)
+			if (BX.getClass('BX.Bizproc.Automation.API.documentFields'))
 			{
 				return BX.Bizproc.Automation.API.documentFields;
 			}
@@ -766,12 +935,23 @@
 		},
 		getDocumentUserGroups: function()
 		{
-			if (BX.Bizproc.Automation && BX.Bizproc.Automation.API.documentUserGroups)
+			if (BX.getClass('BX.Bizproc.Automation.API.documentUserGroups'))
 			{
 				return BX.Bizproc.Automation.API.documentUserGroups;
 			}
+
 			return [];
-		}
+		},
+		getGlobals: function ()
+		{
+			const context = BX.Bizproc.Automation && BX.Bizproc.Automation.tryGetGlobalContext();
+
+			return (
+				context && context.automationGlobals
+					? context.automationGlobals.globalVariables.concat(context.automationGlobals.globalConstants)
+					: []
+			);
+		},
 	};
 
 	FieldType.File = {

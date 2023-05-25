@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Type\Collection;
 
 /**
@@ -217,15 +218,19 @@ class CAdminList
 		global $APPLICATION;
 
 		$queryString = DeleteParam([self::MODE_FIELD_NAME]);
+		if ($queryString !== '')
+		{
+			$queryString = '&' . $queryString;
+		}
 		$link = $APPLICATION->GetCurPage();
 		if (isset($config['settings']))
 		{
 			$result[] = [
 				"TEXT" => GetMessage("admin_lib_context_sett"),
 				"TITLE" => GetMessage("admin_lib_context_sett_title"),
-				"ONCLICK" => $this->table_id.".ShowSettings('".CUtil::JSEscape(
-					$link."?mode=settings".($queryString <> ""? "&".$queryString : "")
-				)."')",
+				"ONCLICK" => $this->table_id . ".ShowSettings('" . CUtil::JSEscape(
+					$link . "?" . static::getModeConfigUrlParam() . $queryString
+				) . "')",
 				"GLOBAL_ICON" => "adm-menu-setting",
 			];
 		}
@@ -234,9 +239,9 @@ class CAdminList
 			$result[] = [
 				"TEXT" => "Excel",
 				"TITLE" => GetMessage("admin_lib_excel"),
-				"ONCLICK"=>"location.href='".htmlspecialcharsbx(
-					$link."?mode=excel".($queryString <> ""? "&".$queryString : "")
-				)."'",
+				"ONCLICK"=>"location.href='" . htmlspecialcharsbx(
+					$link . "?" . static::getModeExportUrlParam() . $queryString
+				) . "'",
 				"GLOBAL_ICON"=>"adm-menu-excel",
 			];
 		}
@@ -303,7 +308,7 @@ class CAdminList
 	{
 		if($_SERVER['REQUEST_METHOD']=='POST' && isset($_REQUEST['save'])  && check_bitrix_sessid())
 		{
-			$arrays = array(&$_POST, &$_REQUEST, &$GLOBALS);
+			$arrays = array(&$_POST, &$_REQUEST);
 			foreach($arrays as $i => $array)
 			{
 				if(is_array($array["FIELDS"]))
@@ -315,10 +320,27 @@ class CAdminList
 							$keys = array_keys($fields);
 							foreach($keys as $key)
 							{
-								if(($c = mb_substr($key,0,1)) == '~' || $c == '=')
+								if(($c = substr($key,0,1)) == '~' || $c == '=')
 								{
 									unset($arrays[$i]["FIELDS"][$id][$key]);
 								}
+							}
+						}
+					}
+				}
+			}
+			if (is_array($GLOBALS["FIELDS"]))
+			{
+				foreach ($GLOBALS["FIELDS"] as $id => $fields)
+				{
+					if (is_array($fields))
+					{
+						$keys = array_keys($fields);
+						foreach ($keys as $key)
+						{
+							if (($c = substr($key,0,1)) == '~' || $c == '=')
+							{
+								unset($GLOBALS["FIELDS"][$id][$key]);
 							}
 						}
 					}
@@ -917,13 +939,23 @@ class CAdminList
 							$val = htmlspecialcharsex(GetMessage("admin_lib_list_no"));
 						break;
 					case "select":
-						if($field["edit"]["values"][$val])
+						if (isset($field["edit"]["values"][$val]))
+						{
 							$val = htmlspecialcharsex($field["edit"]["values"][$val]);
+						}
+						elseif (isset($field["view"]["values"][$val]))
+						{
+							$val = htmlspecialcharsex($field["view"]["values"][$val]);
+						}
+						else
+						{
+							$val = htmlspecialcharsex($val);
+						}
 						break;
 					case "file":
 						$arFile = CFile::GetFileArray($val);
 						if(is_array($arFile))
-							$val = htmlspecialcharsex(CHTTP::URN2URI($arFile["SRC"]));
+							$val = htmlspecialcharsex((new Uri($arFile["SRC"]))->toAbsolute()->getUri());
 						else
 							$val = "";
 						break;
@@ -1309,6 +1341,16 @@ topWindow.BX.ajax.UpdatePageData({});
 		return static::getModeUrlParam(self::MODE_ACTION);
 	}
 
+	protected static function getModeConfigUrlParam(): string
+	{
+		return static::getModeUrlParam(self::MODE_CONFIG);
+	}
+
+	protected static function getModeExportUrlParam(): string
+	{
+		return static::getModeUrlParam(self::MODE_EXPORT);
+	}
+
 	protected static function getModeParam(string $mode): array
 	{
 		return [self::MODE_FIELD_NAME => $mode];
@@ -1692,10 +1734,18 @@ class CAdminListRow
 								$val = htmlspecialcharsex(GetMessage("admin_lib_list_no"));
 							break;
 						case "select":
-							if($field["edit"]["values"][$val])
+							if (isset($field["edit"]["values"][$val]))
+							{
 								$val = htmlspecialcharsex($field["edit"]["values"][$val]);
+							}
+							elseif (isset($field["view"]["values"][$val]))
+							{
+								$val = htmlspecialcharsex($field["view"]["values"][$val]);
+							}
 							else
+							{
 								$val = htmlspecialcharsex($val);
+							}
 							break;
 						case "file":
 							if ($val > 0)

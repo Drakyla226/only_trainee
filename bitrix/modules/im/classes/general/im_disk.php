@@ -395,7 +395,7 @@ class CIMDisk
 			return false;
 		}
 
-		$folderModel = self::GetFolderModel($chatId);
+		$folderModel = self::getFolderModel($chatId, false);
 		if (!$folderModel)
 		{
 			return false;
@@ -500,13 +500,13 @@ class CIMDisk
 			}
 		}
 
-		$skipUserCheck = $options['SKIP_USER_CHECK'] === true;
-		$linesSilentMode = $options['LINES_SILENT_MODE'] === true;
-		$makeSymlink = $options['SYMLINK'] === true;
-		$templateId = $options['TEMPLATE_ID'] <> ''? $options['TEMPLATE_ID']: '';
-		$fileTemplateId = $options['FILE_TEMPLATE_ID'] <> ''? $options['FILE_TEMPLATE_ID']: '';
-		$attach = isset($options['ATTACH'])? $options['ATTACH']: null;
-		$params = isset($options['PARAMS']) && is_array($options['PARAMS'])? $options['PARAMS']: null;
+		$skipUserCheck = isset($options['SKIP_USER_CHECK']) && $options['SKIP_USER_CHECK'] === true;
+		$linesSilentMode = isset($options['LINES_SILENT_MODE']) && $options['LINES_SILENT_MODE'] === true;
+		$makeSymlink = isset($options['SYMLINK']) && $options['SYMLINK'] === true;
+		$templateId = isset($options['TEMPLATE_ID']) && $options['TEMPLATE_ID'] <> '' ? $options['TEMPLATE_ID'] : '';
+		$fileTemplateId = isset($options['FILE_TEMPLATE_ID']) && $options['FILE_TEMPLATE_ID'] <> '' ? $options['FILE_TEMPLATE_ID'] : '';
+		$attach = $options['ATTACH'] ?? null;
+		$params = isset($options['PARAMS']) && is_array($options['PARAMS']) ? $options['PARAMS'] : null;
 
 		$chatRelation = \CIMChat::GetRelationById($chatId);
 
@@ -1288,7 +1288,7 @@ class CIMDisk
 			return $fileArray;
 		}
 
-		$folderModel = self::GetFolderModel($chatId);
+		$folderModel = self::getFolderModel($chatId, false);
 		if (!$folderModel)
 		{
 			return $fileArray;
@@ -1358,7 +1358,7 @@ class CIMDisk
 			return $fileArray;
 		}
 
-		$folderModel = self::GetFolderModel($chatId);
+		$folderModel = self::getFolderModel($chatId, false);
 		if (!$folderModel)
 		{
 			return $fileArray;
@@ -1421,7 +1421,7 @@ class CIMDisk
 			return $maxId;
 		}
 
-		$folderModel = self::GetFolderModel($chatId);
+		$folderModel = self::getFolderModel($chatId, false);
 		if (!$folderModel)
 		{
 			return $maxId;
@@ -1482,7 +1482,7 @@ class CIMDisk
 		{
 			return $fileArray;
 		}
-		$folderModel = self::GetFolderModel($chatId);
+		$folderModel = self::getFolderModel($chatId, false);
 		if (!$folderModel)
 		{
 			return $fileArray;
@@ -1556,18 +1556,22 @@ class CIMDisk
 		{
 			$contentType = 'image';
 			$params = $fileModel->getFile();
+			$width = isset($params['WIDTH']) ? (int)$params['WIDTH'] : 0;
+			$height = isset($params['HEIGHT']) ? (int)$params['HEIGHT'] : 0;
 			$imageParams = Array(
-				'width' => (int)$params['WIDTH'],
-				'height' => (int)$params['HEIGHT'],
+				'width' => $width,
+				'height' => $height,
 			);
 		}
 		else if (\Bitrix\Disk\TypeFile::isVideo($fileModel->getName()))
 		{
 			$contentType = 'video';
 			$params = $fileModel->getView()->getPreviewData();
+			$width = isset($params['WIDTH']) ? (int)$params['WIDTH'] : 0;
+			$height = isset($params['HEIGHT']) ? (int)$params['HEIGHT'] : 0;
 			$imageParams = Array(
-				'width' => (int)$params['WIDTH'],
-				'height' => (int)$params['HEIGHT'],
+				'width' => $width,
+				'height' => $height,
 			);
 		}
 		else if (\Bitrix\Disk\TypeFile::isAudio($fileModel->getName()))
@@ -1666,10 +1670,11 @@ class CIMDisk
 	}
 
 	/**
-	 * @param int $chatId
+	 * @param int $chatId Chat Id.
+	 * @param bool $createFolder Create disk folder if not exists.
 	 * @return \Bitrix\Disk\Folder|false|null
 	 */
-	public static function GetFolderModel($chatId)
+	public static function GetFolderModel($chatId, $createFolder = true)
 	{
 		if (!self::Enabled())
 		{
@@ -1690,18 +1695,22 @@ class CIMDisk
 		}
 
 		$folderId = (int)$chat['DISK_FOLDER_ID'];
-		$chatType = $chat['TYPE'];
 		if ($folderId > 0)
 		{
 			$folderModel = \Bitrix\Disk\Folder::getById($folderId);
-			if (!$folderModel || $folderModel->getStorageId() != self::GetStorageId())
+			if (
+				!$folderModel
+				|| !($folderModel instanceof \Bitrix\Disk\Folder)
+				|| ($folderModel->getStorageId() != self::GetStorageId())
+			)
 			{
 				$folderId = 0;
 			}
 		}
 
-		if (!$folderId)
+		if (!$folderId && $createFolder === true)
 		{
+			$chatType = $chat['TYPE'];
 			$driver = \Bitrix\Disk\Driver::getInstance();
 			$storageModel = self::GetStorage();
 			if (!$storageModel)
@@ -1772,7 +1781,7 @@ class CIMDisk
 			return false;
 		}
 
-		$folderModel = self::GetFolderModel($chatId);
+		$folderModel = self::getFolderModel($chatId, false);
 		if (!$folderModel)
 		{
 			return false;
@@ -1886,7 +1895,7 @@ class CIMDisk
 			],
 			[
 				// allow only for user, access code `Uxxx`
-				['ACCESS_CODE' => 'U'.$userId, 'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_EDIT)],
+				['ACCESS_CODE' => 'U'.$userId, 'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_FULL)],
 			],
 			true
 		);
@@ -1914,6 +1923,29 @@ class CIMDisk
 		}
 
 		$fileModel->increaseGlobalContentVersion();
+
+		return true;
+	}
+/**
+	 * @param int $userId
+	 * @param int $fileId
+	 * @return bool
+	 */
+	public static function DeleteBackgroundFile($userId, $fileId)
+	{
+		$folderModel = self::GetBackgroundFolderModel($userId);
+		if (!$folderModel)
+		{
+			return false;
+		}
+
+		$fileModel = \Bitrix\Disk\File::getById($fileId);
+		if (!$fileModel || $fileModel->getParentId() != $folderModel->getId())
+		{
+			return false;
+		}
+
+		$fileModel->delete($userId);
 
 		return true;
 	}

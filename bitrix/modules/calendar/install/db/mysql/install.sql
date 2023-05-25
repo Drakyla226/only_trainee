@@ -93,7 +93,8 @@ create table b_calendar_event
   SECTION_ID int null,
   SYNC_STATUS varchar(20) null,
   primary key (ID),
-  INDEX ix_cal_event_date_utc (DATE_FROM_TS_UTC, DATE_TO_TS_UTC),
+  INDEX ix_cal_event_date_from_utc (DATE_FROM_TS_UTC),
+  INDEX ix_cal_event_date_to_utc (DATE_TO_TS_UTC),
   INDEX ix_cal_event_owner_id_date (OWNER_ID, DATE_FROM_TS_UTC, DATE_TO_TS_UTC),
   INDEX ix_cal_event_parent_id (PARENT_ID),
   INDEX ix_cal_event_created_by (CREATED_BY),
@@ -105,7 +106,8 @@ create table b_calendar_event
   INDEX ix_cal_type_del_date (CAL_TYPE, DELETED, DATE_TO_TS_UTC, DATE_FROM_TS_UTC),
   INDEX ix_event_location (LOCATION),
   INDEX ix_event_section_del (SECTION_ID,DELETED),
-  INDEX ix_cal_google_sync_status (SYNC_STATUS)
+  INDEX ix_cal_google_sync_status (SYNC_STATUS),
+  INDEX ix_cal_event_section_del_date (SECTION_ID, DELETED, DATE_TO_TS_UTC, DATE_FROM_TS_UTC)
 );
 
 create table b_calendar_event_sect
@@ -153,7 +155,8 @@ create table b_calendar_access
 	ACCESS_CODE varchar(100) not null,
 	TASK_ID int not null,
 	SECT_ID varchar(100) not null,
-	primary key (ACCESS_CODE, TASK_ID, SECT_ID)
+	PRIMARY KEY (ACCESS_CODE, TASK_ID, SECT_ID),
+	INDEX ix_access_sect_id (SECT_ID)
 );
 
 create table b_calendar_resource
@@ -189,14 +192,92 @@ create table b_calendar_location
   SECTION_ID int not null,
   NECESSITY char(1) default 'N',
   CAPACITY int default 0,
+  CATEGORY_ID int default null,
   PRIMARY KEY(ID),
   INDEX ix_location_section(SECTION_ID)
 );
 
-create table `b_calendar_log`
+create table b_calendar_log
 (
   ID int not null auto_increment,
   TIMESTAMP_X TIMESTAMP NOT NULL DEFAULT current_timestamp,
-  MESSAGE TEXT NULL,
-  PRIMARY KEY(ID)
-)
+  MESSAGE MEDIUMTEXT NULL,
+  TYPE varchar(50) default null,
+  UUID varchar(255) default null,
+  USER_ID int default null,
+  PRIMARY KEY(ID),
+  INDEX ix_cal_log_uuid(UUID),
+  INDEX ix_cal_log_user_id(USER_ID)
+);
+
+create table b_calendar_section_connection
+(
+	ID int NOT NULL AUTO_INCREMENT,
+	SECTION_ID int NOT NULL,
+	CONNECTION_ID int NOT NULL,
+	VENDOR_SECTION_ID varchar(255) NOT NULL,
+	SYNC_TOKEN text,
+	PAGE_TOKEN text,
+	ACTIVE char(1) DEFAULT 'Y',
+	LAST_SYNC_DATE datetime DEFAULT NULL,
+	LAST_SYNC_STATUS varchar(10) DEFAULT NULL,
+	VERSION_ID varchar(255) DEFAULT NULL,
+	IS_PRIMARY char(1) DEFAULT 'N',
+	PRIMARY KEY (ID),
+	INDEX ix_cal_section_con_section_id (SECTION_ID),
+	INDEX ix_cal_section_con_connection_id (CONNECTION_ID)
+);
+
+create table b_calendar_event_connection
+(
+	ID int NOT NULL AUTO_INCREMENT,
+	EVENT_ID int NOT NULL,
+	CONNECTION_ID int NOT NULL,
+	VENDOR_EVENT_ID varchar(255) DEFAULT NULL,
+	SYNC_STATUS varchar(20) DEFAULT NULL,
+	RETRY_COUNT int DEFAULT 0 COMMENT 'Retry count of sending event to vendor, if sync status is not success',
+	ENTITY_TAG varchar(255) DEFAULT NULL COMMENT 'Version of vendor event',
+	VERSION varchar(255) DEFAULT NULL COMMENT 'Version of internal event',
+	VENDOR_VERSION_ID varchar(255) DEFAULT NULL,
+	RECURRENCE_ID varchar(255) DEFAULT NULL,
+	DATA text DEFAULT NULL,
+	PRIMARY KEY (ID),
+	INDEX ix_cal_event_con_event_id (EVENT_ID),
+	INDEX ix_cal_event_con_connection_id (CONNECTION_ID)
+);
+
+CREATE TABLE b_calendar_room_category (
+	ID int NOT NULL AUTO_INCREMENT,
+	NAME  varchar(255) NULL,
+	PRIMARY KEY (ID)
+);
+
+CREATE TABLE b_calendar_queue_message (
+	ID int NOT NULL AUTO_INCREMENT,
+	MESSAGE text NOT NULL,
+	DATE_CREATE datetime NULL,
+	PRIMARY KEY (ID)
+);
+
+CREATE TABLE b_calendar_queue_handled_message(
+	ID int NOT NULL AUTO_INCREMENT,
+	MESSAGE_ID int NOT NULL,
+	QUEUE_ID int NOT NULL,
+	HASH varchar(255) NULL,
+	DATE_CREATE datetime NULL,
+	PRIMARY KEY (ID),
+	INDEX ix_cal_queue_handled_id_hash (QUEUE_ID, HASH)
+);
+
+CREATE TABLE b_calendar_sharing_link (
+	ID int NOT NULL AUTO_INCREMENT,
+	OBJECT_ID int NOT NULL,
+	OBJECT_TYPE varchar(32) NOT NULL,
+	HASH char(64) NOT NULL,
+	OPTIONS text NULL,
+	ACTIVE char(1) NOT NULL DEFAULT 'Y',
+	DATE_CREATE datetime NOT NULL,
+	PRIMARY KEY (ID),
+	INDEX ix_calendar_sharing_link_hash(HASH),
+	INDEX ix_calendar_sharing_link_object_id(OBJECT_ID)
+);

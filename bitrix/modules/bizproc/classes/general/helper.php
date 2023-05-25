@@ -1,7 +1,7 @@
 <?php
 
-IncludeModuleLangFile(__FILE__);
-
+use Bitrix\Main;
+use Bitrix\Bitrix24;
 use Bitrix\Bizproc;
 
 class CBPHelper
@@ -22,7 +22,7 @@ class CBPHelper
 		return self::$cAccess;
 	}
 
-	private static function UsersArrayToStringInternal($arUsers, $arWorkflowTemplate, $arAllowableUserGroups, $appendId = true)
+	private static function usersArrayToStringInternal($arUsers, $arWorkflowTemplate, $arAllowableUserGroups, $appendId = true)
 	{
 		if (is_array($arUsers))
 		{
@@ -108,7 +108,7 @@ class CBPHelper
 		}
 	}
 
-	public static function UsersArrayToString($users, $arWorkflowTemplate, $documentType, $appendId = true)
+	public static function usersArrayToString($users, $arWorkflowTemplate, $documentType, $appendId = true)
 	{
 		if (static::isEmptyValue($users))
 		{
@@ -130,19 +130,19 @@ class CBPHelper
 		return self::UsersArrayToStringInternal($users, $arWorkflowTemplate, $arAllowableUserGroups, $appendId);
 	}
 
-	public static function UsersStringToArray($strUsers, $documentType, &$arErrors, $callbackFunction = null)
+	public static function usersStringToArray($strUsers, $documentType, &$arErrors, $callbackFunction = null)
 	{
 		$arErrors = [];
 
 		$strUsers = trim($strUsers);
 		if ($strUsers == '')
 		{
-			return ($callbackFunction != null) ? array(array(), array()) : array();
+			return ($callbackFunction != null) ? [[], []] : [];
 		}
 
 		if (CBPActivity::isExpression($strUsers))
 		{
-			return ($callbackFunction != null) ? array(array($strUsers), array()) : array($strUsers);
+			return ($callbackFunction != null) ? [[$strUsers], []] : [$strUsers];
 		}
 
 		$arUsers = [];
@@ -164,10 +164,10 @@ class CBPHelper
 		{
 			$bCorrectUser = false;
 			$bNotFoundUser = true;
-			if (preg_match(CBPActivity::ValuePattern, $user, $arMatches))
+			if (CBPActivity::isExpression($user))
 			{
 				$bCorrectUser = true;
-				$arResult[] = $arMatches[0];
+				$arResult[] = $user;
 			}
 			else
 			{
@@ -194,7 +194,7 @@ class CBPHelper
 				elseif (preg_match('#\[([A-Z]{1,}[0-9A-Z_]+)\]#i', $user, $arMatches))
 				{
 					$bCorrectUser = true;
-					$arResult[] = "group_".mb_strtolower($arMatches[1]);
+					$arResult[] = 'group_' . mb_strtolower($arMatches[1]);
 				}
 				else
 				{
@@ -203,19 +203,23 @@ class CBPHelper
 					if ($cnt == 1)
 					{
 						$bCorrectUser = true;
-						$arResult[] = "user_".$ar[0];
+						$arResult[] = 'user_' . $ar[0];
 					}
 					elseif ($cnt > 1)
 					{
 						$bNotFoundUser = false;
-						$arErrors[] = array(
-							"code" => "Ambiguous",
-							"message" => str_replace("#USER#", htmlspecialcharsbx($user), GetMessage("BPCGHLP_AMBIGUOUS_USER")),
-						);
+						$arErrors[] = [
+							'code' => 'Ambiguous',
+							'message' => str_replace(
+								'#USER#',
+								htmlspecialcharsbx($user),
+								GetMessage('BPCGHLP_AMBIGUOUS_USER')
+							),
+						];
 					}
 					elseif ($callbackFunction != null)
 					{
-						$s = call_user_func_array($callbackFunction, array($user));
+						$s = call_user_func_array($callbackFunction, [$user]);
 						if ($s != null)
 						{
 							$arResultAlt[] = $s;
@@ -229,18 +233,22 @@ class CBPHelper
 			{
 				if ($bNotFoundUser)
 				{
-					$arErrors[] = array(
-						"code" => "NotFound",
-						"message" => str_replace("#USER#", htmlspecialcharsbx($user), GetMessage("BPCGHLP_INVALID_USER")),
-					);
+					$arErrors[] = [
+						'code' => 'NotFound',
+						'message' => str_replace(
+							'#USER#',
+							htmlspecialcharsbx($user),
+							GetMessage('BPCGHLP_INVALID_USER')
+						),
+					];
 				}
 			}
 		}
 
-		return ($callbackFunction != null) ? array($arResult, $arResultAlt) : $arResult;
+		return ($callbackFunction != null) ? [$arResult, $arResultAlt] : $arResult;
 	}
 
-	private static function SearchUserByName($user)
+	private static function searchUserByName($user)
 	{
 		$user = trim($user);
 		if ($user == '')
@@ -330,7 +338,7 @@ class CBPHelper
 		return $arResult;
 	}
 
-	public static function FormatTimePeriod($period)
+	public static function formatTimePeriod($period)
 	{
 		$period = intval($period);
 
@@ -382,7 +390,7 @@ class CBPHelper
 		return $s;
 	}
 
-	private static function MakeWord($val, $arWords)
+	private static function makeWord($val, $arWords)
 	{
 		if ($val > 20)
 		{
@@ -403,7 +411,7 @@ class CBPHelper
 		}
 	}
 
-	public static function GetFilterOperation($key)
+	public static function getFilterOperation($key)
 	{
 		$strNegative = "N";
 		if (mb_substr($key, 0, 1) == "!")
@@ -463,7 +471,7 @@ class CBPHelper
 		return array("FIELD" => $key, "NEGATIVE" => $strNegative, "OPERATION" => $strOperation, "OR_NULL" => $strOrNull);
 	}
 
-	public static function PrepareSql(&$arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields)
+	public static function prepareSql(&$arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields)
 	{
 		global $DB;
 
@@ -786,7 +794,7 @@ class CBPHelper
 		foreach ($arOrder as $by => $order)
 		{
 			$by = mb_strtoupper($by);
-			$order = mb_strtoupper($order);
+			$order = $order ? mb_strtoupper($order) : '';
 
 			if ($order != "ASC")
 				$order = "DESC";
@@ -836,7 +844,7 @@ class CBPHelper
 		);
 	}
 
-	public static function ParseDocumentId($parameterDocumentId)
+	public static function parseDocumentId($parameterDocumentId)
 	{
 		if (!is_array($parameterDocumentId))
 		{
@@ -860,18 +868,15 @@ class CBPHelper
 			$entity = $parameterDocumentId[0];
 		}
 
-		$moduleId = trim($moduleId);
+		$moduleId = is_scalar($moduleId) ? trim($moduleId) : '';
+		$entity = is_scalar($entity) ? trim($entity) : '';
+		$documentId = is_scalar($documentId) ? trim($documentId) : '';
 
-		if (!is_array($documentId))
-		{
-			$documentId = trim($documentId);
-		}
 		if ($documentId === '')
 		{
 			throw new CBPArgumentNullException("documentId");
 		}
 
-		$entity = trim($entity);
 		if ($entity === '')
 		{
 			throw new CBPArgumentNullException("entity");
@@ -880,7 +885,7 @@ class CBPHelper
 		return [$moduleId, $entity, $documentId];
 	}
 
-	public static function ParseDocumentIdArray($parameterDocumentId)
+	public static function parseDocumentIdArray($parameterDocumentId)
 	{
 		if (!is_array($parameterDocumentId))
 		{
@@ -942,7 +947,7 @@ class CBPHelper
 		return [$moduleId, $entity, $documentId];
 	}
 
-	public static function GetFieldValuePrintable($fieldName, $fieldType, $result)
+	public static function getFieldValuePrintable($fieldName, $fieldType, $result)
 	{
 		$newResult = null;
 
@@ -995,7 +1000,7 @@ class CBPHelper
 		return $newResult;
 	}
 
-	public static function ConvertUserToPrintableForm($userId, $nameTemplate = "")
+	public static function convertUserToPrintableForm($userId, $nameTemplate = "", $htmlSpecialChars = true)
 	{
 		if (mb_substr($userId, 0, mb_strlen("user_")) == "user_")
 		{
@@ -1029,7 +1034,7 @@ class CBPHelper
 		$str = "";
 		if ($ar = $db->Fetch())
 		{
-			$str = CUser::FormatName($nameTemplate, $ar, true);
+			$str = CUser::FormatName($nameTemplate, $ar, true, $htmlSpecialChars);
 			$str = $str." [".$ar["ID"]."]";
 			$str = str_replace(",", " ", $str);
 		}
@@ -1037,7 +1042,7 @@ class CBPHelper
 		return $str;
 	}
 
-	public static function GetJSFunctionsForFields($objectName, $arDocumentFields, $arDocumentFieldTypes)
+	public static function getJSFunctionsForFields($objectName, $arDocumentFields, $arDocumentFieldTypes)
 	{
 		ob_start();
 
@@ -1201,7 +1206,7 @@ class CBPHelper
 		return $str;
 	}
 
-	public static function GetDocumentFieldTypes()
+	public static function getDocumentFieldTypes()
 	{
 		$arResult = array(
 			"string" => array("Name" => GetMessage("BPCGHLP_PROP_STRING"), "BaseType" => "string"),
@@ -1223,7 +1228,7 @@ class CBPHelper
 	/**
 	 * @deprecated
 	 */
-	public static function GetGUIFieldEdit($documentType, $formName, $fieldName, $fieldValue, $arDocumentField, $bAllowSelection)
+	public static function getGUIFieldEdit($documentType, $formName, $fieldName, $fieldValue, $arDocumentField, $bAllowSelection)
 	{
 		return self::GetFieldInputControl(
 			$documentType,
@@ -1234,7 +1239,7 @@ class CBPHelper
 		);
 	}
 
-	public static function GetFieldInputControl($documentType, $arFieldType, $arFieldName, $fieldValue, $bAllowSelection = false)
+	public static function getFieldInputControl($documentType, $arFieldType, $arFieldName, $fieldValue, $bAllowSelection = false)
 	{
 		if (!is_array($fieldValue) || is_array($fieldValue) && CBPHelper::IsAssociativeArray($fieldValue))
 		{
@@ -1452,7 +1457,7 @@ class CBPHelper
 		return $s;
 	}
 
-	public static function GetFieldInputValue($documentType, $arFieldType, $arFieldName, $arRequest, &$arErrors)
+	public static function getFieldInputValue($documentType, $arFieldType, $arFieldName, $arRequest, &$arErrors)
 	{
 		$result = [];
 
@@ -1640,7 +1645,7 @@ class CBPHelper
 		return $result;
 	}
 
-	public static function GetFieldInputValuePrintable($documentType, $arFieldType, $fieldValue)
+	public static function getFieldInputValuePrintable($documentType, $arFieldType, $fieldValue)
 	{
 		$result = $fieldValue;
 
@@ -1693,7 +1698,7 @@ class CBPHelper
 		return $result;
 	}
 
-	public static function SetGUIFieldEdit($documentType, $fieldName, $arRequest, &$arErrors, $arDocumentField = null)
+	public static function setGUIFieldEdit($documentType, $fieldName, $arRequest, &$arErrors, $arDocumentField = null)
 	{
 		return self::GetFieldInputValue($documentType, $arDocumentField, array("Field" => $fieldName), $arRequest, $arErrors);
 	}
@@ -1705,7 +1710,7 @@ class CBPHelper
 	 * @param false $siteId
 	 * @return array|string|string[]|null
 	 */
-	public static function ConvertTextForMail($text, $siteId = false)
+	public static function convertTextForMail($text, $siteId = false)
 	{
 		if (is_array($text))
 		{
@@ -1851,7 +1856,7 @@ class CBPHelper
 		return $url;
 	}
 
-	public static function IsAssociativeArray($ar)
+	public static function isAssociativeArray($ar)
 	{
 		if (!is_array($ar))
 		{
@@ -1891,7 +1896,7 @@ class CBPHelper
 		return $fl;
 	}
 
-	public static function ExtractUsersFromUserGroups($value, $activity)
+	public static function extractUsersFromUserGroups($value, $activity)
 	{
 		$result = [];
 
@@ -2071,7 +2076,7 @@ class CBPHelper
 		return false;
 	}
 
-	public static function ExtractUsers($arUsersDraft, $documentId, $bFirst = false)
+	public static function extractUsers($arUsersDraft, $documentId, $bFirst = false)
 	{
 		$result = [];
 
@@ -2163,7 +2168,12 @@ class CBPHelper
 		return null;
 	}
 
-	public static function MakeArrayFlat($ar)
+	public static function extractFirstUser($userGroups, $documentId): ?int
+	{
+		return static::extractUsers($userGroups, $documentId, true);
+	}
+
+	public static function makeArrayFlat($ar)
 	{
 		if (!is_array($ar))
 		{
@@ -2172,7 +2182,13 @@ class CBPHelper
 
 		$result = [];
 
-		if (!CBPHelper::IsAssociativeArray($ar) && (count($ar) == 2) && in_array($ar[0], array("Variable", "Document", "Template", "Workflow", "User", "System")) && is_string($ar[1]))
+		if (
+			!CBPHelper::isAssociativeArray($ar)
+			&& (count($ar) === 2)
+			&& isset($ar[0], $ar[1])
+			&& in_array($ar[0], ["Variable", "Document", "Template", "Workflow", "User", "System"])
+			&& is_string($ar[1])
+		)
 		{
 			$result[] = $ar;
 			return $result;
@@ -2193,6 +2209,29 @@ class CBPHelper
 		}
 
 		return $result;
+	}
+
+	public static function flatten($array): array
+	{
+		if (!is_array($array))
+		{
+			return [$array];
+		}
+
+		$result = [];
+		array_walk_recursive($array, function($a) use (&$result) { $result[] = $a; });
+
+		return $result;
+	}
+
+	public static function stringify($mixed): string
+	{
+		if (is_array($mixed))
+		{
+			return implode(', ', static::flatten($mixed));
+		}
+
+		return (string)$mixed;
 	}
 
 	public static function getBool($value)
@@ -2223,7 +2262,7 @@ class CBPHelper
 		);
 	}
 
-	public static function ConvertParameterValues($val)
+	public static function convertParameterValues($val)
 	{
 		$result = $val;
 
@@ -2247,7 +2286,7 @@ class CBPHelper
 		return $result;
 	}
 
-	public static function StripUserPrefix($value)
+	public static function stripUserPrefix($value)
 	{
 		if (is_array($value) && !CBPHelper::IsAssociativeArray($value))
 		{
@@ -2524,5 +2563,25 @@ class CBPHelper
 			}
 		}
 		return (int) $result;
+	}
+
+	public static function isWorkTimeAvailable(): bool
+	{
+		if (
+			Main\Loader::includeModule('bitrix24')
+			&& !Bitrix24\Feature::isFeatureEnabled('bizproc_timeman')
+		)
+		{
+			return false;
+		}
+
+		if (Main\Loader::includeModule('intranet'))
+		{
+			$workTime = \Bitrix\Intranet\Site\Sections\TimemanSection::getWorkTime();
+
+			return $workTime['available'] && \Bitrix\Main\Loader::includeModule('timeman');
+		}
+
+		return false;
 	}
 }

@@ -28,7 +28,15 @@ export class BarcodeSearchInput extends ProductSearchInput
 		this.focused = false;
 		this.settingsCollection = Extension.getSettings('catalog.product-selector');
 
-		if (!this.settingsCollection.get('isEnabledQrAuth') && this.selector.getConfig('ENABLE_BARCODE_QR_AUTH', true))
+		this.isInstalledMobileApp =
+			this.selector.getConfig('IS_INSTALLED_MOBILE_APP')
+			|| this.settingsCollection.get('isInstallMobileApp')
+		;
+
+		if (
+			!this.settingsCollection.get('isEnabledQrAuth')
+			&& this.selector.getConfig('ENABLE_BARCODE_QR_AUTH', true)
+		)
 		{
 			this.qrAuth = new QrAuthorization();
 			this.qrAuth.createQrCodeImage();
@@ -134,34 +142,24 @@ export class BarcodeSearchInput extends ProductSearchInput
 			{
 				params.footer = ProductCreationLimitedFooter;
 			}
-			else if (this.model && this.model.isSaveable() && this.model.isCatalogExisted())
-			{
-				params.footer = BarcodeSearchSelectorFooter;
-				params.footerOptions = {
-					inputEntity: this,
-					isEmptyBarcode: false,
-					inputName: this.inputName,
-					allowCreateItem: this.isAllowedCreateProduct(),
-					creationLabel: Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE'),
-					currentValue: this.getValue(),
-				};
-			}
 			else
 			{
 				params.footer = BarcodeSearchSelectorFooter;
 				params.footerOptions = {
 					inputEntity: this,
-					isEmptyBarcode: true,
+					isEmptyBarcode: !this.model || !this.model.isCatalogExisted(),
 					inputName: this.inputName,
+					errorAdminHint: this.settingsCollection.get('errorAdminHint'),
+					allowEditItem: this.isAllowedEditProduct(),
 					allowCreateItem: this.isAllowedCreateProduct(),
 					creationLabel: Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE'),
 					currentValue: this.getValue(),
-				};
-				params.searchOptions = {
-					allowCreateItem: this.isAllowedCreateProduct(),
-					footerOptions: {
-						label: Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE')
-					},
+					searchOptions: {
+						allowCreateItem: this.isAllowedCreateProduct(),
+						footerOptions: {
+							label: Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE')
+						},
+					}
 				};
 			}
 
@@ -232,9 +230,12 @@ export class BarcodeSearchInput extends ProductSearchInput
 				}
 			)
 			.then((result) => {
+				this.selector.emit('onBarcodeQrClose', {});
+
 				if (result.data === true)
 				{
-					this.selector.emit('onBarcodeQrClose', {});
+					this.selector.emit('onBarcodeScannerInstallChecked', {});
+					this.isInstalledMobileApp = true;
 				}
 			})
 		;
@@ -242,7 +243,7 @@ export class BarcodeSearchInput extends ProductSearchInput
 		userOptions.save('product-selector', 'barcodeQrAuth', 'showed', 'Y');
 	}
 
-	handleShowSearchDialog(event: UIEvent)
+	handleClickNameInput(event: UIEvent)
 	{
 		if (this.qrAuth && this.getDialog().getContainer())
 		{
@@ -256,7 +257,13 @@ export class BarcodeSearchInput extends ProductSearchInput
 				Dom.append(this.layoutMobileQrPopup(), this.getDialog().getContainer());
 			}
 		}
-		super.handleShowSearchDialog(event);
+
+		super.handleClickNameInput(event);
+	}
+
+	showItems()
+	{
+		this.searchInDialog();
 	}
 
 	onChangeValue(value: string)
@@ -272,6 +279,8 @@ export class BarcodeSearchInput extends ProductSearchInput
 			rowId: this.selector.getRowId(),
 			fields
 		});
+
+		this.selector.emit('onBarcodeChange', {value});
 
 		if (this.selector.isEnabledAutosave())
 		{
@@ -294,7 +303,13 @@ export class BarcodeSearchInput extends ProductSearchInput
 		}
 	}
 
-	searchInDialog(searchQuery: string = '')
+	searchInDialog(): void
+	{
+		const searchQuery = this.getFilledValue().trim();
+		this.searchByBarcode(searchQuery);
+	}
+
+	searchByBarcode(searchQuery: string = ''): void
 	{
 		if (!this.selector.isProductSearchEnabled())
 		{
@@ -302,25 +317,24 @@ export class BarcodeSearchInput extends ProductSearchInput
 		}
 
 		const dialog = this.getDialog();
-		/*if (searchQuery === '' && this.model.isEmpty())
+		if (!dialog)
 		{
-			dialog.hide();
 			return;
-		}*/
+		}
 
-		dialog.removeItems()
-
-		if (dialog)
+		dialog.removeItems();
+		if (!Type.isStringFilled(searchQuery))
 		{
-			if (searchQuery === '')
+			if (this.model && this.model.isCatalogExisted())
 			{
 				dialog.setPreselectedItems([[BarcodeSearchInput.SEARCH_TYPE_ID, this.model.getSkuId()]])
 				dialog.loadState = 'UNSENT';
 				dialog.load();
 			}
-			dialog.show();
-			dialog.search(searchQuery);
 		}
+
+		dialog.show();
+		dialog.search(searchQuery);
 	}
 
 	handleNameInputBlur(event: UIEvent)
@@ -411,18 +425,28 @@ export class BarcodeSearchInput extends ProductSearchInput
 
 	startMobileScanner(event)
 	{
-		if (
-			!this.settingsCollection.get('isInstallMobileApp')
-			&& this.selector.getConfig('ENABLE_BARCODE_QR_AUTH', true)
-		)
+		if (this.isInstalledMobileApp)
 		{
-			this.qrAuth = new QrAuthorization();
-			this.qrAuth.createQrCodeImage();
-			this.handleShowSearchDialog(event);
+			this.sendMobilePush(event);
+
 			return;
 		}
 
-		this.sendMobilePush(event);
+		if (!this.qrAuth)
+		{
+			this.qrAuth = new QrAuthorization();
+			this.qrAuth.createQrCodeImage();
+		}
+
+		if (this.getDialog().isOpen())
+		{
+			this.getDialog().hide();
+			this.getDialog().subscribeOnce('onHide', this.handleClickNameInput.bind(this));
+		}
+		else
+		{
+			this.handleClickNameInput(event);
+		}
 	}
 
 	sendMobilePush(event)
@@ -478,7 +502,7 @@ export class BarcodeSearchInput extends ProductSearchInput
 			}
 			else
 			{
-				this.searchInDialog(barcode);
+				this.searchByBarcode(barcode);
 			}
 			this.getNameInput().value = Text.encode(barcode);
 		});
@@ -487,7 +511,7 @@ export class BarcodeSearchInput extends ProductSearchInput
 	selectScannedBarcodeProduct(productId)
 	{
 		this.toggleIcon(this.getSearchIcon(), 'none');
-		this.model.getErrorCollection().clearErrors();
+		this.clearErrors();
 		if (this.selector)
 		{
 			this.selector.onProductSelect(
@@ -514,6 +538,7 @@ export class BarcodeSearchInput extends ProductSearchInput
 
 			if (
 				!this.settingsCollection.get('isShowedBarcodeSpotlightInfo')
+				&& this.settingsCollection.get('isAllowedShowBarcodeSpotlightInfo')
 				&& this.selector.getConfig('ENABLE_INFO_SPOTLIGHT', true)
 			)
 			{
@@ -552,7 +577,7 @@ export class BarcodeSearchInput extends ProductSearchInput
 				event.preventDefault();
 				if (this.qrAuth)
 				{
-					this.handleShowSearchDialog(event);
+					this.handleClickNameInput(event);
 				}
 				else
 				{

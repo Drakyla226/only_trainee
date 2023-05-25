@@ -585,11 +585,38 @@
 	{
 		var fields = this.htmlForm.elements;
 		var emptyRcpt = true;
+
+		var countCc = 0;
+		var countBcc = 0;
+		var countTo = 0;
+
 		for (var i = 0; i < fields.length; i++)
 		{
-			if ('data[to][]' == fields[i].name && fields[i].value.length > 0)
+			if ('data[to][]' === fields[i].name && fields[i].value.length)
+			{
 				emptyRcpt = false;
+				countTo++;
+			}
+
+			if ('data[cc][]' === fields[i].name && fields[i].value.length)
+			{
+				countCc++;
+			}
+
+			if ('data[bcc][]' === fields[i].name && fields[i].value.length)
+			{
+				countBcc++;
+			}
 		}
+
+		var emailsLimitToSendMessage = Number(BX.message('EMAILS_LIMIT_TO_SEND_MESSAGE'));
+
+		if(emailsLimitToSendMessage !== -1 && (countTo > emailsLimitToSendMessage || countCc > emailsLimitToSendMessage || countBcc > emailsLimitToSendMessage))
+		{console.log(emailsLimitToSendMessage);
+			form.showError(BX.message('MAIL_MESSAGE_NEW_TARIFF_RESTRICTION'));
+			return BX.PreventDefault(event);
+		}
+
 		if (emptyRcpt)
 		{
 			// @TODO: hide on select
@@ -658,10 +685,10 @@
 					code: 0
 				}];
 			}
+
 			for (var i = 0; i < data.errors.length; i++)
 			{
-				errorNode.appendChild(document.createTextNode(data.errors[i].message));
-				errorNode.appendChild(document.createElement('BR'));
+				errorNode.innerHTML += data.errors[i].message + "</br>";
 			}
 
 			form.showError(errorNode.innerHTML);
@@ -690,7 +717,9 @@
 		var replyButton = BX.findChildByClassName(this.__wrapper, 'js-msg-view-reply-panel', true);
 
 		if (this.htmlForm.parentNode === this.__dummyNode)
+		{
 			this.htmlForm.__wrapper.appendChild(this.htmlForm);
+		}
 
 		mailForm.init();
 
@@ -827,8 +856,10 @@
 
 	BXMailMessage.prototype.onMessageActionError = function (response)
 	{
-		alert(response.errors[0].message);
-		// todo show errors
+		top.BX.UI.Notification.Center.notify({
+			autoHideDelay: 4000,
+			content: response.errors[0].message
+		});
 	};
 
 	BXMailMessage.prototype.onMessageActionSuccess = function (btn)
@@ -893,17 +924,35 @@
 			},
 			function (json)
 			{
-				BXMailMailbox.syncProgress(
-					stepper,
-					gridId,
-					{
-						'complete': false,
-						'status': -1,
-						'errors': json.errors,
-						'is_fatal_error': json.data.is_fatal_error,
-					},
-
-				);
+				if(!json.errors.indexOf('Network error'))
+				{
+					BXMailMailbox.syncProgress(
+						stepper,
+						gridId,
+						{
+							'complete': false,
+							'status': -1,
+							'errors': json.errors,
+							'is_fatal_error': json.data.is_fatal_error,
+						},
+					);
+				}
+				else
+				{
+					/*
+						Suspend informing the user that synchronization is in progress
+						if synchronization takes too long.
+					*/
+					BXMailMailbox.syncProgress(
+						stepper,
+						gridId,
+						{
+							'complete': true,
+							'status': 1,
+							'errors': [],
+						},
+					);
+				}
 			}
 		);
 	};
@@ -933,13 +982,11 @@
 		{
 			self.syncData[params.sessid].new = params.new;
 		}
-
-		if (params.complete && !self.syncData[params.sessid].complete)
+		
+		if (!self.syncData[params.sessid].complete)
 		{
 			if (self.syncData[params.sessid].new > 0 || params.updated > 0 || params.deleted > 0)
 			{
-				BX.onCustomEvent('BX.Mail.Sync:newLettersArrived');
-
 				var messageGrid = new BX.Mail.MessageGrid();
 				messageGrid.setGridId(gridId);
 				messageGrid.reloadTable();
@@ -1116,7 +1163,16 @@
 			},
 			{
 				condition: [
-					'^' + siteDir + 'mail/(blacklist|signature|config|message|addressbook)'
+					'^' + siteDir + 'mail/(blacklist|signature|addressbook)',
+				],
+				options: {
+					width: 1080,
+					cacheable: false
+				}
+			},
+			{
+				condition: [
+					'^' + siteDir + 'mail/(message)'
 				],
 				options: {
 					width: 1080

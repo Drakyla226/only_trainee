@@ -86,6 +86,8 @@ BX.Kanban.Column = function(options)
 	this.addItemTitleText = null;
 
 	this.pagination = new BX.Kanban.Pagination(this);
+
+	this.handleScrollWithThrottle =  BX.Runtime.throttle(this.handleScroll, 100, this);
 };
 
 BX.Kanban.Column.DEFAULT_COLOR = "ace9fb";
@@ -832,7 +834,9 @@ BX.Kanban.Column.prototype =
 			attrs: {
 				className: "main-kanban-column-title-input-edit",
 				type: "text",
-				placeholder: this.getGrid().getMessage("COLUMN_TITLE_PLACEHOLDER")
+				placeholder: this.getGrid().getMessage("COLUMN_TITLE_PLACEHOLDER2"),
+				autocomplete: "off",
+				disabled: true
 			},
 			events: {
 				blur: this.handleTextBoxBlur.bind(this),
@@ -866,12 +870,24 @@ BX.Kanban.Column.prototype =
 	{
 		this.disableDragging();
 		this.getContainer().classList.add("main-kanban-column-edit-mode");
+		this.getTitleTextBox().disabled = false;
 		this.getTitleTextBox().value = this.getName();
+
 		this.focusTextBox();
+	},
+
+	isEditModeEnabled: function()
+	{
+		return this.getContainer().classList.contains("main-kanban-column-edit-mode");
 	},
 
 	applyEditMode: function()
 	{
+		if (!this.isEditModeEnabled())
+		{
+			return;
+		}
+
 		var title = BX.util.trim(this.getTitleTextBox().value);
 		var titleChanged = false;
 		if (title.length > 0 && this.getName() !== title)
@@ -892,6 +908,8 @@ BX.Kanban.Column.prototype =
 
 		this.colorChanged = false;
 		this.enableDragging();
+
+		this.getTitleTextBox().disabled = true;
 		this.getContainer().classList.remove("main-kanban-column-edit-mode");
 	},
 
@@ -944,6 +962,9 @@ BX.Kanban.Column.prototype =
 		this.showRemoveConfirmDialog();
 	},
 
+	handleScroll(event) {
+		BX.Event.EventEmitter.emit(this.getGrid(), 'Kanban.Column:onScroll', { event });
+	},
 	showColorPicker: function()
 	{
 		this.stopTextBoxBlur();
@@ -1137,7 +1158,19 @@ BX.Kanban.Column.prototype =
 
 	handleAddItemButtonClick: function(event)
 	{
-		this.addDraftItem(this.getFirstItem(false));
+		var firstItem = this.getFirstItem(false);
+		if (firstItem)
+		{
+			var existsDraftItem = firstItem.getId().indexOf('kanban-new-item-') === 0;
+			if (existsDraftItem)
+			{
+				firstItem.applyDraftEditMode();
+
+				return;
+			}
+		}
+
+		this.addDraftItem(firstItem);
 	},
 
 	cleanLayoutItems: function()
@@ -1269,7 +1302,8 @@ BX.Kanban.Column.prototype =
 				"data-type": "column"
 			},
 			events: {
-				wheel: BX.delegate(this.blockPageScroll, this)
+				wheel: BX.delegate(this.blockPageScroll, this),
+				scroll: this.handleScrollWithThrottle.bind(this),
 			},
 			children: [
 				this.getItemsContainer(),

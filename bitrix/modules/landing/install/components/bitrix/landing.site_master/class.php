@@ -153,6 +153,7 @@ class LandingSiteMasterComponent extends LandingBaseFormComponent implements Con
 
 	/**
 	 * Returns postfix for bitrix24 domain.
+	 *
 	 * @return string
 	 */
 	protected function getPostfix(): string

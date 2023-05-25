@@ -401,6 +401,7 @@ class HttpClient implements Log\LoggerAwareInterface
 				if($this->redirectCount < $this->redirectMax)
 				{
 					$this->effectiveUrl = $location;
+					$this->requestHeaders->delete('Host');
 					if($this->status == 302 || $this->status == 303)
 					{
 						$this->queryMethod = self::HTTP_GET;
@@ -452,6 +453,16 @@ class HttpClient implements Log\LoggerAwareInterface
 			$this->setHeader($name, $value);
 		}
 		return $this;
+	}
+
+	/**
+	 * Returns HTTP request headers.
+	 *
+	 * @return HttpHeaders
+	 */
+	public function getRequestHeaders(): HttpHeaders
+	{
+		return $this->requestHeaders;
 	}
 
 	/**
@@ -841,7 +852,7 @@ class HttpClient implements Log\LoggerAwareInterface
 
 		$request = $method." ".$path." HTTP/".$this->version."\r\n";
 
-		$this->setHeader("Host", $url->getHost());
+		$this->setHeader("Host", $url->getHost(), false);
 		$this->setHeader("Connection", "close", false);
 		$this->setHeader("Accept", "*/*", false);
 		$this->setHeader("Accept-Language", "en", false);
@@ -897,11 +908,12 @@ class HttpClient implements Log\LoggerAwareInterface
 		{
 			if ($this->debugLevel)
 			{
-				$logger->debug("{date} - {host}\n{trace}", ['trace' => Diag\Helper::getBackTrace(6, DEBUG_BACKTRACE_IGNORE_ARGS, 3)]);
-			}
-			if ($this->debugLevel & HttpDebug::REQUEST_HEADERS)
-			{
-				$logger->debug("REQUEST>>>\n" . $request);
+				$message = "{date} - {host}\n{trace}";
+				if ($this->debugLevel & HttpDebug::REQUEST_HEADERS)
+				{
+					$message .= "REQUEST>>>\n" . $request;
+				}
+				$logger->debug($message, ['trace' => Diag\Helper::getBackTrace(6, DEBUG_BACKTRACE_IGNORE_ARGS, 3)]);
 			}
 		}
 
@@ -1030,14 +1042,14 @@ class HttpClient implements Log\LoggerAwareInterface
 
 		if ($logger = $this->getLogger())
 		{
-			if ($this->debugLevel & HttpDebug::RESPONSE_BODY)
-			{
-				$logger->debug("\n");
-				$logger->debug($this->result);
-			}
 			if ($this->debugLevel)
 			{
-				$logger->debug("\n{delimiter}\n");
+				$message = "\n{delimiter}\n";
+				if ($this->debugLevel & HttpDebug::RESPONSE_BODY)
+				{
+					$message = "\n" . $this->result . $message;
+				}
+				$logger->debug($message);
 			}
 		}
 
@@ -1129,10 +1141,10 @@ class HttpClient implements Log\LoggerAwareInterface
 					$this->status = intval($find[1]);
 				}
 			}
-			elseif(mb_strpos($header, ':') !== false)
+			elseif(strpos($header, ':') !== false)
 			{
-				list($headerName, $headerValue) = explode(':', $header, 2);
-				if(mb_strtolower($headerName) == 'set-cookie')
+				[$headerName, $headerValue] = explode(':', $header, 2);
+				if(strtolower($headerName) == 'set-cookie')
 				{
 					$this->responseCookies->addFromString($headerValue);
 				}

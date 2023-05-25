@@ -1,8 +1,13 @@
 <?php
 
 use Bitrix\Catalog;
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\Access\Model\StoreDocumentElement;
 use Bitrix\Catalog\StoreDocumentBarcodeTable;
+use Bitrix\Catalog\StoreDocumentElementTable;
 use Bitrix\Catalog\StoreDocumentTable;
+use Bitrix\Catalog\Url\InventoryManagementSourceBuilder;
 use Bitrix\Catalog\v2\Integration\UI\EntityEditor\StoreDocumentProvider;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
@@ -13,6 +18,8 @@ use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\StoreDocumentArrival;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\StoreDocumentStoreAdjustment;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\StoreDocumentMoving;
+use Bitrix\Catalog\v2\Contractor;
+use Bitrix\Crm\Settings\EntityEditSettings;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -34,6 +41,20 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 	private $documentType;
 	/** @var array $document */
 	private $document;
+	/** @var AccessController */
+	private $accessController;
+	private bool $canSelectDocumentType = true;
+
+	/** @var Contractor\Provider\IProvider|null */
+	private ?Contractor\Provider\IProvider $contractorsProvider;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$this->accessController = AccessController::getCurrent();
+		$this->contractorsProvider = Contractor\Provider\Manager::getActiveProvider();
+	}
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -44,6 +65,14 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		if (isset($arParams['DOCUMENT_TYPE']))
 		{
 			$this->documentType = $arParams['DOCUMENT_TYPE'];
+
+			if (
+				$this->isNew()
+				&& in_array($this->documentType, [StoreDocumentTable::TYPE_ARRIVAL, StoreDocumentTable::TYPE_STORE_ADJUSTMENT], true)
+			)
+			{
+				$this->replaceDocumentTypeToAccessibleType();
+			}
 		}
 		if (!isset($arParams['PATH_TO']))
 		{
@@ -51,6 +80,40 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		}
 
 		return parent::onPrepareComponentParams($arParams);
+	}
+
+	/**
+	 * Replace selected type in params of component to accessible document type.
+	 *
+	 * Checks access only `modify` right, because the type change is relevant only at creation.
+	 *
+	 * @return void
+	 */
+	private function replaceDocumentTypeToAccessibleType(): void
+	{
+		$replaces = [
+			StoreDocumentTable::TYPE_ARRIVAL => StoreDocumentTable::TYPE_STORE_ADJUSTMENT,
+			StoreDocumentTable::TYPE_STORE_ADJUSTMENT => StoreDocumentTable::TYPE_ARRIVAL,
+		];
+
+		foreach ($replaces as $baseType => $anotherType)
+		{
+			$can = $this->accessController->checkByValue(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, $baseType);
+			if (!$can)
+			{
+				$this->canSelectDocumentType = false;
+
+				// change current type
+				if ($this->documentType === $baseType)
+				{
+					$can = $this->accessController->checkByValue(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, $anotherType);
+					if ($can)
+					{
+						$this->documentType = $anotherType;
+					}
+				}
+			}
+		}
 	}
 
 	protected function listKeysSignedParameters()
@@ -73,10 +136,13 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		}
 		$this->initializeDocumentFields();
 
+		$this->arResult['INCLUDE_CRM_ENTITY_EDITOR'] = Contractor\Provider\Manager::isActiveProviderByModule('crm');
 		$this->arResult['GUID'] = $this->arResult['FORM']['GUID'];
 		$this->arResult['TOOLBAR_ID'] = "toolbar_store_document_{$this->documentId}";
 		$this->arResult['IS_MAIN_CARD_READ_ONLY'] = $this->arResult['FORM']['READ_ONLY'];
 		$this->arResult['DOCUMENT_TYPE'] = $this->getDocumentType();
+		$this->arResult['FOCUSED_TAB'] = $this->request->get('focusedTab');
+
 		$this->setDropdownTypes();
 
 		$this->getAdditionalEntityEditorActions();
@@ -86,6 +152,10 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$this->checkIfInventoryManagementIsUsed();
 
 		$this->arResult['BUTTONS'] = $this->getToolbarButtons();
+
+		$this->arResult['INVENTORY_MANAGEMENT_SOURCE'] =
+			InventoryManagementSourceBuilder::getInstance()->getInventoryManagementSource()
+		;
 
 		$this->includeComponentTemplate();
 	}
@@ -151,6 +221,26 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 		$editorProvider = $this->getEditorProvider();
 		$this->arResult['FORM'] = $editorProvider->getFields();
+		$this->addPreloadedFields();
+	}
+
+	private function addPreloadedFields(): void
+	{
+		$preloadedDocumentFields = $this->arParams['PRELOADED_FIELDS']['DOCUMENT_FIELDS'] ?? null;
+		if (!is_array($preloadedDocumentFields) || empty($preloadedDocumentFields))
+		{
+			return;
+		}
+
+		if (isset($preloadedDocumentFields['TOTAL'], $preloadedDocumentFields['CURRENCY']))
+		{
+			$total = $preloadedDocumentFields['TOTAL'];
+			$currency = $preloadedDocumentFields['CURRENCY'];
+			$preloadedDocumentFields['FORMATTED_TOTAL'] = CCurrencyLang::CurrencyFormat($total, $currency, false);
+			$preloadedDocumentFields['FORMATTED_TOTAL_WITH_CURRENCY'] = CCurrencyLang::CurrencyFormat($total, $currency);
+		}
+
+		$this->arResult['FORM']['ENTITY_DATA'] = array_merge($this->arResult['FORM']['ENTITY_DATA'], $preloadedDocumentFields);
 	}
 
 	private function getEditorProvider(): StoreDocumentProvider
@@ -165,9 +255,21 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	private function loadDocument()
 	{
-		if (!$this->checkDocumentReadRights())
+		if (!$this->checkDocumentBaseRights())
 		{
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_VIEW_RIGHTS_ERROR');
+			if (Main\Loader::includeModule('crm'))
+			{
+				$this->arResult['ERROR_MESSAGES'][] = [
+					'TITLE' => Loc::getMessage('CATALOG_STORE_DOCUMENT_ERR_ACCESS_DENIED'),
+					'HELPER_CODE' => 15955386,
+					'LESSON_ID' => 25010,
+					'COURSE_ID' => 48,
+				];
+			}
+			else
+			{
+				$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_VIEW_RIGHTS_ERROR');
+			}
 			return;
 		}
 
@@ -176,7 +278,15 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			return;
 		}
 
-		$document = StoreDocumentTable::getById($this->documentId)->fetch();
+		$document = StoreDocumentTable::getList([
+			'select' => [
+				'*',
+				'CONTRACTOR_REF_' => 'CONTRACTOR',
+			],
+			'filter' => [
+				'=ID' => $this->documentId,
+			],
+		])->fetch();
 		if ($document)
 		{
 			$document = $this->fillDefaultDocumentFields($document);
@@ -186,6 +296,11 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		else
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_DOCUMENT_NOT_FOUND_ERROR');
+		}
+
+		if (!$this->checkDocumentReadRights())
+		{
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_VIEW_RIGHTS_ERROR');
 		}
 	}
 
@@ -200,14 +315,56 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		return $resultDocument;
 	}
 
+	private function checkDocumentBaseRights(): bool
+	{
+		return
+			$this->accessController->check(ActionDictionary::ACTION_CATALOG_READ)
+			&& $this->accessController->check(ActionDictionary::ACTION_INVENTORY_MANAGEMENT_ACCESS)
+			;
+	}
+
 	private function checkDocumentReadRights(): bool
 	{
-		return Main\Engine\CurrentUser::get()->canDoOperation('catalog_read');
+		return
+			$this->checkDocumentBaseRights()
+			&& $this->accessController->checkByValue(
+				ActionDictionary::ACTION_STORE_DOCUMENT_VIEW,
+				$this->getDocumentType()
+			)
+			;
 	}
 
 	private function checkDocumentWriteRights(): bool
 	{
-		return Main\Engine\CurrentUser::get()->canDoOperation('catalog_store');
+		return
+			$this->checkDocumentBaseRights()
+			&& $this->accessController->checkByValue(
+				ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY,
+				$this->getDocumentType()
+			)
+			;
+	}
+
+	private function checkDocumentConductRights(): bool
+	{
+		return
+			$this->checkDocumentBaseRights()
+			&& $this->accessController->checkByValue(
+				ActionDictionary::ACTION_STORE_DOCUMENT_CONDUCT,
+				$this->getDocumentType()
+			)
+			;
+	}
+
+	private function checkDocumentCancelRights(): bool
+	{
+		return
+			$this->checkDocumentBaseRights()
+			&& $this->accessController->checkByValue(
+				ActionDictionary::ACTION_STORE_DOCUMENT_CANCEL,
+				$this->getDocumentType()
+			)
+			;
 	}
 
 	public function saveAction($fields = []): array
@@ -260,7 +417,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	public function saveAndConductAction($fields = []): array
 	{
-		if (!$this->checkDocumentWriteRights())
+		if (!$this->checkDocumentWriteRights() || !$this->checkDocumentConductRights())
 		{
 			return [
 				'ERROR' => Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_WRITE_RIGHTS_ERROR'),
@@ -361,7 +518,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	public function conductAction(): array
 	{
-		if (!$this->checkDocumentWriteRights())
+		if (!$this->checkDocumentConductRights())
 		{
 			return [
 				'ERROR' => Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_WRITE_RIGHTS_ERROR'),
@@ -416,7 +573,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	public function cancelConductAction(): array
 	{
-		if (!$this->checkDocumentWriteRights())
+		if (!$this->checkDocumentCancelRights())
 		{
 			return [
 				'ERROR' => Loc::getMessage('CATALOG_STORE_DOCUMENT_DETAIL_NO_WRITE_RIGHTS_ERROR'),
@@ -447,33 +604,70 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		];
 	}
 
+	/**
+	 * @param $fields
+	 * @return Main\Result
+	 */
 	private function saveDocument($fields): Main\Result
 	{
+		$contractorProviderSaveResult = null;
+		if ($this->contractorsProvider)
+		{
+			$contractorProviderSaveResult = $this->contractorsProvider::onBeforeDocumentSave($fields);
+		}
+
 		$result = new Main\Result();
+		$entityId = null;
 		if ($this->isNew())
 		{
 			$addDocumentResult = $this->addDocument($fields);
-			if (!$addDocumentResult->isSuccess())
+			if ($addDocumentResult->isSuccess())
+			{
+				$entityId = (int)$addDocumentResult->getData()['ENTITY_ID'];
+			}
+			else
 			{
 				$result->addErrors($addDocumentResult->getErrors());
-				return $result;
 			}
-
-			$entityId = $addDocumentResult->getData()['ENTITY_ID'];
 		}
 		else
 		{
 			$updateDocumentResult = $this->updateDocument($fields);
-			if (!$updateDocumentResult->isSuccess())
+			if ($updateDocumentResult->isSuccess())
+			{
+				$entityId = (int)$updateDocumentResult->getData()['ENTITY_ID'];
+			}
+			else
 			{
 				$result->addErrors($updateDocumentResult->getErrors());
-				return $result;
 			}
-
-			$entityId = $updateDocumentResult->getData()['ENTITY_ID'];
 		}
 
-		$result->setData(['ENTITY_ID' => $entityId]);
+		if (!$result->isSuccess())
+		{
+			if ($this->contractorsProvider)
+			{
+				$this->contractorsProvider::onAfterDocumentSaveFailure($entityId, $contractorProviderSaveResult);
+			}
+
+			return $result;
+		}
+
+		if ($this->contractorsProvider)
+		{
+			$this->contractorsProvider::onAfterDocumentSaveSuccess(
+				$entityId,
+				$contractorProviderSaveResult,
+				[
+					'entityEditorSettings' => new EntityEditSettings($this->getEditorProvider()->getConfigId()),
+				]
+			);
+		}
+
+		if ($result->isSuccess())
+		{
+			$result->setData(['ENTITY_ID' => $entityId]);
+		}
 
 		return $result;
 	}
@@ -483,7 +677,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		global $APPLICATION;
 		$result = new Main\Result();
 
-		$prepareFieldsResult = $this->prepareFieldsToSave($fields);
+		$prepareFieldsResult = $this->prepareFieldsToAdd($fields);
 		if (!$prepareFieldsResult->isSuccess())
 		{
 			$result->addErrors($prepareFieldsResult->getErrors());
@@ -529,40 +723,9 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			$this->updateElements($fieldsToUpdate['ELEMENT']);
 		}
 
-		if ($fieldsToUpdate['DOCUMENT_FILES'])
-		{
-			$this->updateFiles($this->documentId, $fieldsToUpdate['DOCUMENT_FILES'], $fieldsToUpdate['DOCUMENT_FILES_del']);
-		}
-
 		$result->setData(['ENTITY_ID' => $this->documentId]);
+
 		return $result;
-	}
-
-	private function updateFiles($documentId, $files, $deletedFiles)
-	{
-		$filesToSave = $files;
-		if (!empty($deletedFiles))
-		{
-			$rowsToDelete = \Bitrix\Catalog\StoreDocumentFileTable::getList([
-				'select' => ['ID', 'FILE_ID'],
-				'filter' => [
-					'DOCUMENT_ID' => $documentId,
-					'FILE_ID' => $deletedFiles,
-				]
-			])->fetchAll();
-			foreach ($rowsToDelete as $row)
-			{
-				$deleteResult = \Bitrix\Catalog\StoreDocumentFileTable::delete($row['ID']);
-				if ($deleteResult->isSuccess())
-				{
-					\CFile::Delete($row['FILE_ID']);
-				}
-			}
-
-			$filesToSave = array_diff($files, $deletedFiles);
-		}
-
-		\CCatalogDocs::saveFiles($documentId, $filesToSave);
 	}
 
 	private function updateBarcodes(array $fields): void
@@ -617,7 +780,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		}
 	}
 
-	private function prepareFieldsToSave(array $fields): Main\Result
+	private function prepareFieldsToAdd(array $fields): Main\Result
 	{
 		$result = new Main\Result();
 		$preparedFields = [];
@@ -644,9 +807,17 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		{
 			unset($preparedFields['TOTAL']);
 		}
-		if (!$preparedFields['CURRENCY'])
+
+		if (empty($preparedFields['CURRENCY']))
 		{
-			$preparedFields['CURRENCY'] = \Bitrix\Currency\CurrencyManager::getBaseCurrency();
+			if ($this->isNew() && isset($preparedFields['TOTAL_WITH_CURRENCY']))
+			{
+				$preparedFields['CURRENCY'] = $preparedFields['TOTAL_WITH_CURRENCY'];
+			}
+			else
+			{
+				$preparedFields['CURRENCY'] = \Bitrix\Currency\CurrencyManager::getBaseCurrency();
+			}
 		}
 		$preparedFields['DOC_TYPE'] = $this->getDocumentType();
 		$preparedFields['SITE_ID'] = $this->getSiteId();
@@ -674,6 +845,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$validFieldNames = array_keys(StoreDocumentTable::getEntity()->getFields());
 		$validFieldNames = array_merge($validFieldNames, ['ELEMENT', 'DOCUMENT_FILES']);
 		$preparedFields = array_intersect_key($preparedFields, array_flip($validFieldNames));
+
+		$preparedFields = $this->prepareFilesToUpdate($preparedFields);
 
 		$result->setData(['PREPARED_FIELDS' => $preparedFields]);
 
@@ -730,16 +903,10 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			$generalFields['TOTAL'] = $this->calculateDocumentTotalFromElement($element);
 		}
 
-		if ($fields['DOCUMENT_FILES'])
-		{
-			$preparedFields['DOCUMENT_FILES'] = $generalFields['DOCUMENT_FILES'];
-			unset($generalFields['DOCUMENT_FILES']);
-			$preparedFields['DOCUMENT_FILES_del'] = $generalFields['DOCUMENT_FILES_del'];
-			unset($generalFields['DOCUMENT_FILES_del']);
-		}
+		$generalFields = $this->prepareFilesToUpdate($generalFields);
 
 		$validFieldNames = array_keys(StoreDocumentTable::getEntity()->getFields());
-		$validFieldNames = array_merge($validFieldNames, ['ELEMENT', 'DOCUMENT_FILES', 'DOCUMENT_FILES_del']);
+		$validFieldNames = array_merge($validFieldNames, ['ELEMENT', 'DOCUMENT_FILES']);
 		$generalFields = array_intersect_key($generalFields, array_flip($validFieldNames));
 
 		$preparedFields['GENERAL'] = $generalFields;
@@ -747,6 +914,44 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$result->setData(['PREPARED_FIELDS' => $preparedFields]);
 
 		return $result;
+	}
+
+	private function prepareFilesToUpdate(array $fields): array
+	{
+		$filesExists = isset($fields['DOCUMENT_FILES']) && is_array($fields['DOCUMENT_FILES']);
+		$filesDelete = isset($fields['DOCUMENT_FILES_del']) && is_array($fields['DOCUMENT_FILES_del']);
+		if ($filesExists || $filesDelete)
+		{
+			$result = [];
+			if ($filesExists)
+			{
+				$fileList = $fields['DOCUMENT_FILES'];
+				Main\Type\Collection::normalizeArrayValuesByInt($fileList, false);
+				$fileList = \Bitrix\Main\UI\FileInputUtility::instance()->checkFiles(
+					'document_files_uploader',
+					$fileList
+				);
+				foreach ($fileList as $id)
+				{
+					$result[$id] = (string)$id;
+				}
+			}
+
+			if ($filesDelete)
+			{
+				$deleteList = $fields['DOCUMENT_FILES_del'];
+				Main\Type\Collection::normalizeArrayValuesByInt($deleteList, false);
+				foreach ($deleteList as $id)
+				{
+					$result[$id] = 'delete' . $id;
+				}
+			}
+
+			$fields['DOCUMENT_FILES'] = array_values($result);
+			unset($result);
+		}
+
+		return $fields;
 	}
 
 	private function prepareFieldByName($fieldName, $value): Main\Result
@@ -840,7 +1045,7 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			StoreDocumentTable::TYPE_ARRIVAL,
 			StoreDocumentTable::TYPE_STORE_ADJUSTMENT,
 		];
-		if (!in_array($this->getDocumentType(), $dropdownRequiringTypes))
+		if (!$this->canSelectDocumentType || !in_array($this->getDocumentType(), $dropdownRequiringTypes))
 		{
 			$this->arResult['DROPDOWN_TYPES'] = [];
 			return;
@@ -861,6 +1066,69 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		}
 	}
 
+	/**
+	 * Products of document.
+	 *
+	 * @return array
+	 */
+	private function getDocumentProducts(): array
+	{
+		if (!$this->documentId)
+		{
+			return [];
+		}
+
+		$result = [];
+
+		$rows = StoreDocumentElementTable::getList([
+			'filter' => [
+				'=DOC_ID' => $this->documentId,
+			],
+		]);
+		foreach ($rows as $row)
+		{
+			$id = (int)$row['ID'];
+			$result[$id] = $row;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Checks whether the fields of the element have changed.
+	 *
+	 * @param array $old
+	 * @param array $new
+	 *
+	 * @return bool
+	 */
+	private function isChangedElement(array $old, array $new): bool
+	{
+		$checkedFields = [
+			'STORE_FROM' => 'intval',
+			'STORE_TO' => 'intval',
+			'ELEMENT_ID' => 'intval',
+			'AMOUNT' => 'floatval',
+			'PURCHASING_PRICE' => 'floatval',
+			'BASE_PRICE' => 'floatval',
+			'BASE_PRICE_EXTRA' => 'floatval',
+			'BASE_PRICE_EXTRA_RATE' => 'strval',
+		];
+
+		foreach ($checkedFields as $name => $typeCallback)
+		{
+			$oldValue =  call_user_func($typeCallback, $old[$name] ?? null);
+			$newValue =  call_user_func($typeCallback, $new[$name] ?? null);
+
+			if ($oldValue !== $newValue)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private function decodeProducts($encodedProducts)
 	{
 		return CUtil::JsObjectToPhp($encodedProducts);
@@ -869,12 +1137,16 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 	private function prepareElementField($products): Main\Result
 	{
 		$result = new Main\Result();
+
 		$elements = [];
 		$documentBarcodesMap = [];
+		$existElements = $this->getDocumentProducts();
+
 		if (!isset($products))
 		{
 			$products = [];
 		}
+
 		foreach ($products as $product)
 		{
 			if (!$product['SKU_ID'])
@@ -917,6 +1189,8 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 				$elementFields['DOC_ID'] = $this->documentId;
 			}
 
+			$elementFields['STORE_TO'] = null;
+			$elementFields['STORE_FROM'] = null;
 			switch ($this->getDocumentType())
 			{
 				case StoreDocumentTable::TYPE_ARRIVAL:
@@ -932,7 +1206,36 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 					break;
 			}
 
+			$existElement = $existElements[$product['ID']] ?? null;
+			if (
+				$existElement
+				&& $this->isChangedElement($existElement, $elementFields)
+				&& $elementFields['STORE_TO'] !== null
+				&& $elementFields['STORE_FROM'] !== null
+			)
+			{
+				$can = $this->accessController->check(
+					ActionDictionary::ACTION_STORE_VIEW,
+					StoreDocumentElement::createFromArray($elementFields)
+				);
+				if (!$can)
+				{
+					$message = Loc::getMessage('CATALOG_STORE_DOCUMENT_ELEMENT_STORE_ACCESS_DENIED', [
+						'#PRODUCT_NAME#' => $product['NAME'] ?? $product['ELEMENT_ID'],
+					]);
+					$result->addError(
+						new Main\Error($message)
+					);
+					continue;
+				}
+			}
+
 			$elements[] = $elementFields;
+		}
+
+		if (!$result->isSuccess())
+		{
+			return $result;
 		}
 
 		$barcodeFilter = array_unique(array_column($documentBarcodesMap, 'BARCODE'));
@@ -995,22 +1298,24 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		return PriceMaths::roundPrecision($result);
 	}
 
-	private function getUrlToDocumentDetail($documentId, $addCloseOnSaveParam = false)
+	private function getUrlToDocumentDetail($documentId, $addCloseOnSaveParam = false): string
 	{
-		$pathToDocumentDetail = $this->arParams['PATH_TO']['DOCUMENT'] ?? '';
-		if ($pathToDocumentDetail === '')
+		$pathToDocumentDetailTemplate = $this->arParams['PATH_TO']['DOCUMENT'] ?? '';
+		if ($pathToDocumentDetailTemplate === '')
 		{
-			return $pathToDocumentDetail;
+			return $pathToDocumentDetailTemplate;
 		}
 
-		$url = str_replace('#DOCUMENT_ID#', $documentId, $pathToDocumentDetail);
+		$pathToDocumentDetail = str_replace('#DOCUMENT_ID#', $documentId, $pathToDocumentDetailTemplate);
 
 		if ($addCloseOnSaveParam)
 		{
-			$url .= '?closeOnSave=Y';
+			$pathToDocumentDetail .= '?closeOnSave=Y';
 		}
 
-		return $url;
+		return
+			InventoryManagementSourceBuilder::getInstance()->addInventoryManagementSourceParam($pathToDocumentDetail)
+			;
 	}
 
 	private function clearElementsForDocument()
@@ -1113,6 +1418,10 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 			$sliderPath = getLocalPath('components' . $sliderPath . '/slider.php');
 			$this->arResult['MASTER_SLIDER_URL'] = $sliderPath;
 		}
+		else
+		{
+			$this->arResult['MASTER_SLIDER_URL'] = null;
+		}
 	}
 
 	public function sendAnalyticsAction()
@@ -1122,44 +1431,60 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 
 	private function getAdditionalEntityEditorActions()
 	{
-		$this->arResult['FORM']['ADDITIONAL_ACTIONS'] = [
-			[
-				'ID' => 'SAVE_AND_CONDUCT',
-				'ACTION' => 'saveAndConduct',
-				'ACTION_TYPE' => UI\EntityEditor\Action::ACTION_TYPE_SAVE,
-			],
-			[
+		$additionalActions = [];
+		$customToolPanelButtons = [];
+
+		if ($this->checkDocumentConductRights())
+		{
+			if ($this->checkDocumentWriteRights())
+			{
+				$additionalActions[] = [
+					'ID' => 'SAVE_AND_CONDUCT',
+					'ACTION' => 'saveAndConduct',
+					'ACTION_TYPE' => UI\EntityEditor\Action::ACTION_TYPE_SAVE,
+				];
+
+				$customToolPanelButtons[] = [
+					'ID' => 'SAVE_AND_CONDUCT',
+					'TEXT' => Loc::getMessage('CATALOG_STORE_DOCUMENT_SAVE_AND_CONDUCT_BUTTON'),
+					'ACTION_ID' => 'SAVE_AND_CONDUCT',
+					'CLASS' => 'ui-btn-light-border',
+				];
+			}
+
+			$additionalActions[] = [
 				'ID' => 'CONDUCT',
 				'ACTION' => 'conduct',
 				'ACTION_TYPE' => UI\EntityEditor\Action::ACTION_TYPE_DIRECT,
-			],
-			[
-				'ID' => 'CANCEL_CONDUCT',
-				'ACTION' => 'cancelConduct',
-				'ACTION_TYPE' => UI\EntityEditor\Action::ACTION_TYPE_DIRECT,
-			],
-		];
+			];
 
-		$this->arResult['FORM']['CUSTOM_TOOL_PANEL_BUTTONS'] = [
-			[
-				'ID' => 'SAVE_AND_CONDUCT',
-				'TEXT' => Loc::getMessage('CATALOG_STORE_DOCUMENT_SAVE_AND_CONDUCT_BUTTON'),
-				'ACTION_ID' => 'SAVE_AND_CONDUCT',
-				'CLASS' => 'ui-btn-light-border',
-			],
-			[
+			$customToolPanelButtons[] = [
 				'ID' => 'CONDUCT',
 				'TEXT' => Loc::getMessage('CATALOG_STORE_DOCUMENT_CONDUCT_BUTTON'),
 				'ACTION_ID' => 'CONDUCT',
 				'CLASS' => 'ui-btn-light-border',
-			],
-			[
+			];
+		}
+
+		if ($this->checkDocumentCancelRights())
+		{
+			$additionalActions[] = [
+				'ID' => 'CANCEL_CONDUCT',
+				'ACTION' => 'cancelConduct',
+				'ACTION_TYPE' => UI\EntityEditor\Action::ACTION_TYPE_DIRECT,
+			];
+
+			$customToolPanelButtons[] = [
 				'ID' => 'CANCEL_CONDUCT',
 				'TEXT' => Loc::getMessage('CATALOG_STORE_DOCUMENT_CANCEL_CONDUCT_BUTTON'),
 				'ACTION_ID' => 'CANCEL_CONDUCT',
 				'CLASS' => 'ui-btn-light-border',
-			],
-		];
+			];
+		}
+
+		$this->arResult['FORM']['ENABLE_TOOL_PANEL'] = !empty($customToolPanelButtons) || $this->checkDocumentWriteRights();
+		$this->arResult['FORM']['ADDITIONAL_ACTIONS'] = $additionalActions;
+		$this->arResult['FORM']['CUSTOM_TOOL_PANEL_BUTTONS'] = $customToolPanelButtons;
 
 		$viewButtons = $this->document && $this->document['STATUS'] === 'Y' ? ['CANCEL_CONDUCT'] : ['CONDUCT'];
 

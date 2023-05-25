@@ -1,7 +1,12 @@
 <?
 namespace Bitrix\Calendar\Sync;
 
+use Bitrix\Calendar\Sync\Google\Helper;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
+use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
@@ -22,11 +27,13 @@ final class GoogleApiSync
 	const CHANNEL_EXPIRATION = 604800; //60*60**24*7
 	const CONNECTION_CHANNEL_TYPE = 'BX_CONNECTION';
 	const SECTION_CHANNEL_TYPE = 'BX_SECTION';
+	const SECTION_CONNECTION_CHANNEL_TYPE = 'SECTION_CONNECTION';
 	const SYNC_EVENTS_LIMIT = 50;
 	const SYNC_EVENTS_DATE_INTERVAL = '-1 months';
 	const DEFAULT_TIMEZONE = 'UTC';
 	const DATE_TIME_FORMAT = 'Y-m-d\TH:i:sP';
 	public const END_OF_DATE = "01.01.2038";
+	public const EXTERNAL_LINK = 'https://www.bitrix24.com/controller/google_calendar_push.php?target_host=';
 
 	/**
 	 * @var GoogleApiTransport
@@ -53,6 +60,23 @@ final class GoogleApiSync
 	 * @var string
 	 */
 	private $nextPageToken = '';
+
+	/**
+	 * GoogleApiSync constructor.
+	 *
+	 * @param int $userId
+	 * @param int $connectionId
+	 */
+	public function __construct($userId = 0, $connectionId = 0)
+	{
+		if (!$userId)
+		{
+			$userId = \CCalendar::GetUserId();
+		}
+		$this->userId = $userId;
+		$this->connectionId = $connectionId;
+		$this->syncTransport = new GoogleApiTransport((int)$userId);
+	}
 
 	/**
 	 * Closes watch channel and asking google to stop pushes
@@ -102,23 +126,29 @@ final class GoogleApiSync
 	{
 		if (defined('BX24_HOST_NAME') && BX24_HOST_NAME)
 		{
-			$externalUrl = 'https://www.bitrix24.com/controller/google_calendar_push.php?target_host=' . BX24_HOST_NAME;
+			$externalUrl = self::EXTERNAL_LINK . BX24_HOST_NAME;
 		}
 		else
 		{
-			$server = \Bitrix\Main\Application::getInstance()->getContext()->getServer();
-			$domain = $server['HTTP_HOST'];
-			$externalUrl = 'https://' . $domain . '/bitrix/tools/calendar/push.php';
+			$request = Context::getCurrent()->getRequest();
+			if (defined('SITE_SERVER_NAME') && SITE_SERVER_NAME)
+			{
+				$host = SITE_SERVER_NAME;
+			}
+			else
+			{
+				$host = Option::get('main', 'server_name', $request->getHttpHost());
+			}
+
+			$externalUrl = 'https://' . $host . '/bitrix/tools/calendar/push.php';
 		}
 
-		$requestParams = [
-			'id' => $type.'_'.$this->userId.'_'.md5($inputSecretWord.strtotime('now')),
+		return [
+			'id' => $type.'_'.$this->userId.'_'.md5($inputSecretWord. time()),
 			'type' => 'web_hook',
 			'address' => $externalUrl,
 			'expiration' => (time() + self::CHANNEL_EXPIRATION) * 1000,
 		];
-
-		return $requestParams;
 	}
 
 	/**
@@ -146,23 +176,6 @@ final class GoogleApiSync
 		}
 
 		return false;
-	}
-
-	/**
-	 * GoogleApiSync constructor.
-	 *
-	 * @param int $userId
-	 * @param int $connectionId
-	 */
-	public function __construct($userId = 0, $connectionId = 0)
-	{
-		if (!$userId)
-		{
-			$userId = \CCalendar::GetUserId();
-		}
-		$this->userId = $userId;
-		$this->connectionId = $connectionId;
-		$this->syncTransport = new GoogleApiTransport((int)$userId);
 	}
 
 	/**
@@ -291,7 +304,7 @@ final class GoogleApiSync
 			$response = $this->syncTransport->getCalendarList($this->getCalendarListParams($syncToken));
 		}
 
-		if (!empty($response['items']))
+		if ($response && !empty($response['items']))
 		{
 			foreach($response['items'] as $calendarItem)
 			{
@@ -375,7 +388,7 @@ final class GoogleApiSync
 	 */
 	public function deleteEvent($eventId, $calendarId)
 	{
-		return $this->syncTransport->deleteEvent(preg_replace('/(@google.com)/', '', $eventId), urlencode($calendarId));
+		return $this->syncTransport->deleteEvent($eventId, urlencode($calendarId));
 	}
 
 	/**
@@ -394,7 +407,7 @@ final class GoogleApiSync
 		$params['calendarId'] = $calendarId;
 		$params['instanceTz'] = $parameters['instanceTz'] ?? null;
 		$params['originalDateFrom'] = $eventData['ORIGINAL_DATE_FROM'] ?? null;
-		$params['gEventId'] = $eventData['G_EVENT_ID'] || !strpos($eventData['DAV_XML_ID'], '@google.com')  ? $eventData['G_EVENT_ID'] : str_replace('@google.com', '',  $eventData['DAV_XML_ID']);
+		$params['gEventId'] = $eventData['G_EVENT_ID'] ?: str_replace('@google.com', '',  $eventData['DAV_XML_ID']);
 		$params['syncCaldav'] = $parameters['syncCaldav'] ?? false;
 
 		$newEvent = $this->prepareToSaveEvent($eventData, $params);
@@ -482,10 +495,12 @@ final class GoogleApiSync
 			'TZ_FROM' => $this->defaultTimezone,
 			'TZ_TO' => $this->defaultTimezone
 		];
+
 		foreach ($this->eventMapping as $internalKey => $externalKey)
 		{
 			$returnData[$internalKey] = (isset($event[$externalKey]) ? $event[$externalKey] : '');
 		}
+
 		$returnData['iCalUID'] = $event['iCalUID'];
 		$returnData['DAV_XML_ID'] = $event['iCalUID'];
 		$returnData['G_EVENT_ID'] = $event['id'];
@@ -683,7 +698,7 @@ final class GoogleApiSync
 				}
 			}
 
-			$returnData['recurringEventId'] = $event['recurringEventId'] . '@google.com';
+			$returnData['recurringEventId'] = $event['recurringEventId'];
 		}
 		if (!empty($exDates))
 		{
@@ -716,6 +731,11 @@ final class GoogleApiSync
 		if (!empty($event['location']))
 		{
 			$returnData['LOCATION'] = Rooms\Util::unParseTextLocation($event['location']);
+		}
+
+		if (!empty($event['sequence']))
+		{
+			$returnData['VERSION'] = (int)$event['sequence'] + Util::VERSION_DIFFERENCE;
 		}
 
 		return $returnData;
@@ -793,7 +813,7 @@ final class GoogleApiSync
 				->add('+1 day')
 				->format('Y-m-d');
 
-			if (!empty($eventData['DAV_XML_ID']) && mb_stripos($eventData['DAV_XML_ID'], '@google.com') !== false)
+			if (!empty($eventData['G_EVENT_ID']))
 			{
 				$newEvent['start']['dateTime'] = null;
 				$newEvent['end']['dateTime'] = null;
@@ -811,7 +831,7 @@ final class GoogleApiSync
 				->format(self::DATE_TIME_FORMAT);
 			$newEvent['end']['timeZone'] = Util::prepareTimezone($eventData['TZ_TO'])->getName();
 
-			if (!empty($eventData['DAV_XML_ID']) && mb_stripos($eventData['DAV_XML_ID'], '@google.com') !== false)
+			if (!empty($eventData['G_EVENT_ID']))
 			{
 				$newEvent['start']['date'] = null;
 				$newEvent['end']['date'] = null;
@@ -834,14 +854,14 @@ final class GoogleApiSync
 				->format(self::DATE_TIME_FORMAT);
 		}
 
-		if (isset($eventData['DAV_XML_ID']) && isset($eventData['RECURRENCE_ID']))
+		if (isset($eventData['G_EVENT_ID']) && isset($eventData['RECURRENCE_ID']))
 		{
-			$newEvent['recurringEventId'] = $eventData['DAV_XML_ID'];
+			$newEvent['recurringEventId'] = $eventData['G_EVENT_ID'];
 		}
 
-		if ($params['syncCaldav'])
+		if ($params['syncCaldav'] || isset($eventData['DAV_XML_ID']))
 		{
-			$newEvent['iCalUID'] = str_replace('@google.com', '', $eventData['DAV_XML_ID']);
+			$newEvent['iCalUID'] = $eventData['DAV_XML_ID'];
 		}
 
 		if (isset($eventData['G_EVENT_ID']))
@@ -856,6 +876,11 @@ final class GoogleApiSync
 		else
 		{
 			$newEvent['visibility'] = "public";
+		}
+
+		if (isset($eventData['VERSION']))
+		{
+			$newEvent['sequence'] = $eventData['VERSION'] - Util::VERSION_DIFFERENCE;
 		}
 
 		return $newEvent;
@@ -892,7 +917,7 @@ final class GoogleApiSync
 		{
 			return $this->syncTransport->importEvent($newEvent, urlencode($params['calendarId']));
 		}
-		elseif (!empty($params['gEventId']))
+		elseif (($params['gEventId']))
 		{
 			return $this->syncTransport->updateEvent($newEvent, urlencode($params['calendarId']), $params['gEventId']);
 		}
@@ -924,8 +949,8 @@ final class GoogleApiSync
 	 */
 	private function prepareCalendar($calendar): array
 	{
-		$returnData['summary'] = $calendar['NAME'];
-		if (isset($calendar['EXTERNAL_TYPE']) && $calendar['EXTERNAL_TYPE'] === \CCalendarSect::EXTRENAL_TYPE_LOCAL)
+		$returnData['summary'] = Emoji::decode($calendar['NAME']);
+		if (isset($calendar['EXTERNAL_TYPE']) && $calendar['EXTERNAL_TYPE'] === \CCalendarSect::EXTERNAL_TYPE_LOCAL)
 		{
 			IncludeModuleLangFile($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/calendar/classes/general/calendar.php');
 			$returnData['summary'] = Loc::getMessage('EC_CALENDAR_BITRIX24_NAME') . " " . $returnData['summary'];

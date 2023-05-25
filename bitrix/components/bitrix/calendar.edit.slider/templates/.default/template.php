@@ -43,11 +43,11 @@ foreach ($fieldsList as $k => $field)
 	}
 }
 
-$event['UF_CRM_CAL_EVENT'] = $UF['UF_CRM_CAL_EVENT'];
+$event['UF_CRM_CAL_EVENT'] = $UF['UF_CRM_CAL_EVENT'] ?? null;
 if (empty($event['UF_CRM_CAL_EVENT']['VALUE']))
 	$event['UF_CRM_CAL_EVENT'] = false;
 
-$event['UF_WEBDAV_CAL_EVENT'] = $UF['UF_WEBDAV_CAL_EVENT'];
+$event['UF_WEBDAV_CAL_EVENT'] = $UF['UF_WEBDAV_CAL_EVENT'] ?? null;
 if (empty($event['UF_WEBDAV_CAL_EVENT']['VALUE']))
 	$event['UF_WEBDAV_CAL_EVENT'] = false;
 
@@ -67,7 +67,7 @@ $arParams['UF'] = $UF;
 		<div class="calendar-head-area">
 			<div class="calendar-head-area-inner">
 				<div class="calendar-head-area-title">
-					<span id="<?=$id?>_title" class="calendar-head-area-title-name"><?= $event['ID'] ? Loc::getMessage('EC_EDIT_SLIDER_EDIT_TITLE') : Loc::getMessage('EC_EDIT_SLIDER_NEW_TITLE')?></span>
+					<span id="<?=$id?>_title" class="calendar-head-area-title-name"><?= !empty($event['ID']) ? Loc::getMessage('EC_EDIT_SLIDER_EDIT_TITLE') : Loc::getMessage('EC_EDIT_SLIDER_NEW_TITLE')?></span>
 				</div>
 			</div>
 		</div>
@@ -132,7 +132,7 @@ $arParams['UF'] = $UF;
 										"TEXT" => Array(
 											"ID" => $id.'_edit_ed_desc',
 											"NAME" => "desc",
-											"VALUE" => $event['DESCRIPTION'],
+											"VALUE" => $event['DESCRIPTION'] ?? null,
 											"HEIGHT" => "160px"
 										),
 										"UPLOAD_WEBDAV_ELEMENT" => $arParams['UF']['UF_WEBDAV_CAL_EVENT'],
@@ -148,8 +148,7 @@ $arParams['UF'] = $UF;
 											"jsObjName" => $arParams['id'].'_entry_slider_editor',
 											"height" => 120,
 											"documentCSS" => "",
-											"fontFamily" => "'Helvetica Neue', Helvetica, Arial, sans-serif",
-											"fontSize" => "12px",
+											"fontSize" => "14px",
 											"lazyLoad" => false,
 											"setFocusAfterShow" => false
 										)
@@ -487,7 +486,7 @@ $arParams['UF'] = $UF;
 								<div class="calendar-options-item-name js-calendar-field-name"><?= Loc::getMessage('EC_EDIT_SLIDER_LOCATION_COLUMN')?></div>
 							</div>
 							<div class="calendar-options-item-column-right">
-								<div class="calendar-options-item-column-one">
+								<div class="calendar-options-item-column-one calendar-options-item-column-location">
 									<div class="calendar-field-container calendar-field-container-select" id="<?=$id?>_location_wrap"></div>
 								</div>
 							</div>
@@ -568,7 +567,7 @@ $arParams['UF'] = $UF;
 												</label>
 											</div>
 										</div>
-										<?if ($event['ID']):?>
+										<?if (!empty($event['ID'])):?>
 										<div class="calendar-field-container calendar-field-container-checkbox">
 											<div class="calendar-field-block">
 												<label type="text" class="calendar-field-checkbox-label">
@@ -805,7 +804,7 @@ $arParams['UF'] = $UF;
 																"TEXT" => Array(
 																	"ID" => $id.'_edit_ed_desc',
 																	"NAME" => "desc",
-																	"VALUE" => $event['DESCRIPTION'],
+																	"VALUE" => $event['DESCRIPTION'] ?? null,
 																	"HEIGHT" => "160px"
 																),
 																"UPLOAD_WEBDAV_ELEMENT" => $arParams['UF']['UF_WEBDAV_CAL_EVENT'],
@@ -821,8 +820,7 @@ $arParams['UF'] = $UF;
 																	"jsObjName" => $arParams['id'].'_entry_slider_editor',
 																	"height" => 120,
 																	"documentCSS" => "",
-																	"fontFamily" => "'Helvetica Neue', Helvetica, Arial, sans-serif",
-																	"fontSize" => "12px",
+																	"fontSize" => "14px",
 																	"lazyLoad" => false,
 																	"setFocusAfterShow" => false
 																)

@@ -3,6 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Im as IM;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\Localization\Loc;
 
 class CIMChat
 {
@@ -1206,7 +1207,7 @@ class CIMChat
 			{
 				$arManagerList[$arRes["CHAT_ID"]][] = (int)$arRes["RELATION_USER_ID"];
 			}
-			$arChat[$arRes["CHAT_ID"]]['manager_list'] = $arManagerList[$arRes["CHAT_ID"]];
+			$arChat[$arRes["CHAT_ID"]]['manager_list'] = $arManagerList[$arRes["CHAT_ID"]] ?? null;
 		}
 
 		$lines = Array();
@@ -1337,14 +1338,14 @@ class CIMChat
 			}
 			$arUserChatBlockStatus[$arRes["CHAT_ID"]][$arRes["RELATION_USER_ID"]] = $arRes['RELATION_NOTIFY_BLOCK'] == 'Y';
 			$arUserInChat[$arRes["CHAT_ID"]][] = $arRes["RELATION_USER_ID"];
-			$arUserCallStatus[$arRes["CHAT_ID"]][$arRes["RELATION_USER_ID"]] = trim($arRes["CALL_STATUS"]);
+			$arUserCallStatus[$arRes["CHAT_ID"]][$arRes["RELATION_USER_ID"]] = trim($arRes["CALL_STATUS"] ?? '');
 			$arChat[$arRes["CHAT_ID"]]['mute_list'] = $arUserChatBlockStatus[$arRes["CHAT_ID"]];
 
 			if ($arRes["RELATION_MANAGER"] == 'Y')
 			{
 				$arManagerList[$arRes["CHAT_ID"]][] = (int)$arRes["RELATION_USER_ID"];
 			}
-			$arChat[$arRes["CHAT_ID"]]['manager_list'] = $arManagerList[$arRes["CHAT_ID"]];
+			$arChat[$arRes["CHAT_ID"]]['manager_list'] = $arManagerList[$arRes["CHAT_ID"]] ?? null;
 		}
 
 		$result = array(
@@ -1483,7 +1484,7 @@ class CIMChat
 				'CHAT_ENTITY_ID' => $arRes['CHAT_ENTITY_ID'],
 				'START_ID' => $arRes['START_ID'],
 				'END_ID' => $arRes['END_ID'],
-				'COUNT' => $relation['COUNT'],
+				'COUNT' => $relation['COUNTER'],
 				'USER_ID' => $this->user_id,
 				'BY_EVENT' => $byEvent
 			)));
@@ -2575,7 +2576,7 @@ class CIMChat
 					"MESSAGE_TYPE" => $params['TYPE'],
 					"USER_ID" => $userId,
 					"STATUS" => IM_STATUS_READ,
-					"MANAGER" => $authorId == $userId || $managers[$userId]? 'Y': 'N',
+					"MANAGER" => $authorId == $userId || isset($managers[$userId]) ? 'Y' : 'N',
 				));
 
 				if ($params['TYPE'] != IM_MESSAGE_OPEN)
@@ -2752,7 +2753,7 @@ class CIMChat
 				}
 			}
 
-			self::index($chatId);
+			self::addChatIndex((int)$chatId, mb_substr($chatTitle, 0, 255));
 		}
 		else
 		{
@@ -2924,7 +2925,15 @@ class CIMChat
 			";
 			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
 			$arRes = $dbRes->Fetch();
-			if (!$arRes)
+			if ($arRes)
+			{
+				if (\Bitrix\Im\User::getInstance()->isExtranet())
+				{
+					$GLOBALS["APPLICATION"]->ThrowException(GetMessage("IM_ERROR_AUTHORIZE_ERROR"), "AUTHORIZE_ERROR");
+					return false;
+				}
+			}
+			else
 			{
 				$strSql = "
 					SELECT
@@ -3312,7 +3321,7 @@ class CIMChat
 			&& $arRes['CHAT_ENTITY_TYPE'] != 'LIVECHAT'
 		)
 		{
-			self::index($chatId);
+			self::updateChatIndex($chatId);
 		}
 
 		if (!empty($chatEntityType))
@@ -3478,6 +3487,8 @@ class CIMChat
 		}
 
 		$message = '';
+
+
 		if ($skipMessage)
 		{
 			$message = '';
@@ -3571,8 +3582,26 @@ class CIMChat
 					"CODE" => 'CHAT_LEAVE',
 					"NOTIFY" => $chatEntityType == 'LINES'? 'Y': 'N',
 				),
-				"PUSH" => 'N'
+				"PUSH" => 'N',
+				"SKIP_USER_CHECK" => "Y",
 			));
+		}
+
+		if (!$bSelf && $chatType !== IM_MESSAGE_OPEN_LINE)
+		{
+			$gender = \Bitrix\Im\User::getInstance($this->user_id)->getGender();
+			$userName = \Bitrix\Im\User::getInstance($this->user_id)->getFullName(false);
+			$userName = '[USER='.$this->user_id.']'.$userName.'[/USER]';
+			$notificationMessage = Loc::getMessage('IM_CHAT_KICK_NOTIFICATION_'. $gender, ["#USER_NAME#" => $userName]);
+			$notificationFields = [
+				'TO_USER_ID' => $userId,
+				'FROM_USER_ID' => 0,
+				'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+				'NOTIFY_MODULE' => 'im',
+				'NOTIFY_TITLE' => htmlspecialcharsback($arRes['CHAT_TITLE']),
+				'NOTIFY_MESSAGE' => $notificationMessage,
+			];
+			CIMNotify::Add($notificationFields);
 		}
 
 		if ($chatType == IM_MESSAGE_OPEN)
@@ -3621,7 +3650,7 @@ class CIMChat
 			&& $arRes['CHAT_ENTITY_TYPE'] != 'LIVECHAT'
 		)
 		{
-			self::index($chatId);
+			self::updateChatIndex($chatId);
 		}
 
 		if (!empty($chatEntityType))
@@ -3780,7 +3809,7 @@ class CIMChat
 			'CALL' => true,
 			'LEAVE' => false,
 			'LEAVE_OWNER' => false,
-			'SEND' => CIMChat::CanSendMessageToGeneralChat($userId)
+			'SEND' => CIMChat::CanSendMessageToGeneralChat((int)$USER->GetID())
 		];
 
 		if (\Bitrix\Main\Loader::includeModule('imbot'))
@@ -3979,6 +4008,13 @@ class CIMChat
 			return false;
 		}
 
+		self::deleteChat($chatData);
+
+		return true;
+	}
+
+	public static function deleteChat(array $chatData): void
+	{
 		global $DB;
 
 		self::hide($chatData['ID']);
@@ -4000,8 +4036,6 @@ class CIMChat
 				$folderModel->deleteTree(\Bitrix\Disk\SystemUser::SYSTEM_USER_ID);
 			}
 		}
-
-		return true;
 	}
 
 	public static function hide($chatId)
@@ -4018,7 +4052,10 @@ class CIMChat
 			}
 		}
 
-		if (\Bitrix\Main\Loader::includeModule("pull"))
+		if (
+			!empty($pushList)
+			&& \Bitrix\Main\Loader::includeModule("pull")
+		)
 		{
 			\Bitrix\Pull\Event::add($pushList, Array(
 				'module_id' => 'im',
@@ -4036,27 +4073,60 @@ class CIMChat
 
 	public static function index($chatId)
 	{
-		$arRelation = self::GetRelationById($chatId);
-		$users = Array();
+		$index =
+			\Bitrix\Im\Internals\ChatIndex::create()
+				->setChatId((int)$chatId)
+		;
+		static::fillChatIndexWithUserFullNames($index);
 
-		$i = 0;
-		foreach ($arRelation as $relation)
-		{
-			if ($i > 100)
-				break;
-
-			$users[] = \Bitrix\Im\User::getInstance($relation['USER_ID'])->getFullName(false);
-			$i++;
-		}
-
-		\Bitrix\Im\Model\ChatIndexTable::merge(array(
-			'CHAT_ID' => $chatId,
-			'SEARCH_USERS' => implode(' ', $users),
-		));
-
-		\Bitrix\Im\Model\ChatTable::indexRecord($chatId);
+		\Bitrix\Im\Model\ChatTable::indexRecord($index);
 
 		return true;
+	}
+
+	public static function addChatIndex(int $chatId, string $chatTitle)
+	{
+		$index =
+			\Bitrix\Im\Internals\ChatIndex::create()
+				->setChatId($chatId)
+				->setTitle($chatTitle)
+		;
+		static::fillChatIndexWithUserFullNames($index);
+
+		\Bitrix\Im\Model\ChatTable::addIndexRecord($index);
+
+		return true;
+	}
+
+	public static function updateChatIndex($chatId)
+	{
+		$index =
+			\Bitrix\Im\Internals\ChatIndex::create()
+				->setChatId((int)$chatId)
+		;
+		static::fillChatIndexWithUserFullNames($index);
+
+		\Bitrix\Im\Model\ChatTable::updateIndexRecord($index);
+
+		return true;
+	}
+
+	public static function fillChatIndexWithUserFullNames(\Bitrix\Im\Internals\ChatIndex $index)
+	{
+		$query =
+			\Bitrix\Im\Model\RelationTable::query()
+				->addSelect('USER_ID')
+				->where('CHAT_ID', $index->getChatId())
+				->setLimit(100)
+		;
+
+		$users = [];
+		foreach ($query->exec() as $relation)
+		{
+			$users[] = \Bitrix\Im\User::getInstance($relation['USER_ID'])->getFullName(false);
+		}
+
+		$index->setUserList($users);
 	}
 
 	public static function getNextConferenceDefaultTitle()

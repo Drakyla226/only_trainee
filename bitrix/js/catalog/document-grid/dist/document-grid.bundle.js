@@ -10,6 +10,7 @@ this.BX = this.BX || {};
 	    this.grid = BX.Main.gridManager.getInstanceById(this.gridId);
 	    this.isConductDisabled = options.isConductDisabled;
 	    this.masterSliderUrl = options.masterSliderUrl;
+	    this.inventoryManagementSource = options.inventoryManagementSource;
 	  }
 
 	  babelHelpers.createClass(DocumentGridManager, [{
@@ -30,15 +31,19 @@ this.BX = this.BX || {};
 	          text: main_core.Loc.getMessage('DOCUMENT_GRID_CONTINUE'),
 	          color: ui_buttons.ButtonColor.SUCCESS,
 	          onclick: function onclick(button, event) {
+	            button.setDisabled();
 	            main_core.ajax.runAction('catalog.document.deleteList', {
 	              data: {
 	                documentIds: [documentId]
+	              },
+	              analyticsLabel: {
+	                inventoryManagementSource: _this.inventoryManagementSource
 	              }
 	            }).then(function (response) {
 	              popup.destroy();
 
 	              _this.grid.reload();
-	            }).catch(function (response) {
+	            })["catch"](function (response) {
 	              if (response.errors) {
 	                BX.UI.Notification.Center.notify({
 	                  content: response.errors[0].message
@@ -82,6 +87,8 @@ this.BX = this.BX || {};
 	        };
 	      }
 
+	      actionConfig.analyticsLabel.inventoryManagementSource = this.inventoryManagementSource;
+	      actionConfig.analyticsLabel.mode = 'single';
 	      var popup = new main_popup.Popup({
 	        id: 'catalog_delete_document_popup',
 	        titleBar: main_core.Loc.getMessage('DOCUMENT_GRID_DOCUMENT_CONDUCT_TITLE'),
@@ -90,11 +97,12 @@ this.BX = this.BX || {};
 	          text: main_core.Loc.getMessage('DOCUMENT_GRID_CONTINUE'),
 	          color: ui_buttons.ButtonColor.SUCCESS,
 	          onclick: function onclick(button, event) {
+	            button.setDisabled();
 	            main_core.ajax.runAction('catalog.document.conductList', actionConfig).then(function (response) {
 	              popup.destroy();
 
 	              _this2.grid.reload();
-	            }).catch(function (response) {
+	            })["catch"](function (response) {
 	              if (response.errors) {
 	                BX.UI.Notification.Center.notify({
 	                  content: response.errors[0].message
@@ -138,6 +146,8 @@ this.BX = this.BX || {};
 	        };
 	      }
 
+	      actionConfig.analyticsLabel.mode = 'single';
+	      actionConfig.analyticsLabel.inventoryManagementSource = this.inventoryManagementSource;
 	      var popup = new main_popup.Popup({
 	        id: 'catalog_delete_document_popup',
 	        titleBar: main_core.Loc.getMessage('DOCUMENT_GRID_DOCUMENT_CANCEL_TITLE'),
@@ -146,11 +156,12 @@ this.BX = this.BX || {};
 	          text: main_core.Loc.getMessage('DOCUMENT_GRID_CONTINUE'),
 	          color: ui_buttons.ButtonColor.SUCCESS,
 	          onclick: function onclick(button, event) {
+	            button.setDisabled();
 	            main_core.ajax.runAction('catalog.document.cancelList', actionConfig).then(function (response) {
 	              popup.destroy();
 
 	              _this3.grid.reload();
-	            }).catch(function (response) {
+	            })["catch"](function (response) {
 	              if (response.errors) {
 	                BX.UI.Notification.Center.notify({
 	                  content: response.errors[0].message
@@ -179,10 +190,13 @@ this.BX = this.BX || {};
 	      main_core.ajax.runAction('catalog.document.deleteList', {
 	        data: {
 	          documentIds: documentIds
+	        },
+	        analyticsLabel: {
+	          inventoryManagementSource: this.inventoryManagementSource
 	        }
 	      }).then(function (response) {
 	        _this4.grid.reload();
-	      }).catch(function (response) {
+	      })["catch"](function (response) {
 	        if (response.errors) {
 	          response.errors.forEach(function (error) {
 	            if (error.message) {
@@ -210,10 +224,14 @@ this.BX = this.BX || {};
 	      main_core.ajax.runAction('catalog.document.conductList', {
 	        data: {
 	          documentIds: documentIds
+	        },
+	        analyticsLabel: {
+	          mode: 'list',
+	          inventoryManagementSource: this.inventoryManagementSource
 	        }
 	      }).then(function (response) {
 	        _this5.grid.reload();
-	      }).catch(function (response) {
+	      })["catch"](function (response) {
 	        if (response.errors) {
 	          response.errors.forEach(function (error) {
 	            if (error.message) {
@@ -241,10 +259,14 @@ this.BX = this.BX || {};
 	      main_core.ajax.runAction('catalog.document.cancelList', {
 	        data: {
 	          documentIds: documentIds
+	        },
+	        analyticsLabel: {
+	          mode: 'list',
+	          inventoryManagementSource: this.inventoryManagementSource
 	        }
 	      }).then(function (response) {
 	        _this6.grid.reload();
-	      }).catch(function (response) {
+	      })["catch"](function (response) {
 	        if (response.errors) {
 	          response.errors.forEach(function (error) {
 	            if (error.message) {

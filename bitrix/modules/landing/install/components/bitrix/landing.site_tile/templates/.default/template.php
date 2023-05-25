@@ -12,12 +12,19 @@ use Bitrix\Main\Localization\Loc;
 /** @var string $templateFolder */
 /** @var \LandingSiteTileComponent $component */
 
-Extension::load(['sidepanel', 'main.qrcode', 'ui.dialogs.messagebox']);
+Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
+	'sidepanel',
+	'main.qrcode',
+	'ui.dialogs.messagebox',
+]);
 
-if (!$arParams['ITEMS'] && !$arParams['PAGE_URL_SITE_ADD'])
-{
-	return;
-}
+//todo: when no site has been created yet, we display a banner but simply without a button
+// if (!$arParams['ITEMS'] && !$arParams['PAGE_URL_SITE_ADD'])
+// {
+// 	return;
+// }
 
 $isAjax = $component->isAjax();
 ?>
@@ -40,20 +47,26 @@ $isAjax = $component->isAjax();
 			]
 		});
 		<?endif;?>
-		<?if ($arResult['SIDE_PANEL'] && !$isAjax):?>
+		<?php if ($arResult['SIDE_PANEL'] && !$isAjax): ?>
 		BX.SidePanel.Instance.bindAnchors({
 			rules: [
-				<?if ($arParams['PAGE_URL_SITE_ADD']):?>
+				<?php if ($arParams['PAGE_URL_SITE_ADD']): ?>
 				{
-					condition: ['<?= str_replace('/?', '/\\\?', $arParams['PAGE_URL_SITE_ADD'])?>'],
+					condition: ['<?=
+							strpos($arParams['PAGE_URL_SITE_ADD'], '?')
+								? explode('?', $arParams['PAGE_URL_SITE_ADD'])[0]
+								: $arParams['PAGE_URL_SITE_ADD']
+						?>'],
 					options: {
-						allowChangeHistory: false
-						<?if ($arParams['TYPE'] === 'STORE'):?>
-						,width: 1200
-						<?endif;?>
+						allowChangeHistory: false,
+						customLeftBoundary: 0,
+						cacheable: false,
+						<?php if ($arParams['TYPE'] === 'STORE'): ?>
+							width: 1200,
+						<?php endif; ?>
 					}
 				},
-				<?endif?>
+				<?php endif; ?>
 				{
 					condition: <?= \CUtil::PhpToJSObject($arResult['SIDE_PANEL'])?>,
 					stopParameters: ['tab', 'action'],
@@ -61,18 +74,30 @@ $isAjax = $component->isAjax();
 				}
 			]
 		});
-		<?endif;?>
+		<?php endif; ?>
 	});
 </script>
 
 <?if (!$arParams['ITEMS']):
-	$features = [
-		$component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT1'),
-		$component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT2'),
-		$component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT3'),
-		$component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT4'),
-		$component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT5')
-	];
+	$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT1');
+	if ($arParams['TYPE'] === 'STORE' && \Bitrix\Landing\Manager::getZone() === 'ru')
+	{
+		$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT6');
+	}
+	else
+	{
+		$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT2');
+	}
+	$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT3');
+	if ($arParams['TYPE']  === 'STORE' && \Bitrix\Landing\Manager::getZone() === 'ru')
+	{
+		$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT7');
+	}
+	else
+	{
+		$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT4');
+	}
+	$features[] = $component->getMessageType('LANDING_SITE_TILE_EMPTY_FEAT5');
 	\trimArr($features, true);
 	$langImg = \Bitrix\Landing\Manager::availableOnlyForZone('ru') ? 'ru' : 'en';
 	?>
@@ -94,11 +119,17 @@ $isAjax = $component->isAjax();
 						<?endforeach;?>
 					</ul>
 					<div class="landing-sites__grid-empty--bth-container">
-						<a href="<?= $arParams['PAGE_URL_SITE_ADD']?>" class="ui-btn ui-btn-lg ui-btn-success ui-btn-icon-inline ui-btn-icon-add landing-sites__grid-empty--bth-radiance">
-							<span class="landing-sites__grid-empty--bth-radiance-left"></span>
-								<?= $component->getMessageType('LANDING_SITE_TILE_EMPTY_ADD')?>
-							<span class="landing-sites__grid-empty--bth-radiance-right"></span>
-						</a>
+						<?php if ($arParams['PAGE_URL_SITE_ADD'] !== ''): ?>
+							<a href="<?= $arParams['PAGE_URL_SITE_ADD']?>" class="ui-btn ui-btn-lg ui-btn-success landing-sites__grid-empty--bth-radiance">
+								<span class="landing-sites__grid-empty--bth-radiance-left"></span>
+								<?= $component->getMessageType('LANDING_SITE_TILE_EMPTY_ADD_2')?>
+								<span class="landing-sites__grid-empty--bth-radiance-right"></span>
+							</a>
+						<?php else: ?>
+							<p class="landing-sites__grid-empty--text">
+								<?= $component->getMessageType('LANDING_SITE_TILE_EMPTY_ADD_NO_RIGHT')?>
+							</p>
+						<?php endif; ?>
 					</div>
 				</div>
 			</div>
@@ -121,12 +152,26 @@ $isAjax = $component->isAjax();
 		let switchDomainPage = '<?= \CUtil::jsEscape($arParams['PAGE_URL_SITE_DOMAIN_SWITCH'])?>';
 
 		<?if ($arParams['FEEDBACK_CODE']):?>
+		<?php
+		if ($arParams['TYPE'] === 'PAGE')
+		{
+			$title = Loc::getMessage('LANDING_SITE_TILE_DEV_HELP');
+			$text = Loc::getMessage('LANDING_SITE_TILE_DEV_ORDER');
+			$buttonText = Loc::getMessage('LANDING_SITE_TILE_DEV_BTN');
+		}
+		else
+		{
+			$title = Loc::getMessage('LANDING_SITE_TILE_DEV_STORE_HELP');
+			$text = Loc::getMessage('LANDING_SITE_TILE_DEV_STORE_ORDER');
+			$buttonText = Loc::getMessage('LANDING_SITE_TILE_DEV_STORE_BTN');
+		}
+		?>
 		items.push({
 			id: '<?= $arParams['FEEDBACK_CODE']?>',
 			type: 'itemMarketing',
-			title: '<?= \CUtil::jsEscape(Loc::getMessage('LANDING_SITE_TILE_DEV_HELP'))?>',
-			text: '<?= \CUtil::jsEscape(Loc::getMessage('LANDING_SITE_TILE_DEV_ORDER'))?>',
-			buttonText: '<?= \CUtil::jsEscape(Loc::getMessage('LANDING_SITE_TILE_DEV_BTN'))?>',
+			title: '<?= \CUtil::jsEscape($title)?>',
+			text: '<?= \CUtil::jsEscape($text)?>',
+			buttonText: '<?= \CUtil::jsEscape($buttonText)?>',
 			onClick: function()
 			{
 				BX.fireEvent(BX('landing-feedback-<?= $arParams['FEEDBACK_CODE']?>-button'), 'click');

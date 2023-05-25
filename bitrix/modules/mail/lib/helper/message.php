@@ -9,13 +9,23 @@ use Bitrix\Main;
 use Bitrix\Main\Security;
 use Bitrix\Mail\Internals;
 use Bitrix\Mail\Helper\MessageAccess as AccessHelper;
+use Bitrix\Main\Config\Option;
 
 class Message
 {
-
 	// entity types with special access rules (group tokens)
 	public const ENTITY_TYPE_IM_CHAT = MessageAccessTable::ENTITY_TYPE_IM_CHAT;
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
+
+	public static function getMaxAttachedFilesSize()
+	{
+		return (int)Option::get('main', 'max_file_size_mail_attachments', '20000000');
+	}
+
+	public static function getMaxAttachedFilesSizeAfterEncoding()
+	{
+		return floor(static::getMaxAttachedFilesSize()/4)*3;
+	}
 
 	/**
 	 * Returns a whitelist of attributes for the html sanitizer
@@ -301,7 +311,11 @@ class Message
 	{
 		global $USER;
 
-		if (!($userId > 0 || is_object($USER) && $USER->isAuthorized()))
+		if (
+			!($userId > 0 || is_object($USER) && $USER->isAuthorized()) ||
+			//If message id = 0 , the message is deleted or not loaded:
+			is_null($message['ID']) || $message['ID'] === 0 || $message['ID'] === '0'
+		)
 		{
 			return false;
 		}
@@ -400,65 +414,73 @@ class Message
 		return str_rot13($string);
 	}
 
-	public static function getTotalUnseenCount($userId)
+	/**
+	 * @param $userId
+	 * @param $onlyGeneralCounter
+	 * @return array|int
+	 */
+	public static function getCountersForUserMailboxes($userId, $onlyGeneralCounter = false)
 	{
-		$mailboxes = MailboxTable::getUserMailboxes($userId);
+		static $countersForUsers;
 
-		if (empty($mailboxes))
+		if (empty($countersForUsers))
 		{
-			return 0;
+			$countersForUsers = [];
 		}
 
-		$mailboxIds = array_column($mailboxes, 'ID');
-
-		$totalUnseen = (int)Internals\MailCounterTable::getList([
-			'select' => [
-				new \Bitrix\Main\Entity\ExpressionField(
-					'UNSEEN',
-					'SUM(VALUE)'
-				),
-			],
-			'filter' => [
-				'=ENTITY_TYPE' => 'MAILBOX',
-				'@ENTITY_ID' => $mailboxIds,
-			],
-		])->fetchAll()[0]['UNSEEN'];
-
-		return $totalUnseen;
-	}
-
-	public static function getTotalUnseenForMailboxes($userId)
-	{
-		$mailboxes = MailboxTable::getUserMailboxes($userId);
-
-		if (empty($mailboxes))
+		if (!isset($countersForUsers[$userId]))
 		{
-			return array();
-		}
+			$mailboxes = MailboxTable::getUserMailboxes($userId);
 
-		$mailboxIds = array_column($mailboxes, 'ID');
+			if (empty($mailboxes))
+			{
+				return array();
+			}
 
-		$totalUnseen = Internals\MailCounterTable::getList([
-			'select' => [
-				'VALUE',
-				'ENTITY_ID',
-			],
-			'filter' => [
-				'=ENTITY_TYPE' => 'MAILBOX',
-				'@ENTITY_ID' => $mailboxIds,
-			],
-		])->fetchAll();
+			$mailboxIds = array_column($mailboxes, 'ID');
 
-		$result = [];
+			$totalUnseen = Internals\MailCounterTable::getList([
+				'select' => [
+					new \Bitrix\Main\Entity\ExpressionField(
+						'UNSEEN',
+						'SUM(VALUE)'
+					),
+					'VALUE',
+					'ENTITY_ID',
+				],
+				'filter' => [
+					'=ENTITY_TYPE' => 'MAILBOX',
+					'@ENTITY_ID' => $mailboxIds,
+				],
+			])->fetchAll();
 
-		foreach ($totalUnseen as $index => $item)
-		{
-			$result[$item['ENTITY_ID']] = [
-				'UNSEEN' => $item['VALUE'],
+			$counters = [];
+
+			$totalCounter = 0;
+
+			foreach ($totalUnseen as $index => $item)
+			{
+				$totalCounter += $item['VALUE'];
+
+				$counters[$item['ENTITY_ID']] = [
+					'UNSEEN' => $item['VALUE'],
+				];
+			}
+
+			$countersForUsers[$userId] = [
+				'mailboxesWithCounters' => $counters,
+				'totalCounter' => $totalCounter,
 			];
 		}
 
-		return $result;
+		if($onlyGeneralCounter)
+		{
+			return $countersForUsers[$userId]['totalCounter'];
+		}
+		else
+		{
+			return $countersForUsers[$userId]['mailboxesWithCounters'];
+		}
 	}
 
 	public static function ensureAttachments(&$message)
@@ -468,7 +490,7 @@ class Message
 			return false;
 		}
 
-		if (Main\Config\Option::get('mail', 'save_attachments', B_MAIL_SAVE_ATTACHMENTS) !== 'Y')
+		if (Option::get('mail', 'save_attachments', B_MAIL_SAVE_ATTACHMENTS) !== 'Y')
 		{
 			return false;
 		}
@@ -652,18 +674,22 @@ class Message
 				$charset = $mailbox['CHARSET'] ?: $mailbox['LANG_CHARSET'];
 				[$header, $html, $text, $attachments] = \CMailMessage::parseMessage($technicalTitle, $charset);
 
-				if($html === '')
+				if (mb_strlen($text) > \CMailMessage::MAX_LENGTH_MESSAGE_BODY)
 				{
-					$html = '<div></div>';
+					[$text, $html] = \CMailMessage::prepareLongMessage($text, $html);
 				}
+
+				$html = empty(trim(strip_tags($html))) ? '' : static::sanitizeHtml($html, true);
 
 				\CMailMessage::update(
 					$message['MESSAGE_ID'],
 					[
 						'BODY' => rtrim($text),
-						'BODY_HTML' => static::sanitizeHtml($html, true),
+						'BODY_HTML' => $html,
 					]
 				);
+
+				self::updateMailEntityOptionsRow($mailboxId, (int)$message['MESSAGE_ID']);
 			}
 		}
 
@@ -700,5 +726,24 @@ class Message
 			default:
 				return true; // tasks, crm creates per-user tokens
 		}
+	}
+
+	/**
+	 * @param $mailboxId
+	 * @param $messageId
+	 * @return void
+	 */
+	public static function updateMailEntityOptionsRow($mailboxId, $messageId): void
+	{
+		Internals\MailEntityOptionsTable::update([
+				'MAILBOX_ID' => $mailboxId,
+				'ENTITY_ID' => $messageId,
+				'ENTITY_TYPE' => 'MESSAGE',
+				'PROPERTY_NAME' => 'UNSYNC_BODY',
+			],
+			[
+				'VALUE' => 'N',
+			]
+		);
 	}
 }

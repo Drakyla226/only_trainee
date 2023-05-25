@@ -1409,7 +1409,7 @@ abstract class EntityObject implements ArrayAccess
 	 */
 	public function sysGetRuntime($name)
 	{
-		return $this->_runtimeValues[$name];
+		return $this->_runtimeValues[$name] ?? null;
 	}
 
 	/**
@@ -1571,7 +1571,9 @@ abstract class EntityObject implements ArrayAccess
 				if (!($value instanceof $remoteObjectClass))
 				{
 					throw new ArgumentException(sprintf(
-						'Expected instance of `%s`, got `%s` instead', $remoteObjectClass, get_class($value)
+						'Expected instance of `%s`, got `%s` instead',
+						$remoteObjectClass,
+						is_object($value) ? get_class($value) : gettype($value)
 					));
 				}
 			}
@@ -1642,8 +1644,26 @@ abstract class EntityObject implements ArrayAccess
 						}
 					}
 
-					$elementalValue = empty($value) ? null : $value->sysGetValue($remoteFieldName);
-					$this->sysSetValue($localFieldName, $elementalValue);
+					$remoteField = $field->getRefEntity()->getField($remoteFieldName);
+
+					if (!empty($value) && !$value->sysHasValue($remoteField->getName())
+						&& $value->state === State::RAW && $remoteField->isPrimary() && $remoteField->isAutocomplete())
+					{
+						// get primary value after save
+						$localObject = $this;
+						$remoteObject = $value;
+
+						$remoteObject->sysAddOnPrimarySetListener(function () use (
+							$localObject, $localFieldName, $remoteObject, $remoteFieldName
+						) {
+							$localObject->sysSetValue($localFieldName, $remoteObject->get($remoteFieldName));
+						});
+					}
+					else
+					{
+						$elementalValue = empty($value) ? null : $value->sysGetValue($remoteFieldName);
+						$this->sysSetValue($localFieldName, $elementalValue);
+					}
 
 					$elementalsChanged = true;
 				}
@@ -1935,8 +1955,9 @@ abstract class EntityObject implements ArrayAccess
 		{
 			$field = $this->entity->getField($fieldName);
 
-			if ($field instanceof Reference)
+			if ($field instanceof Reference && !array_key_exists($fieldName, $this->_currentValues))
 			{
+				// if there is a new relation, then the old one is not into cascade anymore
 				if ($saveCascade && !empty($value))
 				{
 					$value->save();
@@ -2074,6 +2095,22 @@ abstract class EntityObject implements ArrayAccess
 			if ($value instanceof Collection)
 			{
 				$value->sysReviseDeletedObjects();
+			}
+		}
+
+		if ($saveCascade)
+		{
+			$this->sysSaveCurrentReferences();
+		}
+	}
+
+	public function sysSaveCurrentReferences()
+	{
+		foreach ($this->_currentValues as $fieldName => $value)
+		{
+			if ($this->entity->getField($fieldName) instanceof Reference && !empty($value))
+			{
+				$value->save();
 			}
 		}
 	}
@@ -2379,7 +2416,7 @@ abstract class EntityObject implements ArrayAccess
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public function offsetExists($offset)
+	public function offsetExists($offset): bool
 	{
 		return $this->sysHasValue($offset) && $this->sysGetValue($offset) !== null;
 	}
@@ -2393,6 +2430,7 @@ abstract class EntityObject implements ArrayAccess
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
+	#[\ReturnTypeWillChange]
 	public function offsetGet($offset)
 	{
 		if ($this->offsetExists($offset))
@@ -2418,7 +2456,7 @@ abstract class EntityObject implements ArrayAccess
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public function offsetSet($offset, $value)
+	public function offsetSet($offset, $value): void
 	{
 		if (is_null($offset))
 		{
@@ -2435,7 +2473,7 @@ abstract class EntityObject implements ArrayAccess
 	 *
 	 * @param mixed $offset
 	 */
-	public function offsetUnset($offset)
+	public function offsetUnset($offset): void
 	{
 		$this->unset($offset);
 	}

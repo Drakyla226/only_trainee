@@ -245,7 +245,7 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
           var fields = this.getItem(index);
           fields.deleted = 'Y';
           fields.status = sale_checkout_const.Loader.status.wait;
-          this.pool.add(sale_checkout_const.Pool.action.delete, index, {
+          this.pool.add(sale_checkout_const.Pool.action["delete"], index, {
             id: fields.id,
             fields: {
               value: 'Y'
@@ -337,8 +337,13 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
             quantity = ratio;
           }
 
-          if (available > 0 && quantity > available) {
-            quantity = available;
+          if (sale_checkout_lib.Product.isService(fields)) ; else {
+            // for products
+            if (sale_checkout_lib.Product.isLimitedQuantity(fields)) {
+              if (available > 0 && quantity > available) {
+                quantity = available;
+              }
+            }
           }
 
           quantity = sale_checkout_lib.Basket.toFixed(quantity, ratio, available);
@@ -367,8 +372,13 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
             quantity = sale_checkout_lib.Basket.roundFloatValue(quantity);
           }
 
-          if (available > 0 && quantity > available) {
-            quantity = available;
+          if (sale_checkout_lib.Product.isService(fields)) ; else {
+            // for products
+            if (sale_checkout_lib.Product.isLimitedQuantity(fields)) {
+              if (available > 0 && quantity > available) {
+                quantity = available;
+              }
+            }
           }
 
           quantity = sale_checkout_lib.Basket.toFixed(quantity, ratio, available);
@@ -402,8 +412,13 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
             quantity = ratio;
           }
 
-          if (available > 0 && quantity > available) {
-            quantity = available;
+          if (sale_checkout_lib.Product.isService(fields)) ; else {
+            // for products
+            if (sale_checkout_lib.Product.isLimitedQuantity(fields)) {
+              if (available > 0 && quantity > available) {
+                quantity = available;
+              }
+            }
           }
 
           quantity = sale_checkout_lib.Basket.toFixed(quantity, ratio, available);
@@ -442,7 +457,7 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
                     return resolve();
                   });
                 });
-              }).catch();
+              })["catch"]();
             } else {
               resolve();
             }
@@ -684,6 +699,9 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
           main_core_events.EventEmitter.subscribe(sale_checkout_const.EventType.consent.accepted, function () {
             return _this2.handlerConsentAccepted();
           });
+          main_core_events.EventEmitter.subscribe(sale_checkout_const.EventType.property.validate, function (e) {
+            return _this2.handlerValidateProperty(e);
+          });
           main_core_events.EventEmitter.subscribe(sale_checkout_const.EventType.element.buttonCheckout, main_core.Runtime.debounce(function () {
             return _this2.handlerCheckout();
           }, 1000, this));
@@ -813,7 +831,7 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
                   _this3.store.dispatch('application/setPathLocation', url);
                 }
               });
-            }).catch(function () {
+            })["catch"](function () {
               return _this3.appSetStatusNone();
             });
           }
@@ -869,11 +887,93 @@ this.BX.Sale.Checkout = this.BX.Sale.Checkout || {};
             signedParameters: this.store.getters['application/getSignedParameters']
           }).then(function (result) {
             return _this4.executeRestAnswer(cmd, result);
-          }).catch(function (result) {
+          })["catch"](function (result) {
             return _this4.executeRestAnswer(cmd, {
               error: result.errors
             });
           });
+        }
+        /**
+         * @private
+         */
+
+      }, {
+        key: "handlerValidateProperty",
+        value: function handlerValidateProperty(event) {
+          var property = {};
+          property.index = event.getData().index;
+          property.fields = this.getPropertyItem(property.index);
+          this.changeValidatedProperty(property);
+        }
+        /**
+         * @private
+         */
+
+      }, {
+        key: "getPropertyItem",
+        value: function getPropertyItem(index) {
+          return this.store.getters['property/get'](index);
+        }
+        /**
+         * @private
+         */
+
+      }, {
+        key: "changeValidatedProperty",
+        value: function changeValidatedProperty(property) {
+          var fields = property.fields;
+          var errors = this.store.getters['property/getErrors'];
+
+          if (this.propertyDataValidate(fields)) {
+            errors = this.deletePropertyError(fields, errors);
+          } else {
+            errors = this.addPropertyError(fields, errors);
+          }
+
+          this.provider.setModelPropertyError(errors);
+        }
+        /**
+         * @private
+         */
+
+      }, {
+        key: "propertyDataValidate",
+        value: function propertyDataValidate(fields) {
+          return !(fields.required === 'Y' && fields.value === '');
+        }
+        /**
+         * @private
+         */
+
+      }, {
+        key: "deletePropertyError",
+        value: function deletePropertyError(fields, errors) {
+          for (var errorIndex in errors) {
+            if (errors[errorIndex]['propertyId'] === fields.id) {
+              errors.splice(errorIndex, 1);
+            }
+          }
+
+          return errors;
+        }
+        /**
+         * @private
+         */
+
+      }, {
+        key: "addPropertyError",
+        value: function addPropertyError(fields, errors) {
+          var errorIds = errors.map(function (item) {
+            return item.propertyId;
+          });
+
+          if (!errorIds.includes(fields.id)) {
+            errors.push({
+              propertyId: fields.id
+            });
+          }
+
+          return errors;
         }
         /**
          * @private

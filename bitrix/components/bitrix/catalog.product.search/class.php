@@ -1,10 +1,12 @@
 <?php
 
+use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Iblock;
 use Bitrix\Catalog;
+use Bitrix\Catalog\Access\ActionDictionary;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
@@ -146,11 +148,23 @@ class ProductSearchComponent extends \CBitrixComponent
 		$params['func_name'] = isset($_REQUEST["func_name"]) ? preg_replace("/[^a-zA-Z0-9_\.]/is", "", $_REQUEST["func_name"]) : '';
 		$params['event'] = isset($_REQUEST['event']) ? preg_replace("/[^a-zA-Z0-9_\.]/is", "", $_REQUEST['event']) : '';
 		$params['caller'] = isset($_REQUEST["caller"]) ? preg_replace("/[^a-zA-Z0-9_\-]/is", "", $_REQUEST["caller"]) : '';
+		$params['multiple_select'] = $_REQUEST['multiple_select'] ?? 'N';
+		$params['multiple_select'] = $params['multiple_select'] === 'Y';
 		$params['subscribe'] = (isset($_REQUEST['subscribe']) && $_REQUEST['subscribe'] == 'Y');
-		$params['store_from_id'] = isset($_REQUEST["STORE_FROM_ID"]) ? (int)$_REQUEST["STORE_FROM_ID"] : 0;
+		$params['store_from_id'] = (int)($_REQUEST["STORE_FROM_ID"] ??  0);
 		if ($params['store_from_id'] < 0)
+		{
 			$params['store_from_id'] = 0;
-		$params['allow_select_parent'] = (isset($_REQUEST['allow_select_parent']) && $_REQUEST['allow_select_parent'] == 'Y' ? 'Y' : 'N');
+		}
+		$params['allow_select_parent'] = $_REQUEST['allow_select_parent'] ?? 'N';
+		if ($params['allow_select_parent'] !== 'Y')
+		{
+			$params['allow_select_parent'] = 'N';
+		}
+		if ($params['caller'] === 'discount')
+		{
+			$params['allow_select_parent'] = 'Y';
+		}
 
 		if (!empty($_REQUEST['del_filter']))
 		{
@@ -186,8 +200,8 @@ class ProductSearchComponent extends \CBitrixComponent
 
 	public function executeComponent()
 	{
-		$this->checkAccess();
 		$this->loadModules();
+		$this->checkAccess();
 		$this->checkIblockAccess();
 
 		if (!empty($_REQUEST['action']) && $_REQUEST['action'] == 'open_section')
@@ -238,12 +252,13 @@ class ProductSearchComponent extends \CBitrixComponent
 
 	protected function checkAccess(): bool
 	{
-		global $USER, $APPLICATION;
+		global $APPLICATION;
 
 		if (!$this->checkPermissions)
 			return true;
 
-		if (!($USER->CanDoOperation('catalog_read') || $USER->CanDoOperation('catalog_view')))
+		$accessController = AccessController::getCurrent();
+		if (!($accessController->check(ActionDictionary::ACTION_CATALOG_READ) || $accessController->check(ActionDictionary::ACTION_CATALOG_VIEW)))
 		{
 			$APPLICATION->AuthForm(Loc::getMessage('ACCESS_DENIED'));
 			return false;
@@ -683,7 +698,6 @@ class ProductSearchComponent extends \CBitrixComponent
 				$arSkuTmp["PRODUCT_ID"] = $productId;
 				$arSkuTmp["CAN_BUY"] = $arOffer["CAN_BUY"];
 				$arSkuTmp["ACTIVE"] = $arOffer["ACTIVE"];
-				$arSkuTmp["EXTERNAL_ID"] = $arOffer['EXTERNAL_ID'];
 				if (isset($arOffer['PREVIEW_PICTURE']))
 					$arSkuTmp['PREVIEW_PICTURE'] = $arOffer['PREVIEW_PICTURE'];
 				if (isset($arOffer['DETAIL_PICTURE']))
@@ -1069,9 +1083,14 @@ class ProductSearchComponent extends \CBitrixComponent
 		return (int)$USER->GetID();
 	}
 
-	protected function getCaller()
+	protected function getCaller(): string
 	{
 		return $this->arParams['caller'];
+	}
+
+	protected function isMultipleSelect(): bool
+	{
+		return $this->arParams['multiple_select'];
 	}
 
 	protected function getLid()
@@ -1315,6 +1334,11 @@ class ProductSearchComponent extends \CBitrixComponent
 			unset($price);
 		}
 		unset($arPrices);
+
+		foreach (array_keys($this->arHeaders) as $index)
+		{
+			$this->arHeaders[$index]['default'] ??= false;
+		}
 	}
 
 	/**
@@ -1341,7 +1365,7 @@ class ProductSearchComponent extends \CBitrixComponent
 		if ($this->isAdminSection())
 		{
 			$aOptions = CUserOptions::GetOption("list", $this->getTableId(), array());
-			$aColsTmp = explode(",", $aOptions["columns"]);
+			$aColsTmp = explode(",", $aOptions["columns"] ?? '');
 		}
 		else
 		{
@@ -1433,7 +1457,9 @@ class ProductSearchComponent extends \CBitrixComponent
 		);
 		//TODO: remove this hack for store docs after refactoring
 		if ($this->getCaller() == 'storeDocs')
-			$arFilter['!TYPE'] = Catalog\ProductTable::TYPE_SET;
+		{
+			$arFilter['!=TYPE'] = Catalog\ProductTable::getStoreDocumentRestrictedProductTypes();
+		}
 
 		if ($arFilter['ACTIVE'] == '*')
 			unset($arFilter['ACTIVE']);
@@ -1807,6 +1833,10 @@ class ProductSearchComponent extends \CBitrixComponent
 	{
 		$filter = $this->getFilter();
 		$dbResultList = $this->getMixedList($this->getListSort(), $filter, false, ['ID', 'IBLOCK_ID']);
+
+		$filter['QUERY'] ??= '';
+		$filter['USE_SUBSTRING_QUERY'] ??= 'N';
+
 		$this->arResult = array(
 			'DB_RESULT_LIST' => $dbResultList,
 			'PRODUCTS' => $this->makeItemsFromDbResult($dbResultList),
@@ -1837,7 +1867,8 @@ class ProductSearchComponent extends \CBitrixComponent
 			'SUBSCRIPTION' => $this->getSubscription(),
 			'IS_ADMIN_SECTION' => $this->isAdminSection(),
 			'IS_EXTERNALCONTEXT' => $this->isExternalContext(),
-			'ALLOW_SELECT_PARENT' => $this->arParams['allow_select_parent']
+			'ALLOW_SELECT_PARENT' => $this->arParams['allow_select_parent'],
+			'MULTIPLE' => $this->isMultipleSelect(),
 		);
 	}
 

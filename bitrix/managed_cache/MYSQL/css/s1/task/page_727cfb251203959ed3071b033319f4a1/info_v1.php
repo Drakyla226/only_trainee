@@ -1,1 +1,0 @@
-<?php $filesInfo = ["/local/templates/task/components/bitrix/form.result.new/form_result/style.css" => "1684013532666","/local/templates/task/components/bitrix/catalog.section.list/select_list/style.css" => "16847667686236","/local/templates/task/components/bitrix/news.list/news_list/style.css" => "1684619234150",]; ?>

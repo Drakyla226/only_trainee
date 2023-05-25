@@ -1,8 +1,5 @@
 <?php
-$MESS['LANDING_TPL_ADD_SITE'] = 'Создать сайт';
-$MESS['LANDING_TPL_ADD_SITE_PAGE'] = 'Создать сайт';
-$MESS['LANDING_TPL_ADD_SITE_STORE'] = 'Создать магазин';
-$MESS['LANDING_TPL_ADD_SITE_KNOWLEDGE'] = 'Создать базу знаний';
+$MESS['LANDING_TPL_ADD_SITE_2'] = 'Создать';
 $MESS['LANDING_TPL_ADD_PAGE'] = 'Новая страница';
 $MESS['LANDING_TPL_ACCEPT'] = 'Я согласен';
 $MESS['LANDING_TPL_ACCEPTED'] = 'Вы уже дали согласие';
@@ -15,9 +12,9 @@ $MESS['LANDING_TPL_MENU_FORMS'] = 'CRM-формы';
 $MESS['LANDING_TPL_MENU_TRACKING'] = 'Сквозная аналитика';
 $MESS['LANDING_TPL_MENU_MARKETING'] = 'Маркетинг';
 $MESS['LANDING_TPL_MENU_AGREEMENT'] = 'Соглашение';
-$MESS['LANDING_TPL_SETTING_SITE'] = 'Настройки сайта';
 $MESS['LANDING_TPL_IMPORT_SITE_PAGE'] = 'Импорт сайта';
 $MESS['LANDING_TPL_IMPORT_SITE_KNOWLEDGE'] = 'Импорт базы знаний';
 $MESS['LANDING_TPL_IMPORT_SITE_STORE'] = 'Импорт магазина';
-$MESS['LANDING_TPL_SETTING_CATALOG'] = 'Настройки каталога';
+$MESS['LANDING_TPL_SETTING'] = 'Настройки';
 $MESS['LANDING_TPL_FOLDER_EDIT'] = 'Настройки папки';
+$MESS['LANDING_TPL_DEV_SITE'] = 'Создать девелоперский сайт';

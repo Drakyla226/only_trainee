@@ -22,11 +22,12 @@ Loc::loadMessages(Manager::getDocRoot() . '/bitrix/modules/landing/lib/mutator.p
 
 // assets, extensions
 Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
 	'ui.buttons',
 	'ui.buttons.icons',
 	'ui.alerts',
 	'ui.icons',
-	'ui.fonts.opensans',
 	'ui.info-helper',
 	'ui.notification',
 	'sidepanel',
@@ -165,10 +166,10 @@ $urls = $arResult['TOP_PANEL_CONFIG']['urls'];
 $this->getComponent()->initAPIKeys();
 $formEditor = $arResult['SPECIAL_TYPE'] == Site\Type::PSEUDO_SCOPE_CODE_FORMS;
 
-$urlLandingAdd = str_replace(['#site_show#', '#landing_edit#'], [$siteId, 0], $arParams['~PARAMS']['sef_url']['landing_edit'] ?? '');
+$urlLandingAdd = $component->getUrlAdd(false);
 $urlFolderAdd = str_replace(['#site_show#', '#landing_edit#'], [$siteId, 0], $arParams['~PARAMS']['sef_url']['site_show'] ?? '');
-$urlLandingAdd = $component->getPageParam($urlLandingAdd, ['folderId' => $folderId]);
 $urlFolderAdd = $component->getPageParam($urlFolderAdd, ['folderId' => $folderId, 'folderNew' => 'Y']);
+$urlFormAdd = '/crm/webform/edit/0/';
 
 if ($formEditor)
 {
@@ -176,6 +177,7 @@ if ($formEditor)
 	Extension::load([
 		'landing.ui.panel.formsettingspanel',
 		'crm.form.embed',
+		'landing.form.share-popup',
 	]);
 }
 
@@ -205,7 +207,6 @@ if (!$request->offsetExists('landing_mode')):
 	$startChain = $component->getMessageType('LANDING_TPL_START_PAGE');
 	$lightMode = $arParams['PANEL_LIGHT_MODE'] == 'Y';
 	$panelModifier = $lightMode ? ' landing-ui-panel-top-light' : '';
-	$panelModifier .= $formEditor ? ' landing-ui-panel-top-form' : '';
 	// feedback form
 	$formCode = '';
 	if (!isset($arResult['LICENSE']) || $arResult['LICENSE'] != 'nfr')
@@ -225,8 +226,8 @@ if (!$request->offsetExists('landing_mode')):
 	<div class="landing-ui-panel landing-ui-panel-top<?= $panelModifier;?>">
 		<!-- region Logotype -->
 		<div class="landing-ui-panel-top-logo">
-			<a href="<?= $arParams['PAGE_URL_URL_SITES']?>" class="landing-ui-panel-top-logo-link" data-slider-ignore-autobinding="true">
-				<span class="landing-ui-panel-top-logo-home-btn">
+			<a href="<?= ($arParams['TYPE'] === 'GROUP') ? '#' : $arParams['PAGE_URL_URL_SITES']?>" class="landing-ui-panel-top-logo-link" data-slider-ignore-autobinding="true">
+				<span class="landing-ui-panel-top-logo-home-btn" data-hint="<?= Loc::getMessage("LANDING_TPL_PREVIEW_EXIT")?>" data-hint-no-icon>
 					<svg class='landing-ui-panel-top-logo-home-btn-icon' width="27" height="27" viewBox="0 0 27 27" fill="none" xmlns="http://www.w3.org/2000/svg">
 						<path fill-rule="evenodd" clip-rule="evenodd" d="M11.902 19.6877V15.8046C11.902 15.5837 12.0811 15.4046 12.302 15.4046H14.5087C14.7296 15.4046 14.9087 15.5837 14.9087 15.8046V19.6877C14.9089 19.9086 15.0879 20.0876 15.3087 20.0878L18.8299 20.0891C19.0508 20.0893 19.2299 19.9103 19.23 19.6894C19.23 19.6893 19.23 19.6893 19.2299 19.6892V13.4563C19.2299 13.4365 19.2275 13.4142 19.2275 13.3943H20.4332C20.6633 13.3943 20.8604 13.2883 20.9909 13.0932C21.1189 12.9005 21.1425 12.6747 21.0581 12.4561C20.9519 12.1816 14.2383 5.92948 14.2047 5.90379C13.7957 5.59077 13.3216 5.58796 12.9131 5.89536C12.8759 5.92337 6.15525 12.1815 6.04901 12.4561C5.96462 12.6729 5.99059 12.9011 6.11629 13.0932C6.24671 13.2859 6.44145 13.3943 6.67162 13.3943H7.87965C7.87729 13.4142 7.87729 13.4365 7.87729 13.4563V19.6846C7.8776 19.9054 8.0565 20.0844 8.27729 20.0849L11.502 20.0874C11.7229 20.0879 11.9021 19.9089 11.9023 19.688C11.9023 19.6879 11.9023 19.6878 11.902 19.6877Z" fill="#525C69"/>
 					</svg>
@@ -271,28 +272,19 @@ if (!$request->offsetExists('landing_mode')):
 		<!-- endregion -->
 
 		<!-- region landing.selector -->
-		<?if (!$formEditor):?>
-			<div class="landing-ui-panel-top-selector">
-				<?$APPLICATION->includeComponent('bitrix:landing.selector', '', [
-					'TYPE' => $arParams['TYPE'],
-					'SITE_ID' => $siteId,
-					'FOLDER_ID' => $folderId,
-					'LANDING_ID' => $arResult['LANDING']->getId(),
-					'INPUT_VALUE' => $arResult['LANDING']->getTitle(),
-					'PAGE_URL_LANDING_VIEW' => $arParams['~PARAMS']['sef_url']['landing_view'] ?? '',
-					'PAGE_URL_LANDING_ADD' => $urlLandingAdd,
-					'PAGE_URL_FOLDER_ADD' => $urlFolderAdd
-				]);?>
-			</div>
-		<?else:?>
-			<div class="landing-ui-panel-top-form-name">
-				<span
-					class="landing-ui-panel-top-form-name-inner"
-					title="<?=htmlspecialcharsbx($arResult['FORM_NAME'])?>"><?php
-						echo htmlspecialcharsbx($arResult['FORM_NAME']);
-				?></span>
-			</div>
-		<?endif;?>
+		<div class="landing-ui-panel-top-selector">
+			<?$APPLICATION->includeComponent('bitrix:landing.selector', '', [
+				'TYPE' => $arParams['TYPE'],
+				'SITE_ID' => $siteId,
+				'FOLDER_ID' => $folderId,
+				'LANDING_ID' => $arResult['LANDING']->getId(),
+				'INPUT_VALUE' => $arResult['LANDING']->getTitle(),
+				'PAGE_URL_LANDING_VIEW' => $arParams['~PARAMS']['sef_url']['landing_view'] ?? '',
+				'PAGE_URL_LANDING_ADD' => !$formEditor ? $urlLandingAdd : '',
+				'PAGE_URL_FOLDER_ADD' => !$formEditor ? $urlFolderAdd : '',
+				'PAGE_URL_FORM_ADD' => $formEditor ? $urlFormAdd : '',
+			]);?>
+		</div>
 		<!--  endregion -->
 
 		<?
@@ -346,16 +338,11 @@ if (!$request->offsetExists('landing_mode')):
 
 		<div class="landing-ui-panel-top-menu" id="landing-panel-settings">
 			<?if ($arParams['DRAFT_MODE'] != 'Y'):?>
-			<?if ($formEditor):?>
-				<span class="ui-btn ui-btn-light-border landing-ui-panel-top-menu-link landing-btn-menu landing-ui-panel-top-menu-link-settings"><?=
-					Loc::getMessage('LANDING_FORM_EDITOR_TOP_PANEL_SETTINGS');
-				?></span>
-			<?endif;?>
 			<a href="<?= $urls['preview']->getUri();?>" <?
 				?>id="landing-popup-preview-btn" <?
 				?>data-domain="<?= $site['DOMAIN_NAME']?>" <?
 				?>class="ui-btn ui-btn-light-border landing-ui-panel-top-menu-link landing-btn-menu">
-				<?= Loc::getMessage('LANDING_TPL_PREVIEW_URL_OPEN');?>
+				<?= $formEditor ? Loc::getMessage('LANDING_TPL_PREVIEW_URL_OPEN_FORM') : Loc::getMessage('LANDING_TPL_PREVIEW_URL_OPEN');?>
 			</a>
 
 				<?if (!$formEditor):?>
@@ -365,8 +352,8 @@ if (!$request->offsetExists('landing_mode')):
 						?> value="<?= $component->getMessageType('LANDING_TPL_FEATURES')?>"<?
 						?> />
 				<?else:?>
-					<span class="ui-btn ui-btn-light-border ui-btn-round ui-btn-icon-share landing-form-editor-share-button"><?
-						echo Loc::getMessage('LANDING_FORM_EDITOR_SHARE_BUTTON')
+					<span class="ui-btn ui-btn-light-border ui-btn-round landing-form-editor-share-button"><?
+						echo Loc::getMessage('LANDING_FORM_FEATURES')
 					?></span>
 				<?endif;?>
 			<?else:?>
@@ -383,6 +370,9 @@ if (!$request->offsetExists('landing_mode')):
 	BX.ready(function()
 	{
 		BX.UI.Hint.init(document.querySelector('.landing-ui-panel'));
+		BX.UI.Hint.popupParameters = {
+			angle: false
+		};
 
 		BX.message({
 			LANDING_SITE_TYPE: '<?= $arParams['TYPE'];?>',
@@ -419,11 +409,15 @@ if (!$request->offsetExists('landing_mode')):
 			LANDING_TPL_PREVIEW_URL: '<?= \CUtil::jsEscape(Loc::getMessage('LANDING_TPL_PREVIEW_URL'));?>',
 			LANDING_TPL_PREVIEW_URL_HINT: '<?= \CUtil::jsEscape(Loc::getMessage('LANDING_TPL_PREVIEW_URL_HINT'));?>',
 			LANDING_PAR_PAGE_URL_SITE_EDIT: '<?= \CUtil::jsEscape($arParams['PAGE_URL_SITE_EDIT']);?>',
+			LANDING_TPL_PREVIEW_EXIT: '<?= \CUtil::jsEscape($arParams['LANDING_TPL_PREVIEW_EXIT']);?>',
 		});
 	});
 </script>
 
-<?
+<!-- fonts proxy-->
+<?= $component->getFontProxyUrlScript() ?>
+
+<?php
 // editor frame
 if ($request->offsetExists('landing_mode'))
 {
@@ -492,7 +486,7 @@ if ($request->offsetExists('landing_mode'))
 					{
 						gotoSiteButton = event.data.elementList[i];
 						var replaces = [];
-						var landingPath = '<?= CUtil::jsEscape($arParams['SEF']['landing_view']);?>';
+						var landingPath = '<?= CUtil::jsEscape($arParams['PARAMS']['sef_url']['landing_view']) ?>';
 
 						if (gotoSiteButton.dataset.siteId)
 						{
@@ -508,8 +502,40 @@ if ($request->offsetExists('landing_mode'))
 							replaces.forEach(function(replace) {
 								landingPath = landingPath.replace(replace[0], replace[1]);
 							});
+
+							if (
+								event.data.from !== undefined
+								&& typeof BX.Landing.Metrika !== 'undefined'
+							)
+							{
+								var dataFrom = event.data.from.split('|');
+								var appCode = dataFrom[1];
+								var title = dataFrom[2];
+								var previewId = dataFrom[3];
+								if (
+									appCode !== null
+									&& title !== null
+									&& previewId !== null
+								)
+								{
+									var metrikaValue =
+										landingPath
+										+ '?action=templateCreated&app_code='
+										+ appCode
+										+ '&title='
+										+ title
+										+ '&preview_id='
+										+ previewId;
+									var metrika = new BX.Landing.Metrika(true);
+									metrika.sendLabel(
+										null,
+										'templateCreated',
+										metrikaValue
+									);
+								}
+							}
 							gotoSiteButton.setAttribute('href', landingPath);
-							top.window.location.href = landingPath;
+							setTimeout(() => {top.window.location.href = landingPath}, 3000);
 						}
 					}
 				}

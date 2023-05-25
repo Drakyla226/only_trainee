@@ -112,6 +112,8 @@ class CIMRestService extends IRestService
 
 				'im.videoconf.share.change' => array('callback' => array(__CLASS__, 'videoconfShareChange'), 'options' => array('private' => true)),
 				'im.videoconf.password.check' => array('callback' => array(__CLASS__, 'videoconfPasswordCheck'), 'options' => array('private' => true)),
+				'im.videoconf.add' => array('callback' => array(__CLASS__, 'videoconfAdd'), 'options' => array('private' => true)),
+				'im.videoconf.update' => array('callback' => array(__CLASS__, 'videoconfUpdate'), 'options' => array('private' => true)),
 
 				'im.desktop.status.get' => array('callback' => array(__CLASS__, 'desktopStatusGet'), 'options' => array('private' => true)),
 				'im.desktop.page.open' => array('callback' => array(__CLASS__, 'desktopPageOpen'), 'options' => array('private' => true)),
@@ -846,18 +848,29 @@ class CIMRestService extends IRestService
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
+		$skipChatParam = $arParams['SKIP_CHAT'] ?? null;
+		$skipDialogParam = $arParams['SKIP_DIALOG'] ?? null;
+
 		$config = Array('JSON' => 'Y');
 		if ($arParams['SKIP_OPENLINES'] === 'Y')
 		{
 			$config['SKIP_OPENLINES'] = 'Y';
 		}
-		if ($arParams['SKIP_CHAT'] === 'Y')
+		if ($skipChatParam === 'Y')
 		{
 			$config['SKIP_CHAT'] = 'Y';
 		}
-		if ($arParams['SKIP_DIALOG'] === 'Y')
+		if ($skipDialogParam === 'Y')
 		{
 			$config['SKIP_DIALOG'] = 'Y';
+		}
+		if (isset($arParams['GET_ORIGINAL_TEXT']) && $arParams['GET_ORIGINAL_TEXT'] === 'Y')
+		{
+			$config['GET_ORIGINAL_TEXT'] = 'Y';
+		}
+		else
+		{
+			$config['GET_ORIGINAL_TEXT'] = 'N';
 		}
 
 		if (isset($arParams['LAST_MESSAGE_DATE']) && $arParams['LAST_MESSAGE_DATE'])
@@ -957,6 +970,14 @@ class CIMRestService extends IRestService
 
 	public static function departmentGet($arParams, $offset, CRestServer $server)
 	{
+		if (
+			\Bitrix\Im\User::getInstance()->isExtranet()
+			|| \Bitrix\Im\User::getInstance()->isBot()
+		)
+		{
+			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
 		$ids = Array();
@@ -993,6 +1014,14 @@ class CIMRestService extends IRestService
 
 	public static function departmentManagersGet($arParams, $n, CRestServer $server)
 	{
+		if (
+			\Bitrix\Im\User::getInstance()->isExtranet()
+			|| \Bitrix\Im\User::getInstance()->isBot()
+		)
+		{
+			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
 		$withUserData = $arParams['USER_DATA'] == 'Y';
@@ -1024,6 +1053,14 @@ class CIMRestService extends IRestService
 
 	public static function departmentEmployeesGet($arParams, $n, CRestServer $server)
 	{
+		if (
+			\Bitrix\Im\User::getInstance()->isExtranet()
+			|| \Bitrix\Im\User::getInstance()->isBot()
+		)
+		{
+			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
 		$withUserData = $arParams['USER_DATA'] == 'Y';
@@ -1055,6 +1092,14 @@ class CIMRestService extends IRestService
 
 	public static function departmentColleaguesList($arParams, $offset, CRestServer $server)
 	{
+		if (
+			\Bitrix\Im\User::getInstance()->isExtranet()
+			|| \Bitrix\Im\User::getInstance()->isBot()
+		)
+		{
+			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
 		$withUserData = $arParams['USER_DATA'] == 'Y';
@@ -1089,6 +1134,15 @@ class CIMRestService extends IRestService
 			if (!is_array($arParams['USERS']))
 			{
 				$arParams['USERS'] = [];
+			}
+
+			$arParams['USERS'] = array_filter(array_values($arParams['USERS']));
+			foreach ($arParams['USERS'] as $uid)
+			{
+				if (!is_integer($uid) && !is_string($uid))
+				{
+					throw new Bitrix\Rest\RestException("Parameter USERS has wrong type", "INVALID_FORMAT", CRestServer::STATUS_WRONG_REQUEST);
+				}
 			}
 		}
 		else
@@ -1148,17 +1202,21 @@ class CIMRestService extends IRestService
 		{
 			$add['DESCRIPTION'] = $arParams['DESCRIPTION'];
 		}
-		if (isset($arParams['ENTITY_TYPE']))
+
+		if (\Bitrix\Im\User::getInstance()->isExtranet())
 		{
-			$add['ENTITY_TYPE'] = $arParams['ENTITY_TYPE'];
+			$add['USERS'] = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($add['USERS']);
 		}
-		if (isset($arParams['ENTITY_ID']))
+		else
 		{
-			$add['ENTITY_ID'] = $arParams['ENTITY_ID'];
-		}
-		if (isset($arParams['OWNER_ID']))
-		{
-			$add['OWNER_ID'] = $arParams['OWNER_ID'];
+			if (isset($arParams['ENTITY_TYPE']))
+			{
+				$add['ENTITY_TYPE'] = $arParams['ENTITY_TYPE'];
+			}
+			if (isset($arParams['ENTITY_ID']))
+			{
+				$add['ENTITY_ID'] = $arParams['ENTITY_ID'];
+			}
 		}
 
 		global $USER;
@@ -1573,6 +1631,19 @@ class CIMRestService extends IRestService
 			}
 		}
 
+		if (\Bitrix\Im\User::getInstance($userId)->isExtranet())
+		{
+			if (is_string($arParams['USERS']))
+			{
+				$arParams['USERS'] = \CUtil::JsObjectToPhp($arParams['USERS']);
+			}
+			if (!is_array($arParams['USERS']))
+			{
+				throw new Bitrix\Rest\RestException("User IDs must be passed in array format", "WRONG_REQUEST", CRestServer::STATUS_WRONG_REQUEST);
+			}
+			$arParams['USERS'] = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($arParams['USERS'], $userId);
+		}
+
 		$CIMChat = new CIMChat($userId);
 		$result = $CIMChat->AddUser($arParams['CHAT_ID'], $arParams['USERS'], $hideHistory);
 		if (!$result)
@@ -1794,8 +1865,13 @@ class CIMRestService extends IRestService
 
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
-		if (isset($arParams['MESSAGE']))
+		if (isset($arParams['MESSAGE']) && !empty($arParams['MESSAGE']))
 		{
+			if (!is_string($arParams['MESSAGE']))
+			{
+				throw new Bitrix\Rest\RestException("Wrong message type", "MESSAGE_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
+			}
+
 			$arParams['MESSAGE'] = trim($arParams['MESSAGE']);
 
 			if ($arParams['MESSAGE'] == '' && empty($arParams['ATTACH']))
@@ -1837,7 +1913,7 @@ class CIMRestService extends IRestService
 			$arMessageFields = Array(
 				"MESSAGE_TYPE" => IM_MESSAGE_PRIVATE,
 				"FROM_USER_ID" => $arParams['FROM_USER_ID'],
-				"TO_USER_ID" => $arParams['USER_ID'],
+				"DIALOG_ID" => $arParams['USER_ID'],
 			);
 		}
 		else if (isset($arParams['CHAT_ID']))
@@ -1884,7 +1960,8 @@ class CIMRestService extends IRestService
 						: (!empty($result['APP_NAME_DEFAULT'])
 							? $result['APP_NAME_DEFAULT']
 							: $result['CODE']
-						);
+						)
+					;
 
 					$arParams['MESSAGE'] = "[b]".$moduleName."[/b]\n".$arParams['MESSAGE'];
 				}
@@ -1893,7 +1970,7 @@ class CIMRestService extends IRestService
 			$arMessageFields = Array(
 				"MESSAGE_TYPE" => IM_MESSAGE_CHAT,
 				"FROM_USER_ID" => $arParams['FROM_USER_ID'],
-				"TO_CHAT_ID" => $arParams['CHAT_ID'],
+				"DIALOG_ID" => 'chat'.$arParams['CHAT_ID'],
 			);
 		}
 		else
@@ -1979,10 +2056,15 @@ class CIMRestService extends IRestService
 			}
 		}
 
-		if (isset($arParams['SYSTEM']) && $arParams['SYSTEM'] == 'Y')
+		if (
+			isset($arParams['SYSTEM']) && $arParams['SYSTEM'] == 'Y'
+			&& $server->getAuthType() !== \Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE
+			&& \Bitrix\Im\Dialog::hasAccess($arMessageFields['DIALOG_ID'])
+		)
 		{
 			$arMessageFields['SYSTEM'] = 'Y';
 		}
+
 		if (isset($arParams['URL_PREVIEW']) && $arParams['URL_PREVIEW'] == 'N')
 		{
 			$arMessageFields['URL_PREVIEW'] = 'N';
@@ -2308,9 +2390,12 @@ class CIMRestService extends IRestService
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
-		if ($server->getAuthType() == \Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE)
+		if (
+			$server->getAuthType() != \Bitrix\Rest\OAuth\Auth::AUTH_TYPE
+			&& !self::isDebugEnabled()
+		)
 		{
-			throw new \Bitrix\Rest\RestException("Access for this method not allowed by session authorization.", "WRONG_AUTH_TYPE", \CRestServer::STATUS_WRONG_REQUEST);
+			throw new \Bitrix\Rest\RestException("Access for this method allowed only by OAuth authorization.", "WRONG_AUTH_TYPE", \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
 		global $USER;
@@ -2411,7 +2496,13 @@ class CIMRestService extends IRestService
 			{
 				$result = \Bitrix\Rest\AppTable::getList(array('filter' => array('=CLIENT_ID' => $clientId)));
 				$result = $result->fetch();
-				$moduleName = isset($result['APP_NAME'])? $result['APP_NAME']: $result['CODE'];
+				$moduleName = !empty($result['APP_NAME'])
+					? $result['APP_NAME']
+					: (!empty($result['APP_NAME_DEFAULT'])
+						? $result['APP_NAME_DEFAULT']
+						: $result['CODE']
+					)
+				;
 				$message = $moduleName."#BR#".$arParams['MESSAGE'];
 
 				if (!empty($arParams['MESSAGE_OUT']))
@@ -2586,13 +2677,15 @@ class CIMRestService extends IRestService
 		{
 			$CIMNotify = new CIMNotify();
 
+			$onlyCurrent = $arParams['ONLY_CURRENT'] ?? null;
+			$readAllFromId = $onlyCurrent !== 'Y';
 			if ($arParams['ACTION'] === 'Y')
 			{
-				$CIMNotify->MarkNotifyRead($arParams['ID'], $arParams['ONLY_CURRENT'] != 'Y');
+				$CIMNotify->MarkNotifyRead($arParams['ID'], $readAllFromId);
 			}
 			else
 			{
-				$CIMNotify->MarkNotifyUnRead($arParams['ID'], $arParams['ONLY_CURRENT'] != 'Y');
+				$CIMNotify->MarkNotifyUnRead($arParams['ID'], $readAllFromId);
 			}
 		}
 
@@ -2711,7 +2804,11 @@ class CIMRestService extends IRestService
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
 
-		if (!$arParams['SEARCH_TYPE'] && !$arParams['SEARCH_DATE'] && mb_strlen(trim($arParams['SEARCH_TEXT'])) < 3)
+		if (
+			!($arParams['SEARCH_TYPE'] ?? null)
+			&& !($arParams['SEARCH_DATE'] ?? null)
+			&& mb_strlen(trim($arParams['SEARCH_TEXT'])) < 3
+		)
 		{
 			throw new Bitrix\Rest\RestException("SEARCH_TEXT can't be less then 3 symbols", "SEARCH_TEXT_ERROR", CRestServer::STATUS_WRONG_REQUEST);
 		}
@@ -3028,11 +3125,11 @@ class CIMRestService extends IRestService
 
 		return [
 			'folder' => [
-				'id' => $result['FOLDER']->getId(),
+				'id' => (int)$result['FOLDER']->getId(),
 				'name' => $result['FOLDER']->getName()
 			],
 			'file' => [
-				'id' => $result['FILE']->getId(),
+				'id' => (int)$result['FILE']->getId(),
 				'name' => $result['FILE']->getName()
 			],
 		];
@@ -3042,12 +3139,15 @@ class CIMRestService extends IRestService
 	{
 		$counters = \Bitrix\Im\Counter::get();
 
-		if ($arParams['ONLY_COUNTER'])
+		$onlyCounterParam = $arParams['ONLY_COUNTER'] ?? null;
+		$jsonParam = $arParams['JSON'] ?? null;
+
+		if ($onlyCounterParam)
 		{
 			$counters = $counters['TYPE'];
 		}
 
-		if ($arParams['JSON'] === 'Y')
+		if ($jsonParam === 'Y')
 		{
 			$counters = \Bitrix\Im\Common::toJson($counters);
 		}
@@ -5531,9 +5631,13 @@ class CIMRestService extends IRestService
 
 	public static function mobileConfigGet($params, $n, \CRestServer $server)
 	{
-		if ($server->getAuthType() != \Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE)
+		if (
+			$server->getAuthType() != \Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE
+			&& !self::isDebugEnabled()
+		)
 		{
 			throw new \Bitrix\Rest\RestException("Get access to browser const available only for session authorization.", "WRONG_AUTH_TYPE", \CRestServer::STATUS_FORBIDDEN);
+
 		}
 
 		$config = Array();
@@ -5941,6 +6045,81 @@ class CIMRestService extends IRestService
 		return false;
 	}
 
+	public static function videoconfAdd($arParams, $n, CRestServer $server)
+	{
+		throw new \Bitrix\Rest\RestException('This method is not available', 'METHOD_NOT_AVAILABLE', CRestServer::STATUS_WRONG_REQUEST);
+
+		$arParams = array_change_key_case($arParams, CASE_UPPER);
+
+		if (
+			\Bitrix\Im\User::getInstance()->isExtranet()
+			|| \Bitrix\Im\User::getInstance()->isBot()
+		)
+		{
+			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
+		$arParams['BROADCAST_MODE'] = ($arParams['BROADCAST_MODE'] ?? 'N') === 'Y';
+
+		$createResult = \Bitrix\Im\Call\Conference::add($arParams);
+
+		if (!$createResult->isSuccess())
+		{
+			$error = $createResult->getErrors()[0];
+			throw new Bitrix\Rest\RestException($error->getMessage(), $error->getCode(), CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		return [
+			'chatId' => $createResult->getData()['CHAT_ID'],
+			'alias' => $createResult->getData()['ALIAS_DATA']['ALIAS'],
+			'link' => $createResult->getData()['ALIAS_DATA']['LINK']
+		];
+	}
+
+	public static function videoconfUpdate($arParams, $n, CRestServer $server)
+	{
+		throw new \Bitrix\Rest\RestException('This method is not available', 'METHOD_NOT_AVAILABLE', CRestServer::STATUS_WRONG_REQUEST);
+
+		$arParams = array_change_key_case($arParams, CASE_UPPER);
+
+		if (
+			\Bitrix\Im\User::getInstance()->isExtranet()
+			|| \Bitrix\Im\User::getInstance()->isBot()
+		)
+		{
+			throw new Bitrix\Rest\RestException("Only intranet users have access to this method.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
+		$arParams['BROADCAST_MODE'] = ($arParams['BROADCAST_MODE'] ?? 'N') === 'Y';
+
+		if (!isset($arParams['ID']) || (int)$arParams['ID'] <= 0)
+		{
+			throw new Bitrix\Rest\RestException("Conference ID can't be empty", "CONFERENCE_ID_EMPTY", CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		$conference = \Bitrix\Im\Call\Conference::getById((int)$arParams['ID']);
+
+		if (!$conference)
+		{
+			throw new Bitrix\Rest\RestException("Conference with such id not found.", "CONFERENCE_NOT_FOUND", CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		if (!$conference->canUserEdit(\Bitrix\Main\Engine\CurrentUser::get()->getId()))
+		{
+			throw new Bitrix\Rest\RestException("You can't edit the conference.", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
+		$updateResult = $conference->update($arParams);
+
+		if (!$updateResult->isSuccess())
+		{
+			$error = $updateResult->getErrors()[0];
+			throw new Bitrix\Rest\RestException($error->getMessage(), $error->getCode(), CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		return $updateResult->isSuccess();
+	}
+
 	public static function desktopStatusGet($params, $n, \CRestServer $server)
 	{
 		return [
@@ -6122,6 +6301,12 @@ class CIMRestService extends IRestService
 		{
 			return (\Bitrix\Main\Context::getCurrent()->getRequest()->isHttps() ? "https" : "http")."://".$_SERVER['SERVER_NAME'].(in_array($_SERVER['SERVER_PORT'], Array(80, 443))?'':':'.$_SERVER['SERVER_PORT']);
 		}
+	}
+
+	public static function isDebugEnabled()
+	{
+		$settings = \Bitrix\Main\Config\Configuration::getValue('im');
+		return $settings['rest_debug'] === true;
 	}
 }
 ?>

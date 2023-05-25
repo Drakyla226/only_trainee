@@ -17,23 +17,35 @@ class QueueManager
 	private const LIMIT_SECTIONS_FOR_CHECK = 5;
 
 	/**
+	 * @param int $lastHandledId
 	 * @return string|null
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectException
+	 * @throws \Bitrix\Main\ObjectNotFoundException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function checkNotSendEvents(): ?string
+	public static function checkNotSendEvents(int $lastHandledId = 0): ?string
 	{
+		return true;
+
 		if (!CCalendar::isGoogleApiEnabled())
 		{
 			return null;
 		}
 
-		$eventsDb = self::getEventsDb();
+		$eventsDb = self::getEventsDb($lastHandledId);
+
 		if ($eventsDb === false)
 		{
 			return "\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkNotSendEvents();";
 		}
 
+		$lastHandledId = 0;
 		while ($event = $eventsDb->Fetch())
 		{
+			$lastHandledId = $event['ID'];
+
 			if (GoogleApiPush::isAuthError($event['LAST_RESULT']))
 			{
 				continue;
@@ -69,11 +81,13 @@ class QueueManager
 			}
 		}
 
-		return "\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkNotSendEvents();";
+		return "\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkNotSendEvents(" . $lastHandledId . ");";
 	}
 
 	public static function checkIncompleteSync()
 	{
+		return true;
+
 		if (!CCalendar::isGoogleApiEnabled())
 		{
 			return null;
@@ -113,7 +127,8 @@ class QueueManager
 	 */
 	private static function createEvent(array $event): void
 	{
-		$fields = (new GoogleApiSync($event['OWNER_ID']))->saveEvent($event, $event['GAPI_CALENDAR_ID']);
+		$google = new GoogleApiSync($event['OWNER_ID']);
+		$fields = $google->saveEvent($event, $event['GAPI_CALENDAR_ID']);
 
 		if ($fields !== null)
 		{
@@ -132,8 +147,34 @@ class QueueManager
 	 */
 	private static function updateEvent(array $event): void
 	{
-		$fields = (new GoogleApiSync($event['OWNER_ID']))->saveEvent($event, $event['GAPI_CALENDAR_ID'], []);
-		if ($fields !== null)
+		$google = new GoogleApiSync($event['OWNER_ID']);
+		$fields = $google->saveEvent($event, $event['GAPI_CALENDAR_ID'], []);
+
+		if ($errors = $google->getTransportErrors())
+		{
+			$googleHelper = ServiceLocator::getInstance()->get('calendar.service.google.helper');
+			if (is_array($errors))
+			{
+				foreach ($errors as $error)
+				{
+					if (
+						$googleHelper->isDeletedResource($error['message'])
+						|| $googleHelper->isNotFoundError($error['message'])
+					)
+					{
+						\CCalendarEvent::updateEventFields($event, [
+							'G_EVENT_ID' => '',
+							'DAV_XML_ID' => '',
+							'CAL_DAV_LABEL' => '',
+							'SYNC_STATUS' => Dictionary::SYNC_STATUS['create'],
+						]);
+						self::createEvent($event);
+						return;
+					}
+				}
+			}
+		}
+		else if ($fields !== null)
 		{
 			\CCalendarEvent::updateEventFields($event, [
 				'CAL_DAV_LABEL' => $fields['CAL_DAV_LABEL'],
@@ -150,6 +191,7 @@ class QueueManager
 	{
 		$google = new GoogleApiSync($event['OWNER_ID']);
 		$google->deleteEvent($event['G_EVENT_ID'], $event['GAPI_CALENDAR_ID']);
+
 		if ($errors = $google->getTransportErrors())
 		{
 			$isUpdatedResult = false;
@@ -159,10 +201,14 @@ class QueueManager
 			{
 				foreach ($errors as $error)
 				{
-					if ($googleHelper->isDeletedResource($error))
+					if (
+						$googleHelper->isDeletedResource($error['message'])
+						|| $googleHelper->isNotFoundError($error['message'])
+					)
 					{
 						$isUpdatedResult = true;
 						\CCalendarEvent::updateSyncStatus((int)$event['ID'], Dictionary::SYNC_STATUS['success']);
+						break;
 					}
 				}
 			}
@@ -174,8 +220,7 @@ class QueueManager
 		}
 		else
 		{
-			\CCalendarEvent::updateSyncStatus((int)$event['ID'],
-				Dictionary::SYNC_STATUS['success']);
+			\CCalendarEvent::updateSyncStatus((int)$event['ID'], Dictionary::SYNC_STATUS['success']);
 		}
 	}
 
@@ -268,9 +313,10 @@ class QueueManager
 	}
 
 	/**
+	 * @param int $lastHandledId
 	 * @return \CDBResult|false|void
 	 */
-	private static function getEventsDb()
+	private static function getEventsDb(int $lastHandledId = 0)
 	{
 		global $DB;
 
@@ -285,7 +331,9 @@ class QueueManager
 			. " INNER JOIN b_calendar_section s ON e.SECTION_ID = s.ID"
 			. " INNER JOIN b_dav_connections c ON c.ID = s.CAL_DAV_CON"
 			. " WHERE e.SYNC_STATUS <> 'success'"
+				. " AND e.ID > ".$lastHandledId
 				. " AND s.EXTERNAL_TYPE IN ('local', 'google')"
+			. " ORDER BY e.ID ASC"
 			. " LIMIT 10"
 			. ";"
 		);
@@ -300,7 +348,10 @@ class QueueManager
 	 */
 	private static function detectEventType(array $event): void
 	{
-		if ($event['SYNC_STATUS'] === Dictionary::SYNC_STATUS['exdated'] || $event['SYNC_STATUS'] === Dictionary::SYNC_STATUS['deleted'])
+		if (
+			$event['SYNC_STATUS'] === Dictionary::SYNC_STATUS['exdated']
+			|| $event['SYNC_STATUS'] === Dictionary::SYNC_STATUS['deleted']
+		)
 		{
 			return;
 		}
@@ -311,7 +362,7 @@ class QueueManager
 			return;
 		}
 
-		if ($event['DELETED'] === 'N' && !empty($event['G_EVENT_ID']))
+		if ($event['DELETED'] === 'Y' && !empty($event['G_EVENT_ID']))
 		{
 			self::deleteEvent($event);
 		}
@@ -351,7 +402,9 @@ class QueueManager
 	}
 
 	/**
-	 * @param $agentInterval
+	 * @param int $agentInterval
+	 * @param int $delay
+	 *
 	 * @return void
 	 */
 	public static function setIntervalForAgent(int $agentInterval = self::REGULAR_CHECK_TIME, int $delay = self::REGULAR_CHECK_TIME): void

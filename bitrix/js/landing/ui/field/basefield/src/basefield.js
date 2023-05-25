@@ -1,3 +1,5 @@
+import 'ui.design-tokens';
+
 import {Type, Event, Tag, Text, Dom, Runtime, Cache} from 'main.core';
 import {EventEmitter} from 'main.core.events';
 import {fetchEventsFromOptions} from 'landing.ui.component.internal';
@@ -23,6 +25,15 @@ export class BaseField extends EventEmitter
 	{
 		return Tag.render`
 			<div class="landing-ui-field-description">
+				<span class="fa fa-info-circle"> </span> ${text}
+			</div>
+		`;
+	}
+
+	static createError(text: string): HTMLDivElement
+	{
+		return Tag.render`
+			<div class="landing-ui-field-description landing-ui-error">
 				<span class="fa fa-info-circle"> </span> ${text}
 			</div>
 		`;
@@ -67,7 +78,7 @@ export class BaseField extends EventEmitter
 		Dom.append(this.input, this.layout);
 
 		Dom.attr(this.layout, 'data-selector', this.selector);
-		Dom.attr(this.input, 'data-placeholder', this.placeholder);
+		this.input.setAttribute('data-placeholder', this.placeholder);
 
 		if (Type.isArrayLike(this.className))
 		{
@@ -81,7 +92,10 @@ export class BaseField extends EventEmitter
 			this.disable();
 		}
 
-		Event.bind(this.input, 'paste', this.onPaste);
+		if (options.skipPasteControl !== true)
+		{
+			Event.bind(this.input, 'paste', this.onPaste);
+		}
 
 		this.init();
 

@@ -9,6 +9,24 @@ use Bitrix\Main\Engine\JsonController;
 
 class SkuTree extends JsonController
 {
+	public function configureActions()
+	{
+		return [
+			'getSku' => [
+				'+prefilters' => [
+					new ActionFilter\CloseSession(),
+				],
+				'-prefilters' => [
+					ActionFilter\Authentication::class,
+				],
+			],
+			'getIblockProperties' => [
+				'-prefilters' => [
+					ActionFilter\Authentication::class,
+				],
+			],
+		];
+	}
 	protected function getDefaultPreFilters()
 	{
 		return array_merge(
@@ -100,6 +118,7 @@ class SkuTree extends JsonController
 			{
 				if ((int)$offer['ID'] === $skuId)
 				{
+					unset($offer['DISPLAY_PROPERTIES'], $offer['PROPERTIES']);
 					return $offer;
 				}
 			}

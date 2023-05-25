@@ -126,7 +126,15 @@ class BaseTrigger
 		if ($conditionRules)
 		{
 			$conditionGroup = new ConditionGroup($conditionRules);
-			return $conditionGroup->evaluate($this->getTarget());
+			$target = $this->getTarget();
+			$result = $conditionGroup->evaluate($target);
+
+			if ($result)
+			{
+				$target->setAppliedTriggerConditionResults($conditionGroup->getEvaluateResults());
+			}
+
+			return $result;
 		}
 
 		return true;
@@ -158,6 +166,35 @@ class BaseTrigger
 			'NAME' => static::getName(),
 			'CODE' => static::getCode(),
 			'RETURN' => static::getReturnProperties(),
+			'DESCRIPTION' => static::getDescription(),
+			'GROUP' => static::getGroup(),
+			'SETTINGS' => static::getSettings(),
 		];
+	}
+
+	public static function getDescription(): string
+	{
+		return '';
+	}
+
+	public static function getGroup(): array
+	{
+		return [];
+	}
+
+	protected static function getSettings(): ?array
+	{
+		$map = static::getPropertiesMap();
+		if ($map)
+		{
+			return ['Properties' => array_values($map)];
+		}
+
+		return null;
+	}
+
+	protected static function getPropertiesMap(): array
+	{
+		return [];
 	}
 }

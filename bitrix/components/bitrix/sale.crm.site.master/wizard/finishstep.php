@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Sale\CrmSiteMaster\Steps;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -84,9 +85,6 @@ class FinishStep extends \FinishStep
 
 			// enable composite
 			SitePatcher::enableComposite();
-
-			// enable crm shop
-			SitePatcher::crmShopEnable();
 		}
 
 		ob_start();

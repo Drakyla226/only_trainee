@@ -2,6 +2,7 @@
 $MESS["MAIL_CLIENT_CONFIG_ACCESS"] = "Mailbox access";
 $MESS["MAIL_CLIENT_CONFIG_ACCESS_ADD"] = "Add";
 $MESS["MAIL_CLIENT_CONFIG_ACCESS_HINT"] = "Give the employees access permission to this mailbox so they could receive and reply to email messages. It's a simple, effortless way to set up a collaboration environment for your sales department or helpdesk service.";
+$MESS["MAIL_CLIENT_CONFIG_ACCESS_HINT_MSGVER_1"] = "Give the employees access permission to this mailbox so they could receive and reply to email messages. It's a simple, effortless way to set up a collaboration environment for your sales department or helpdesk service.";
 $MESS["MAIL_CLIENT_CONFIG_ACCESS_MORE"] = "details";
 $MESS["MAIL_CLIENT_CONFIG_BTN_CANCEL"] = "Cancel";
 $MESS["MAIL_CLIENT_CONFIG_BTN_CONNECT"] = "Connect";
@@ -22,7 +23,7 @@ $MESS["MAIL_CLIENT_CONFIG_CRM_QUEUE"] = "Lead and contact distribution queue:";
 $MESS["MAIL_CLIENT_CONFIG_CRM_QUEUE_ADD"] = "Add";
 $MESS["MAIL_CLIENT_CONFIG_CRM_VCF"] = "Create contacts using attached vCard";
 $MESS["MAIL_CLIENT_CONFIG_EDIT_TITLE"] = "Manage Mailbox";
-$MESS["MAIL_CLIENT_CONFIG_EMAIL_BAD"] = "Invalid email address";
+$MESS["MAIL_CLIENT_CONFIG_EMAIL_BAD"] = "Enter a correct email address";
 $MESS["MAIL_CLIENT_CONFIG_EMAIL_EMPTY"] = "Enter email address";
 $MESS["MAIL_CLIENT_CONFIG_EMAIL_EXISTS"] = "This mailbox is already connected";
 $MESS["MAIL_CLIENT_CONFIG_EMAIL_OAUTH_FIELD_ERROR"] = "E-mail is incorrect. Please enter e-mail address that is associated with the selected account.";

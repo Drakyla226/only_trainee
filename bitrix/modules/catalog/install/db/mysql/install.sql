@@ -300,7 +300,9 @@ create table if not exists b_catalog_vat
 	ACTIVE char(1) NOT NULL default 'Y',
 	C_SORT int(18) NOT NULL default 100,
 	NAME varchar(50) NOT NULL default '',
-	RATE decimal(18,2) NOT NULL default '0.00',
+	RATE decimal(18,2) null default '0.00',
+	EXCLUDE_VAT char(1) not null default 'N',
+	XML_ID varchar(255) null,
 	primary key (ID),
 	index IX_CAT_VAT_ACTIVE (ACTIVE)
 );
@@ -432,8 +434,8 @@ create table if not exists b_catalog_store_docs
 	DATE_DOCUMENT DATETIME NULL,
 	STATUS_BY INT NULL,
 	TOTAL DOUBLE NULL,
-	COMMENTARY varchar(1000) NULL,
-	TITLE VARCHAR (255) DEFAULT NULL,
+	COMMENTARY VARCHAR(1000) NULL,
+	TITLE VARCHAR(255) NULL,
 	RESPONSIBLE_ID INT NULL,
 	ITEMS_ORDER_DATE DATETIME NULL,
 	ITEMS_RECEIVED_DATE DATETIME NULL,
@@ -470,10 +472,12 @@ create table if not exists b_catalog_docs_element
 create table if not exists b_catalog_docs_barcode
 (
 	ID INT NOT NULL AUTO_INCREMENT,
+	DOC_ID INT NOT NULL,
 	DOC_ELEMENT_ID INT NOT NULL,
 	BARCODE VARCHAR(100) NOT NULL,
 	PRIMARY KEY (ID),
-	INDEX IX_B_CATALOG_DOCS_BARCODE1 (DOC_ELEMENT_ID ASC)
+	INDEX IX_B_CATALOG_DOCS_BARCODE1 (DOC_ELEMENT_ID ASC),
+	index IX_B_CATALOG_DOCS_BARCODE_OWNER (DOC_ID)
 );
 
 create table if not exists b_catalog_measure
@@ -578,4 +582,62 @@ create table if not exists b_catalog_rounding
 	DATE_MODIFY datetime null,
 	primary key (ID),
 	index IX_CAT_RND_CATALOG_GROUP(CATALOG_GROUP_ID)
+);
+
+create table if not exists b_catalog_product_compilation
+(
+	ID int not null auto_increment,
+	DEAL_ID int not null,
+	PRODUCT_IDS text not null,
+	CREATION_DATE datetime not null,
+	CHAT_ID int null,
+	QUEUE_ID int null,
+	primary key (ID),
+	index IX_CAT_COMPILATION_DEAL_ID(DEAL_ID)
+);
+
+create table if not exists b_catalog_exported_product
+(
+	ID int not null auto_increment,
+	PRODUCT_ID int not null,
+	SERVICE_ID varchar(100) not null,
+	TIMESTAMP_X timestamp not null default NOW() on update NOW(),
+	ERROR text null,
+	primary key (ID),
+	index IX_CAT_PR_EXP_PRID_SVID(PRODUCT_ID, SERVICE_ID)
+);
+
+create table if not exists b_catalog_exported_product_queue
+(
+	QUEUE_ID int not null,
+	PRODUCT_IDS text not null,
+	primary key (QUEUE_ID)
+);
+
+CREATE TABLE IF NOT EXISTS b_catalog_role
+(
+	ID INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	NAME VARCHAR(250) NOT NULL,
+	PRIMARY KEY (ID)
+);
+
+CREATE TABLE IF NOT EXISTS b_catalog_role_relation
+(
+	ID INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	ROLE_ID INT(10) UNSIGNED NOT NULL,
+	RELATION VARCHAR(8) NOT NULL DEFAULT '',
+	PRIMARY KEY (ID),
+	INDEX ROLE_ID (ROLE_ID),
+	INDEX RELATION (RELATION)
+);
+
+CREATE TABLE IF NOT EXISTS b_catalog_permission
+(
+	ID INT UNSIGNED NOT NULL AUTO_INCREMENT,
+	ROLE_ID INT UNSIGNED NOT NULL,
+	PERMISSION_ID VARCHAR(32) NOT NULL DEFAULT '0',
+	VALUE INT NOT NULL DEFAULT '0',
+	PRIMARY KEY (ID),
+	INDEX ROLE_ID (ROLE_ID),
+	INDEX PERMISSION_ID (PERMISSION_ID)
 );

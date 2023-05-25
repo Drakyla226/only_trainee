@@ -1793,6 +1793,7 @@ class CIBlockDocument
 		CIBlockElement::WF_CleanUpHistoryCopies($documentId, 0);
 
 		$arFieldsPropertyValues = array();
+		$complexDocumentId = ['iblock', get_called_class(), $documentId];
 
 		$dbResult = CIBlockElement::GetList(
 			array(),
@@ -1819,22 +1820,7 @@ class CIBlockDocument
 
 			if ($arDocumentFields[$key]["Type"] == "user")
 			{
-				$ar = array();
-				foreach ($arFields[$key] as $v1)
-				{
-					if (mb_substr($v1, 0, mb_strlen("user_")) == "user_")
-					{
-						$ar[] = mb_substr($v1, mb_strlen("user_"));
-					}
-					else
-					{
-						$a1 = self::GetUsersFromUserGroup($v1, $documentId);
-						foreach ($a1 as $a11)
-							$ar[] = $a11;
-					}
-				}
-
-				$arFields[$key] = $ar;
+				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
 			elseif ($arDocumentFields[$key]["Type"] == "select")
 			{
@@ -1938,14 +1924,12 @@ class CIBlockDocument
 			}
 		}
 
-		if (count($arFieldsPropertyValues) > 0)
-			$arFields["PROPERTY_VALUES"] = $arFieldsPropertyValues;
-
 		$iblockElement = new CIBlockElement();
-		if (count($arFields["PROPERTY_VALUES"]) > 0)
-			$iblockElement->SetPropertyValuesEx($documentId, $arResult["IBLOCK_ID"], $arFields["PROPERTY_VALUES"]);
+		if (!empty($arFieldsPropertyValues))
+		{
+			$iblockElement->SetPropertyValuesEx($documentId, $arResult["IBLOCK_ID"], $arFieldsPropertyValues);
+		}
 
-		UnSet($arFields["PROPERTY_VALUES"]);
 		$res = $iblockElement->Update($documentId, $arFields, false, true, true);
 		if (!$res)
 			throw new Exception($iblockElement->LAST_ERROR);
@@ -2391,6 +2375,7 @@ class CIBlockDocument
 			throw new Exception("IBlock ID is not found");
 
 		$arFieldsPropertyValues = array();
+		$complexDocumentId = ['iblock', get_called_class(), $parentDocumentId];
 
 		$arDocumentFields = static::GetDocumentFields("iblock_".$arFields["IBLOCK_ID"]);
 
@@ -2406,23 +2391,7 @@ class CIBlockDocument
 
 			if ($arDocumentFields[$key]["Type"] == "user")
 			{
-				$ar = array();
-				$arFields[$key] = CBPHelper::MakeArrayFlat($arFields[$key]);
-				foreach ($arFields[$key] as $v1)
-				{
-					if (mb_substr($v1, 0, mb_strlen("user_")) == "user_")
-					{
-						$ar[] = mb_substr($v1, mb_strlen("user_"));
-					}
-					else
-					{
-						$a1 = self::GetUsersFromUserGroup($v1, $parentDocumentId);
-						foreach ($a1 as $a11)
-							$ar[] = $a11;
-					}
-				}
-
-				$arFields[$key] = $ar;
+				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
 			elseif ($arDocumentFields[$key]["Type"] == "select")
 			{

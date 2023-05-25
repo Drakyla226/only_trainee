@@ -55,6 +55,15 @@ foreach ($arResult['ROWS'] as $index => $data)
 	);
 	if ($arParams['CAN_EDIT'])
 	{
+
+		$actions[] = array(
+			'TITLE' => Loc::getMessage('SENDER_SEGMENT_LIST_BTN_COPY_TITLE'),
+			'TEXT' => Loc::getMessage('SENDER_SEGMENT_LIST_BTN_COPY'),
+			'ONCLICK' => "BX.Sender.SegmentList.copy({$data['ID']});"
+		);
+	}
+	if ($arParams['CAN_EDIT'])
+	{
 		$actions[] = array(
 			'TITLE' => Loc::getMessage('SENDER_SEGMENT_LIST_BTN_REMOVE_TITLE'),
 			'TEXT' => Loc::getMessage('SENDER_SEGMENT_LIST_BTN_REMOVE'),
@@ -84,7 +93,6 @@ $APPLICATION->IncludeComponent(
 $filterLayout = ob_get_clean();
 
 $APPLICATION->IncludeComponent("bitrix:sender.ui.panel.title", "", array('LIST' => array(
-	array('type' => 'filter', 'content' => $filterLayout),
 	array('type' => 'buttons', 'list' => [
 		$arParams['CAN_EDIT']
 			?
@@ -97,6 +105,7 @@ $APPLICATION->IncludeComponent("bitrix:sender.ui.panel.title", "", array('LIST' 
 			:
 			null
 	]),
+	array('type' => 'filter', 'content' => $filterLayout),
 )));
 
 $snippet = new \Bitrix\Main\Grid\Panel\Snippet();

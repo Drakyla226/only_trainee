@@ -72,7 +72,7 @@ class UserSettings
 		}
 	}
 
-	public static function get($userId = false)
+	public static function get($userId = null)
 	{
 		if (!$userId)
 		{
@@ -176,12 +176,16 @@ class UserSettings
 			{
 				foreach($ids as $id)
 				{
-					if (intval($id) > 0)
+					if ((int)$id > 0)
 					{
-						$res[] = intval($id);
+						$res[] = (int)$id;
 					}
 				}
 			}
+		}
+		if (is_array($res) && !in_array($userId, $res))
+		{
+			$res[] = $userId;
 		}
 
 		if (isset($params['userList']))
@@ -265,10 +269,14 @@ class UserSettings
 	public static function setTrackingGroups($userId = false, $value = [])
 	{
 		if (!$userId)
+		{
 			$userId = \CCalendar::getUserId();
+		}
 
 		if (!is_array($value))
+		{
 			$value = [];
+		}
 
 		\CUserOptions::setOption("calendar", "superpose_tracking_groups", serialize($value), false, $userId);
 	}
@@ -278,7 +286,7 @@ class UserSettings
 		$res = [];
 		if (class_exists('CUserOptions') && $userId > 0)
 		{
-			$optionName = $options['isPersonalCalendarContext'] ? 'hidden_sections' : 'hidden_sections_'.$options['type'];
+			$optionName = ($options['isPersonalCalendarContext'] ?? null) ? 'hidden_sections' : 'hidden_sections_'.$options['type'];
 			$res = \CUserOptions::getOption('calendar', $optionName, false, $userId);
 
 			if (is_array($res) && isset($res[$optionName]))
@@ -286,7 +294,7 @@ class UserSettings
 				$res = explode(',', $res[$optionName]);
 			}
 
-			if ($res === false && is_array($options['defaultHiddenSections']))
+			if ($res === false && isset($options['defaultHiddenSections']) && is_array($options['defaultHiddenSections']))
 			{
 				$res = $options['defaultHiddenSections'];
 			}

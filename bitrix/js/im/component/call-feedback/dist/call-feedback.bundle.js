@@ -1,5 +1,5 @@
 this.BX = this.BX || {};
-(function (exports,ui_vue,ui_forms,main_popup,im_lib_logger) {
+(function (exports,ui_designTokens,ui_fonts_opensans,ui_vue,ui_forms,main_popup,im_lib_logger) {
     'use strict';
 
     ui_vue.BitrixVue.component('bx-im-component-call-feedback', {
@@ -71,17 +71,14 @@ this.BX = this.BX || {};
         },
         getProblemCode: function getProblemCode() {
           var problem = '';
-
           for (var _i = 0, _Object$entries = Object.entries(this.problemsList); _i < _Object$entries.length; _i++) {
             var _Object$entries$_i = babelHelpers.slicedToArray(_Object$entries[_i], 2),
-                key = _Object$entries$_i[0],
-                value = _Object$entries$_i[1];
-
+              key = _Object$entries$_i[0],
+              value = _Object$entries$_i[1];
             if (this.selectedProblem === value) {
               problem = key;
             }
           }
-
           return problem;
         },
         sendFeedback: function sendFeedback() {
@@ -89,11 +86,9 @@ this.BX = this.BX || {};
           var feedback = this.prepareFeedback();
           im_lib_logger.Logger.warn('Call feedback', feedback);
           this.$emit('feedbackSent');
-
           if (this.selectedRating === 0 && this.selectedProblem === this.problemsList.noProblem) {
             return;
           }
-
           BX.Call.Util.sendTelemetryEvent(feedback);
         },
         getRatingStarClasses: function getRatingStarClasses(index) {
@@ -115,11 +110,9 @@ this.BX = this.BX || {};
         },
         createProblemSelectPopup: function createProblemSelectPopup() {
           var _this = this;
-
           var problemSelect = this.$refs['problemSelect'];
           var className = 'bx-im-call-feedback-problem-select' + (this.darkMode ? ' bx-im-call-feedback-problem-select-dark' : '');
           var items = [];
-
           for (var _i2 = 0, _Object$values = Object.values(this.problemsList); _i2 < _Object$values.length; _i2++) {
             var problem = _Object$values[_i2];
             items.push({
@@ -130,7 +123,6 @@ this.BX = this.BX || {};
               className: 'bx-im-call-feedback-problem-option'
             });
           }
-
           this.problemSelectPopup = new main_popup.Menu({
             bindElement: problemSelect,
             items: items,
@@ -142,7 +134,6 @@ this.BX = this.BX || {};
           if (!this.problemSelectPopup) {
             this.createProblemSelectPopup();
           }
-
           this.problemSelectPopup.toggle();
         },
         onProblemClick: function onProblemClick(problem) {
@@ -154,5 +145,5 @@ this.BX = this.BX || {};
       template: "\n\t\t<div :class=\"wrapClasses\">\n\t\t\t<div class=\"bx-im-call-feedback-header\">\n\t\t  \t\t<div class=\"bx-im-call-feedback-header-icon\"></div>\n\t\t\t\t<div class=\"bx-im-call-feedback-header-title\">{{ $Bitrix.Loc.getMessage('BX_IM_COMPONENT_CALL_FEEDBACK_VIDEOCALL_FINISHED') }}</div>\n\t\t\t</div>\n\t\t\t<div class=\"bx-im-call-feedback-content\">\n\t\t\t  \t<template v-if=\"!isFilled\">\n\t\t\t\t\t<div class=\"bx-im-call-feedback-content-title\">{{ $Bitrix.Loc.getMessage('BX_IM_COMPONENT_CALL_FEEDBACK_RATE_QUALITY') }}</div>\n\t\t\t\t\t<div class=\"bx-im-call-feedback-rating-wrap\">\n\t\t\t\t\t  \t<template v-for=\"i in 5\">\n\t\t\t\t\t\t\t<div\n\t\t\t\t\t\t  \t\t@click=\"onRatingClick(i)\"\n\t\t\t\t\t\t\t\t@mouseover=\"onRatingMouseover(i)\"\n\t\t\t\t\t\t\t\t@mouseout=\"onRatingMouseOut(i)\"\n\t\t\t\t\t\t\t  \t:class=\"getRatingStarClasses(i)\"\n\t\t\t\t\t\t\t></div>\n\t\t\t\t\t\t</template>\n\t\t\t\t\t</div>\n\t\t\t\t\t<div class=\"bx-im-call-feedback-problem\">\n\t\t\t\t\t\t<div @click=\"toggleProblemSelectPopup\" class=\"bx-im-call-feedback-problem-selected ui-ctl ui-ctl-after-icon ui-ctl-dropdown\" ref=\"problemSelect\">\n\t\t\t\t\t\t\t<div class=\"ui-ctl-after ui-ctl-icon-angle\"></div>\n\t\t\t\t\t\t\t<div class=\"ui-ctl-element\">{{ selectedProblem }}</div>\n\t\t\t\t\t\t</div>\n\t\t\t\t\t</div>\n\t\t\t\t  \t<template v-if=\"showTextarea\">\n\t\t\t\t  \t\t<textarea\n\t\t\t\t\t\t  class=\"bx-im-call-feedback-problem-description\"\n\t\t\t\t\t\t  v-model=\"problemDescription\"\n\t\t\t\t\t\t  :placeholder=\"$Bitrix.Loc.getMessage('BX_IM_COMPONENT_CALL_FEEDBACK_ISSUE_DESCRIPTION')\"\n\t\t\t\t\t\t></textarea>\n\t\t\t\t\t</template>\n\t\t\t\t  \t<div class=\"bx-im-call-feedback-submit-wrap\">\n\t\t\t\t\t\t<button @click=\"sendFeedback\" class=\"ui-btn ui-btn-lg ui-btn-primary bx-im-call-feedback-submit\">\n\t\t\t\t\t\t\t{{ $Bitrix.Loc.getMessage('BX_IM_COMPONENT_CALL_FEEDBACK_SEND') }}\n\t\t\t\t\t\t</button>\n\t\t\t\t\t</div>\n\t\t\t\t</template>\n\t\t\t  \t<template v-else>\n\t\t\t\t  \t<div class=\"bx-im-call-feedback-filled-wrap\">\n\t\t\t\t\t\t<div class=\"bx-im-call-feedback-filled-icon\"></div>\n\t\t\t\t\t\t<div class=\"bx-im-call-feedback-filled-text\">{{ $Bitrix.Loc.getMessage('BX_IM_COMPONENT_CALL_FEEDBACK_FILLED') }}</div>\n\t\t\t\t\t</div>\n\t\t\t\t</template>\n\t\t\t</div>\n\t\t</div>\n\t"
     });
 
-}((this.BX.Messenger = this.BX.Messenger || {}),BX,BX,BX.Main,BX.Messenger.Lib));
+}((this.BX.Messenger = this.BX.Messenger || {}),BX,BX,BX,BX,BX.Main,BX.Messenger.Lib));
 //# sourceMappingURL=call-feedback.bundle.js.map

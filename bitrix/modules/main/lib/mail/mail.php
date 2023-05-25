@@ -482,7 +482,7 @@ class Mail
 						'This is not the original file. The size of the original file `%name%` exceeded the limit of %limit% MB.'
 					);
 				}
-				
+
 				if(isset($attachment['METHOD']))
 				{
 					$name = $this->encodeSubject($attachment["NAME"], $attachment['CHARSET']);
@@ -613,17 +613,21 @@ class Mail
 
 		$this->filterHeaderEmails($headers);
 
-		if($headers["Reply-To"] == '' && $headers["From"] <> '')
+		if(
+			(!isset($headers["Reply-To"]) || $headers["Reply-To"] == '')
+			&& isset($headers["From"])
+			&& $headers["From"] <> ''
+		)
 		{
 			$headers["Reply-To"] = preg_replace("/(.*)\\<(.*)\\>/i", '$2', $headers["From"]);
 		}
 
-		if($headers["X-Priority"] == '')
+		if (!isset($headers["X-Priority"]) || $headers["X-Priority"] == '')
 		{
 			$headers["X-Priority"] = '3 (Normal)';
 		}
 
-		if($headers["Date"] == '')
+		if(!isset($headers["Date"]) || $headers["Date"] == '')
 		{
 			$headers["Date"] = date("r");
 		}
@@ -650,17 +654,17 @@ class Mail
 
 		if($this->settingServerMsSmtp)
 		{
-			if($headers["From"] != '')
+			if(isset($headers["From"]) && $headers["From"] != '')
 			{
 				$headers["From"] = preg_replace("/(.*)\\<(.*)\\>/i", '$2', $headers["From"]);
 			}
 
-			if($headers["To"] != '')
+			if(isset($headers["To"]) && $headers["To"] != '')
 			{
 				$headers["To"] = preg_replace("/(.*)\\<(.*)\\>/i", '$2', $headers["To"]);
 			}
 
-			if($headers["Reply-To"] != '')
+			if(isset($headers["Reply-To"]) && $headers["Reply-To"] != '')
 			{
 				$headers["Reply-To"] = preg_replace("/(.*)\\<(.*)\\>/i", '$2', $headers["Reply-To"]);
 			}
@@ -859,7 +863,11 @@ class Mail
 			return $eol;
 		}
 
-		if(strtoupper(substr(PHP_OS, 0, 3)) == 'WIN')
+		if ((int)(explode('.', phpversion())[0]) >= 8)
+		{
+			$eol = "\r\n";
+		}
+		elseif(strtoupper(substr(PHP_OS, 0, 3)) == 'WIN')
 		{
 			$eol = "\r\n";
 		}
@@ -1026,7 +1034,7 @@ class Mail
 		if($textReplaced !== null) $text = $textReplaced;
 
 		$textReplaced = preg_replace_callback(
-			"/(background|background-image\\s*:\\s*url\\s*\\()([\"']?)(.*?)(\\2)(\\s*\\)(.*?);)/is",
+			"/(background\\s*:\\s*url\\s*\\(|background-image\\s*:\\s*url\\s*\\()([\"']?)(.*?)(\\2)(\\s*\\)(.*?);)/is",
 			array($this, $replaceImageFunction),
 			$text
 		);

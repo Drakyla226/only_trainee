@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Catalog;
 
+use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Main\ORM\Data\DataManager;
@@ -12,6 +13,7 @@ use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\UserTable;
 
 /**
@@ -44,6 +46,19 @@ use Bitrix\Main\UserTable;
  * </ul>
  *
  * @package Bitrix\Catalog
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_StoreDocument_Query query()
+ * @method static EO_StoreDocument_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_StoreDocument_Result getById($id)
+ * @method static EO_StoreDocument_Result getList(array $parameters = [])
+ * @method static EO_StoreDocument_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_StoreDocument createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_StoreDocument_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_StoreDocument wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_StoreDocument_Collection wakeUpCollection($rows)
  */
 
 class StoreDocumentTable extends DataManager
@@ -54,7 +69,12 @@ class StoreDocumentTable extends DataManager
 	public const TYPE_RETURN = 'R';
 	public const TYPE_DEDUCT = 'D';
 	public const TYPE_UNDO_RESERVE = 'U';
+	public const TYPE_SALES_ORDERS = 'W';
 	//public const TYPE_INVENTORY = 'I';
+
+	public const STATUS_CONDUCTED = 'Y';
+	public const STATUS_DRAFT = 'N';
+	public const STATUS_CANCELLED = 'C';
 
 	/**
 	 * Returns DB table name for entity.
@@ -343,5 +363,193 @@ class StoreDocumentTable extends DataManager
 				self::TYPE_UNDO_RESERVE,
 			];
 		}
+	}
+
+	public static function getStatusList(): array
+	{
+		return [
+			self::STATUS_CONDUCTED => Loc::getMessage('INVENTORY_DOCUMENT_STATUS_CONDUCTED'),
+			self::STATUS_DRAFT => Loc::getMessage('INVENTORY_DOCUMENT_STATUS_DRAFT'),
+			self::STATUS_CANCELLED => Loc::getMessage('INVENTORY_DOCUMENT_STATUS_CANCELLED'),
+		];
+	}
+
+	public static function getStatusName(string $status): ?string
+	{
+		$statusList = static::getStatusList();
+
+		return $statusList[$status] ?? null;
+	}
+
+	public static function getOrmFilterByStatus(string $status): ?array
+	{
+		switch ($status)
+		{
+			case self::STATUS_CONDUCTED:
+				$result = [
+					'=STATUS' => 'Y',
+				];
+				break;
+			case self::STATUS_DRAFT:
+				$result = [
+					'=STATUS' => 'N',
+					'=WAS_CANCELLED' => 'N',
+				];
+				break;
+			case self::STATUS_CANCELLED:
+				$result = [
+					'=STATUS' => 'N',
+					'=WAS_CANCELLED' => 'Y',
+				];
+				break;
+			default:
+				$result = null;
+				break;
+		}
+
+		return $result;
+	}
+
+	/*
+	 * The following methods are used to select the documents that include a particular product/set of products.
+	 * They are to be used with the \Bitrix\Main\ORM\Query\Query object (i.e. not with getList).
+	 *
+	 * Example:
+	 * $docs = Catalog\StoreDocumentTable::query()->setSelect(['ID'])->withProduct($productId)->fetchAll();
+	 */
+
+	public static function withProduct(Main\ORM\Query\Query $query, $productId)
+	{
+		$productId = (int)$productId;
+		if ($productId <= 0)
+		{
+			return;
+		}
+
+		$tableName = StoreDocumentElementTable::getTableName();
+		$query->whereExpr("
+			(
+				CASE WHEN EXISTS (
+					SELECT ID
+					FROM {$tableName}
+					WHERE DOC_ID = %s
+					AND ELEMENT_ID = {$productId}
+				)
+				THEN 1
+				ELSE 0
+				END
+			) = 1
+		", ['ID']);
+	}
+
+	public static function withProductList(Main\ORM\Query\Query $query, array $productIds)
+	{
+		Main\Type\Collection::normalizeArrayValuesByInt($productIds);
+		if (empty($productIds))
+		{
+			return;
+		}
+
+		$tableName = StoreDocumentElementTable::getTableName();
+		$whereExpression = '(ELEMENT_ID IN (' . implode(',', $productIds) . '))';
+		$query->whereExpr("
+			(
+				CASE WHEN EXISTS (
+					SELECT ID
+					FROM {$tableName}
+					WHERE DOC_ID = %s
+					AND {$whereExpression}
+				)
+				THEN 1
+				ELSE 0
+				END
+			) = 1
+		", ['ID']);
+	}
+
+	public static function withStore(Main\ORM\Query\Query $query, $storeId)
+	{
+		$storeId = (int)$storeId;
+		if ($storeId <= 0)
+		{
+			return;
+		}
+
+		$tableName = StoreDocumentElementTable::getTableName();
+		$query->whereExpr("
+			(
+				CASE WHEN EXISTS (
+					SELECT ID
+					FROM {$tableName}
+					WHERE DOC_ID = %s
+					AND (
+						STORE_FROM = {$storeId}
+						OR STORE_TO = {$storeId}
+					)
+				)
+				THEN 1
+				ELSE 0
+				END
+			) = 1
+		", ['ID']);
+	}
+
+	public static function withStoreList(Main\ORM\Query\Query $query, array $storeIds)
+	{
+		Main\Type\Collection::normalizeArrayValuesByInt($storeIds);
+		if (empty($storeIds))
+		{
+			return;
+		}
+
+		$storeIdsForQuery = implode(',', $storeIds);
+		$whereExpression = "(STORE_FROM IN ({$storeIdsForQuery}) OR STORE_TO IN ({$storeIdsForQuery}))";
+		$tableName = StoreDocumentElementTable::getTableName();
+
+		$query->whereExpr("
+			(
+				CASE WHEN EXISTS (
+					SELECT ID
+					FROM {$tableName}
+					WHERE DOC_ID = %s
+					AND {$whereExpression}
+				)
+				THEN 1
+				ELSE 0
+				END
+			) = 1
+		", ['ID']);
+	}
+
+	public static function withStoreFromList(Main\ORM\Query\Query $query, array $storeIds)
+	{
+		static::addSingleStoreFilterToQuery($query, 'STORE_FROM', $storeIds);
+	}
+
+	public static function withStoreToList(Main\ORM\Query\Query $query, array $storeIds)
+	{
+		static::addSingleStoreFilterToQuery($query, 'STORE_TO', $storeIds);
+	}
+
+	protected static function addSingleStoreFilterToQuery(Main\ORM\Query\Query $query, string $fieldName, array $storeIds): void
+	{
+		Main\Type\Collection::normalizeArrayValuesByInt($storeIds);
+		if (empty($storeIds))
+		{
+			return;
+		}
+
+		$filter = new Main\ORM\Query\Filter\ConditionTree();
+		$filter
+			->whereIn('ref.' . $fieldName, $storeIds)
+		;
+		$query->registerRuntimeField(
+			new ReferenceField(
+				'FILTER_' . $fieldName . '_DOC_ID',
+				StoreDocumentElementTable::getEntity(),
+				Join::on('ref.DOC_ID', 'this.ID')->where($filter),
+				['join_type' => 'INNER']
+			)
+		);
 	}
 }

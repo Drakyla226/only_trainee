@@ -15,6 +15,7 @@
 
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Authentication\Policy;
+use Bitrix\Main\Authentication\Device;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -36,7 +37,7 @@ while($zr = $z->Fetch())
 	$groups[$zr["ID"]] = $zr["NAME"]." [".$zr["ID"]."]";
 }
 
-if($_SERVER["REQUEST_METHOD"] == "GET" && $USER->IsAdmin() && $_REQUEST["RestoreDefaults"] <> '' && check_bitrix_sessid())
+if($_SERVER["REQUEST_METHOD"] == "GET" && $USER->IsAdmin() && isset($_REQUEST["RestoreDefaults"]) && $_REQUEST["RestoreDefaults"] <> '' && check_bitrix_sessid())
 {
 	$aSaveVal = array(
 		array("NAME"=>"admin_passwordh", "DEF"=>""),
@@ -57,7 +58,7 @@ if($_SERVER["REQUEST_METHOD"] == "GET" && $USER->IsAdmin() && $_REQUEST["Restore
 		$APPLICATION->DelGroupRight("main", array($value["ID"]));
 }
 
-if($_SERVER["REQUEST_METHOD"] == "GET" && $USER->CanDoOperation('edit_other_settings') && $_REQUEST["GenKey"] <> '' && check_bitrix_sessid())
+if($_SERVER["REQUEST_METHOD"] == "GET" && $USER->CanDoOperation('edit_other_settings') && isset($_REQUEST["GenKey"]) && $_REQUEST["GenKey"] <> '' && check_bitrix_sessid())
 {
 	$sec = new CRsaSecurity();
 	$arKeys = $sec->Keygen();
@@ -193,6 +194,9 @@ $arAllOptions = array(
 		array("use_time_zones", GetMessage("MAIN_OPT_USE_TIMEZONES"), "N", array("checkbox", "Y", 'onclick="this.form.default_time_zone.disabled = this.form.auto_time_zone.disabled = !this.checked;"')),
 		array("default_time_zone", GetMessage("MAIN_OPT_TIME_ZONE_DEF"), "", array("selectbox", $aZones)),
 		array("auto_time_zone", GetMessage("MAIN_OPT_TIME_ZONE_AUTO"), "N", array("checkbox", "Y")),
+
+		GetMessage('main_options_geo'),
+		array("collect_geonames", GetMessage('main_options_geo_collect_names'), "N", array("checkbox", "Y")),
 	),
 	"mail" => array(
 		GetMessage("main_options_mail"),
@@ -259,6 +263,13 @@ $arAllOptions = array(
 		GetMessage("MAIN_OPT_PROFILE"),
 		Array("user_profile_history", GetMessage("MAIN_OPT_PROFILE_HYSTORY"), "N", Array("checkbox", "Y")),
 		Array("profile_history_cleanup_days", GetMessage("MAIN_OPT_HISTORY_DAYS"), "0", Array("text", 5)),
+
+		GetMessage('main_options_device_history_title'),
+		Array('user_device_history', GetMessage('main_options_device_history'), 'N', ['checkbox', 'Y']),
+		Array('device_history_cleanup_days', GetMessage('main_options_device_history_days'), '180', ['text', 5]),
+		Array('user_device_geodata', GetMessage('main_options_device_geoip'), 'N', ['checkbox', 'Y']),
+		Array('user_device_notify', GetMessage('main_options_device_history_notify', ['#EMAIL_TEMPLATES_URL#' => '/bitrix/admin/message_admin.php?lang=' . LANGUAGE_ID . '&amp;set_filter=Y&amp;find_type_id=' . Device::EMAIL_EVENT]), 'N', ['checkbox', 'Y']),
+		Array('note' => GetMessage('main_options_device_history_note')),
 	),
 	"update" => Array(
 		Array("update_devsrv", GetMessage("MAIN_OPTIONS_UPDATE_DEVSRV"), "N", Array("checkbox", "Y")),
@@ -551,7 +562,7 @@ $arAllOptions["auth"][] = Array("new_user_registration_email_confirmation", GetM
 $arAllOptions["auth"][] = Array("new_user_email_uniq_check", GetMessage("MAIN_REGISTER_EMAIL_UNIQ_CHECK"), "N", Array("checkbox", "Y"));
 $arAllOptions["auth"][] = Array("new_user_registration_cleanup_days", GetMessage("MAIN_REGISTER_CLEANUP_DAYS"), "7", Array("text", 5));
 $arAllOptions["auth"][] = array("note" => $intl->getDataValue('DESCRIPTION'));
-$arAllOptions["auth"][] = array("new_user_agreement", GetMessage("MAIN_REGISTER_AGREEMENT_TITLE", array("#AGGREMENT_CREATE_URL#" => BX_ROOT.'/admin/agreement_edit.php?ID=0&lang='.LANGUAGE_ID)), "", array("selectbox", $listAgreement), "", "", "Y");
+$arAllOptions["auth"][] = array("new_user_agreement", GetMessage("MAIN_REGISTER_AGREEMENT_TITLE_1", array("#AGGREMENT_CREATE_URL#" => BX_ROOT.'/admin/agreement_edit.php?ID=0&lang='.LANGUAGE_ID)), "", array("selectbox", $listAgreement), "", "", "Y");
 
 $arAllOptions["auth"][] = GetMessage("main_options_restrictions");
 $arAllOptions["auth"][] = Array("inactive_users_block_days", GetMessage("main_options_block_inactive"), "0", Array("text", 5));
@@ -808,7 +819,7 @@ if(count($arGROUPS) > count($arUsedGroups)):
 		<option value=""><?echo GetMessage("group_rights_select")?></option>
 <?
 foreach($arGROUPS as $group):
-	if($arUsedGroups[$group["ID"]] == true)
+	if(isset($arUsedGroups[$group["ID"]]) && $arUsedGroups[$group["ID"]])
 		continue;
 ?>
 		<option value="<?=$group["ID"]?>"><?=$group["NAME"]." [".$group["ID"]."]"?></option>

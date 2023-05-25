@@ -1,25 +1,33 @@
-<?
+<?php
 /** @global CUser $USER */
 /** @global CMain $APPLICATION */
+
 use Bitrix\Main,
 	Bitrix\Main\Loader,
+	Bitrix\Catalog\Access\AccessController,
+	Bitrix\Catalog\Access\ActionDictionary,
 	Bitrix\Main\Localization\Loc;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die();
 
 $module_id = "catalog";
 
-if ($USER->CanDoOperation('catalog_read')) :
+Loc::loadMessages(__FILE__);
+if (!Loader::includeModule('catalog'))
+{
+	CAdminMessage::ShowMessage(GetMessage("CAT_1C_CATALOG_MODULE_IS_EMPTY"));
+	\Bitrix\Main\Application::getInstance()->end();
+}
+
+if (AccessController::getCurrent()->check(ActionDictionary::ACTION_CATALOG_READ)) :
 
 	if ($ex = $APPLICATION->GetException())
 	{
 		require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
 		ShowError($ex->GetString());
 		require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_admin.php");
-		die();
+		\Bitrix\Main\Application::getInstance()->end();
 	}
-
-	Loc::loadMessages(__FILE__);
 
 	if (Loader::includeModule('iblock')):
 
@@ -103,6 +111,11 @@ if ($USER->CanDoOperation('catalog_read')) :
 			),
 		);
 
+		$optionHints = [
+			'1C_ELEMENT_ACTION' => Loc::getMessage('CAT_1C_MESS_ONLY_BASE_1C_MODULE'),
+			'1C_SECTION_ACTION' => Loc::getMessage('CAT_1C_MESS_ONLY_BASE_1C_MODULE'),
+		];
+
 		if ($_SERVER['REQUEST_METHOD'] == "POST" && $Update <> '' && $USER->CanDoOperation('edit_php') && check_bitrix_sessid())
 		{
 			$arDisableOptions = array();
@@ -166,7 +179,16 @@ if ($USER->CanDoOperation('catalog_read')) :
 			$strOptionName = htmlspecialcharsbx("catalog_".$Option[0]);
 			?>
 		<tr>
-			<td <? echo ('textarea' == $type[0] || 'mlist' == $type[0] ? 'valign="top"' : ''); ?> width="40%"><?	if($type[0]=="checkbox")
+			<td <? echo ('textarea' == $type[0] || 'mlist' == $type[0] ? 'valign="top"' : ''); ?> width="40%">
+				<?php
+				$id = $Option[0];
+				if (isset($optionHints[$id]))
+				{
+					?><span id="hint_<?= $strOptionName; ?>"></span>
+					<script type="text/javascript">BX.hint_replace(BX('hint_<?=$strOptionName;?>'), '<?=\CUtil::JSEscape($optionHints[$id]); ?>');</script>&nbsp;<?
+				}
+				?>
+				<?	if($type[0]=="checkbox")
 							echo '<label for="'.$strOptionName.'">'.$Option[1].'</label>';
 						else
 							echo $Option[1];?>:</td>
@@ -214,7 +236,15 @@ if ($USER->CanDoOperation('catalog_read')) :
 			$strOptionName = htmlspecialcharsbx("catalog_".$Option[0]);
 			?>
 		<tr id="tr_<?echo htmlspecialcharsbx($Option[0])?>" <?if (!$showExtOptions) echo 'style="display:none"'?>>
-			<td <? echo ('textarea' == $type[0] || 'mlist' == $type[0] ? 'valign="top"' : ''); ?> width="40%"><?	if($type[0]=="checkbox")
+			<td <? echo ('textarea' == $type[0] || 'mlist' == $type[0] ? 'valign="top"' : ''); ?> width="40%">
+				<?php
+				$id = $Option[0];
+				if (isset($optionHints[$id]))
+				{
+				?><span id="hint_<?= $strOptionName; ?>"></span>
+				<script type="text/javascript">BX.hint_replace(BX('hint_<?=$strOptionName;?>'), '<?=\CUtil::JSEscape($optionHints[$id]); ?>');</script>&nbsp;<?
+				}?>
+				<?	if($type[0]=="checkbox")
 							echo '<label for="'.$strOptionName.'">'.$Option[1].'</label>';
 						else
 							echo $Option[1];?>:</td>

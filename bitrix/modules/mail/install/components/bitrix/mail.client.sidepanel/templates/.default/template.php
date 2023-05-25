@@ -6,7 +6,7 @@ global $APPLICATION;
 
 $APPLICATION->restartBuffer();
 
-\CJSCore::init('sidepanel');
+\Bitrix\Main\UI\Extension::load(['sidepanel', 'ui.fonts.opensans']);
 
 ?><!DOCTYPE html>
 <html>
@@ -31,7 +31,6 @@ $APPLICATION->restartBuffer();
 				</div>
 				<div class="mail-msg-sidepanel-title-below">
 					<? $APPLICATION->showViewContent('below_pagetitle'); ?>
-					<div class="mail-msg-sidepanel-title-below-border"></div>
 				</div>
 			</div>
 

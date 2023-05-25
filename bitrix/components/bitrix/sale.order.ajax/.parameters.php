@@ -1,5 +1,11 @@
-<?
-if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
+<?php
+
+if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
+{
+	die();
+}
+
+/** @var array $arCurrentValues */
 
 use Bitrix\Main\Loader;
 use Bitrix\Catalog;
@@ -23,9 +29,9 @@ $arColumns = array(
 );
 
 $arIblockIDs = array();
+$arIblockNames = array();
 if (Loader::includeModule('catalog'))
 {
-	$arIblockNames = array();
 	$parameters = array(
 		'select' => array('IBLOCK_ID', 'NAME' => 'IBLOCK.NAME', 'SITE_ID' => 'IBLOCK_SITE.SITE_ID'),
 		'order' => array('IBLOCK_ID' => 'ASC'),
@@ -259,9 +265,7 @@ $arComponentParameters = array(
 		"SPOT_LOCATION_BY_GEOIP" => array(
 			"NAME" => GetMessage("SBB_SPOT_LOCATION_BY_GEOIP"),
 			"TYPE" => "CHECKBOX",
-			"MULTIPLE" => "N",
 			"DEFAULT" => "Y",
-			"ADDITIONAL_VALUES" => "N",
 			"PARENT" => "BASE",
 		),
 		"DELIVERY_TO_PAYSYSTEM" => array(
@@ -277,18 +281,14 @@ $arComponentParameters = array(
 		"SHOW_VAT_PRICE" => array(
 			"NAME" => GetMessage('SOA_SHOW_VAT_PRICE'),
 			"TYPE" => "CHECKBOX",
-			"MULTIPLE" => "N",
 			"DEFAULT" => "Y",
-			"ADDITIONAL_VALUES" => "N",
 			"PARENT" => "BASE",
 		),
 		"SET_TITLE" => array(),
 		"USE_PREPAYMENT" => array(
 			"NAME" => GetMessage('SBB_USE_PREPAYMENT'),
 			"TYPE" => "CHECKBOX",
-			"MULTIPLE" => "N",
 			"DEFAULT" => "N",
-			"ADDITIONAL_VALUES" => "N",
 			"PARENT" => "BASE",
 		),
 		"DISABLE_BASKET_REDIRECT" => array(
@@ -334,12 +334,16 @@ $arComponentParameters["PARAMETERS"]["PRODUCT_COLUMNS_VISIBLE"] = array(
 	"PARENT" => "ADDITIONAL_SETTINGS",
 );
 
-if (is_array($templateProperties['PRODUCT_COLUMNS_HIDDEN']) && !empty($templateProperties['PRODUCT_COLUMNS_HIDDEN']))
+if (
+	!empty($templateProperties['PRODUCT_COLUMNS_HIDDEN'])
+	&& is_array($templateProperties['PRODUCT_COLUMNS_HIDDEN'])
+)
 {
 	$templateProperties['PRODUCT_COLUMNS_HIDDEN']['VALUES'] = $arColumns;
 }
 
-if ($arCurrentValues['COUNT_DELIVERY_TAX'] == 'Y')
+// deprecated parameter
+if (($arCurrentValues['COUNT_DELIVERY_TAX'] ?? 'N') === 'Y')
 {
 	$arComponentParameters["PARAMETERS"]["COUNT_DELIVERY_TAX"] = array(
 		"NAME" => GetMessage("SOA_COUNT_DELIVERY_TAX"),

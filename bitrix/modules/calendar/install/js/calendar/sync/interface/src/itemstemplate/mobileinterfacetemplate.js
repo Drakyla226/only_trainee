@@ -1,7 +1,7 @@
 // @flow
 'use strict';
 
-import {Loc, Tag, Type} from "main.core";
+import {Loc, Tag, Type, Event, Dom} from "main.core";
 import {InterfaceTemplate} from "./interfacetemplate";
 import MobileSyncBanner from "../controls/mobilesyncbanner";
 import {Util} from "calendar.util";
@@ -27,10 +27,34 @@ export default class MobileInterfaceTemplate extends InterfaceTemplate
 	{
 		return Tag.render `
 			${this.getContentInfoBodyHeader()}
-			<div class="calendar-sync-slider-section calendar-sync-slider-section-banner">
-				${this.getContentBodyConnect()}
-			</div>
+			${this.getContentInfoWarning()}
 		`;
+	}
+
+	getContentInfoBodyHeaderHelper()
+	{
+		if (!this.headerHelper)
+		{
+			this.headerHelper = Tag.render`
+				<div class="calendar-sync-slider-info">
+					<span class="calendar-sync-slider-info-text">
+						<a class="calendar-sync-slider-info-link">
+							${Loc.getMessage('CAL_CONNECT_PHONE')}
+						</a>
+					</span>
+				</div>
+			`;
+
+			Event.bind(this.headerHelper, 'click', this.showMobileSyncBanner.bind(this));
+		}
+
+		return this.headerHelper;
+	}
+
+	showMobileSyncBanner()
+	{
+		this.headerHelper.style.display = 'none';
+		Dom.append(this.getContentBodyConnect(), this.infoBodyHeader);
 	}
 
 	getContentActiveBody()
@@ -45,6 +69,11 @@ export default class MobileInterfaceTemplate extends InterfaceTemplate
 
 	getContentActiveBodyHeader()
 	{
+		const timestamp = this.connection.getSyncDate().getTime() / 1000;
+		const syncTime = timestamp
+			? Util.formatDateUsable(timestamp) + ' ' + BX.date.format(Util.getTimeFormatShort(), timestamp)
+			: '';
+
 		return Tag.render `
 			<div class="calendar-sync-slider-section">
 				<div class="calendar-sync-slider-header-icon ${this.sliderIconClass}"></div>
@@ -52,7 +81,7 @@ export default class MobileInterfaceTemplate extends InterfaceTemplate
 				<div class="calendar-sync-slider-title">${this.titleActiveHeader}</div>
 				<div class="calendar-sync-slider-info">
 					<span class="calendar-sync-slider-info-text">${Loc.getMessage('CAL_SYNC_LAST_SYNC_DATE')}</span>
-					<span class="calendar-sync-slider-info-time">${Util.formatDateUsable(this.connection.getSyncTimestamp()) + ' ' + BX.date.format(Util.getTimeFormatShort(), this.connection.getSyncTimestamp())}</span>
+					<span class="calendar-sync-slider-info-time">${syncTime}</span>
 				</div>
 				<div class="calendar-sync-slider-desc">${Loc.getMessage('CAL_SYNC_DISABLE')}</div>
 					<a class="calendar-sync-slider-link" href="javascript:void(0);" onclick="${this.showHelp.bind(this)}">${Loc.getMessage('CAL_TEXT_ABOUT_WORK_SYNC')}</a>
@@ -64,5 +93,17 @@ export default class MobileInterfaceTemplate extends InterfaceTemplate
 	{
 		this.banner.initQrCode().then(this.banner.drawQRCode.bind(this.banner));
 		return this.banner.getContainer();
+	}
+	
+	getActiveConnectionContent()
+	{
+		return Tag.render`
+			<div class="calendar-sync-wrap calendar-sync-wrap-detail">
+				<div class="calendar-sync-header">
+					<span class="calendar-sync-header-text">${this.getHeaderTitle()}</span>
+				</div>
+				${this.getContentActiveBody()}
+			</div>
+		`
 	}
 }

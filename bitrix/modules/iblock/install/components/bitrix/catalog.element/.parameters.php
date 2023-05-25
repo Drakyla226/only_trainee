@@ -378,6 +378,12 @@ $arComponentParameters = array(
 			"TYPE" => "CHECKBOX",
 			"DEFAULT" => "N",
 		),
+		"ADDITIONAL_FILTER_NAME" => array(
+			'PARENT' => 'DATA_SOURCE',
+			'NAME' => GetMessage('CP_BCE_ADDITIONAL_FILTER_NAME'),
+			'TYPE' => 'STRING',
+			'DEFAULT' => 'elementFilter',
+		),
 		"ADD_SECTIONS_CHAIN" => array(
 			"PARENT" => "ADDITIONAL_SETTINGS",
 			"NAME" => GetMessage("CP_BCE_ADD_SECTIONS_CHAIN"),
@@ -671,7 +677,7 @@ if ($usePropertyFeatures)
 		unset($arComponentParameters["PARAMETERS"]["PRODUCT_PROPERTIES"]);
 }
 
-if ($arCurrentValues["SEF_MODE"] == "Y")
+if (isset($arCurrentValues["SEF_MODE"]) && $arCurrentValues["SEF_MODE"] === "Y")
 {
 	$arComponentParameters["PARAMETERS"]["SECTION_CODE_PATH"] = array(
 		"NAME" => GetMessage("CP_BCE_SECTION_CODE_PATH"),
@@ -779,8 +785,20 @@ if(!\Bitrix\Main\ModuleManager::isModuleInstalled("sale"))
 }
 else
 {
-	$useGiftsDetail = $arCurrentValues["USE_GIFTS_DETAIL"] === null && $arComponentParameters['PARAMETERS']['USE_GIFTS_DETAIL']['DEFAULT'] == 'Y' || $arCurrentValues["USE_GIFTS_DETAIL"] == "Y";
-	$useGiftsMainPrSectionList = $arCurrentValues["USE_GIFTS_MAIN_PR_SECTION_LIST"] === null && $arComponentParameters['PARAMETERS']['USE_GIFTS_MAIN_PR_SECTION_LIST']['DEFAULT'] == 'Y' || $arCurrentValues["USE_GIFTS_MAIN_PR_SECTION_LIST"] == "Y";
+	$useGiftsDetail =
+		(
+			!isset($arCurrentValues["USE_GIFTS_DETAIL"])
+			&& $arComponentParameters['PARAMETERS']['USE_GIFTS_DETAIL']['DEFAULT'] === 'Y'
+		)
+		|| $arCurrentValues["USE_GIFTS_DETAIL"] === "Y"
+	;
+	$useGiftsMainPrSectionList =
+		(
+			!isset($arCurrentValues["USE_GIFTS_MAIN_PR_SECTION_LIST"])
+			&& $arComponentParameters['PARAMETERS']['USE_GIFTS_MAIN_PR_SECTION_LIST']['DEFAULT'] === 'Y'
+		)
+		|| $arCurrentValues["USE_GIFTS_MAIN_PR_SECTION_LIST"] === "Y"
+	;
 	if($useGiftsDetail || $useGiftsMainPrSectionList)
 	{
 		if($useGiftsDetail)

@@ -36,7 +36,20 @@ use Bitrix\Main\Type\DateTime;
  * </ul>
  *
  * @package Bitrix\Catalog
- **/
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Contractor_Query query()
+ * @method static EO_Contractor_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_Contractor_Result getById($id)
+ * @method static EO_Contractor_Result getList(array $parameters = [])
+ * @method static EO_Contractor_Entity getEntity()
+ * @method static \Bitrix\Catalog\EO_Contractor createObject($setDefaultValues = true)
+ * @method static \Bitrix\Catalog\EO_Contractor_Collection createCollection()
+ * @method static \Bitrix\Catalog\EO_Contractor wakeUpObject($row)
+ * @method static \Bitrix\Catalog\EO_Contractor_Collection wakeUpCollection($rows)
+ */
 
 class ContractorTable extends DataManager
 {
@@ -73,7 +86,7 @@ class ContractorTable extends DataManager
 				'PERSON_TYPE',
 				[
 					'required' => true,
-					'values' => static::getTypeList(),
+					'values' => static::getTypes(),
 					'title' => Loc::getMessage('CONTRACTOR_ENTITY_PERSON_TYPE_FIELD'),
 				]
 			),
@@ -356,5 +369,15 @@ class ContractorTable extends DataManager
 				self::TYPE_COMPANY,
 			];
 		}
+	}
+
+	public static function getTypes(): array
+	{
+		return static::getTypeList();
+	}
+
+	public static function getTypeDescriptions(): array
+	{
+		return static::getTypeList(true);
 	}
 }

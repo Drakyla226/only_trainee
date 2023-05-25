@@ -1,11 +1,9 @@
-<?
+<?php
+
 use Bitrix\Bizproc\SchedulerEventTable;
 use Bitrix\Main\Loader;
 
-include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/bizproc/classes/general/runtimeservice.php");
-
-class CBPSchedulerService
-	extends CBPRuntimeService
+class CBPSchedulerService extends CBPRuntimeService
 {
 	/**
 	 * @param bool $withType Return as array [value, type].
@@ -59,7 +57,7 @@ class CBPSchedulerService
 		\Bitrix\Main\Config\Option::set('bizproc', 'delay_min_limit', $limit);
 	}
 
-	public function SubscribeOnTime($workflowId, $eventName, $expiresAt)
+	public function subscribeOnTime($workflowId, $eventName, $expiresAt)
 	{
 		$workflowId = preg_replace('#[^a-z0-9.]#i', '', $workflowId);
 		$eventName = preg_replace('#[^a-z0-9._-]#i', '', $eventName);
@@ -84,12 +82,12 @@ class CBPSchedulerService
 		return self::addAgentInternal($name, $expiresAt);
 	}
 
-	public function UnSubscribeOnTime($id)
+	public function unSubscribeOnTime($id)
 	{
 		CAgent::Delete($id);
 	}
 
-	public static function OnAgent($workflowId, $eventName, $eventParameters = array())
+	public static function onAgent($workflowId, $eventName, $eventParameters = array())
 	{
 		try
 		{
@@ -110,8 +108,9 @@ class CBPSchedulerService
 		}
 	}
 
-	public function SubscribeOnEvent($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId = null)
+	public function subscribeOnEvent($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId = null): ?int
 	{
+		$resultId = null;
 		$entityKey = null;
 		if (is_array($entityId))
 		{
@@ -123,15 +122,21 @@ class CBPSchedulerService
 			$entityKey = 0;
 		}
 
+		if (is_array($entityId))
+		{
+			$entityId = current(\CBPHelper::makeArrayFlat($entityId));
+		}
+
 		if (!SchedulerEventTable::isSubscribed($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId))
 		{
-			SchedulerEventTable::add(array(
+			$result = SchedulerEventTable::add(array(
 				'WORKFLOW_ID' => (string)$workflowId,
 				'HANDLER' => (string)$eventHandlerName,
 				'EVENT_MODULE' => (string)$eventModule,
 				'EVENT_TYPE' => (string)$eventName,
 				'ENTITY_ID' => (string)$entityId
 			));
+			$resultId = (int)$result->getId();
 		}
 
 		RegisterModuleDependences(
@@ -144,9 +149,11 @@ class CBPSchedulerService
 			'',
 			array($eventModule, $eventName, $entityKey)
 		);
+
+		return $resultId;
 	}
 
-	public function UnSubscribeOnEvent($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId = null)
+	public function unSubscribeOnEvent($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId = null)
 	{
 		// Clean old-style registry entry.
 		UnRegisterModuleDependences(
@@ -170,6 +177,11 @@ class CBPSchedulerService
 			$entityKey = 0;
 		}
 
+		if (is_array($entityId))
+		{
+			$entityId = current(\CBPHelper::makeArrayFlat($entityId));
+		}
+
 		SchedulerEventTable::deleteBySubscription($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId);
 
 		if (!SchedulerEventTable::hasSubscriptions($eventModule, $eventName))
@@ -186,13 +198,32 @@ class CBPSchedulerService
 		}
 	}
 
+	public function unSubscribeByEventId(int $eventId, $entityKey = null)
+	{
+		$event = SchedulerEventTable::getList([
+			'select' => ['WORKFLOW_ID', 'HANDLER','EVENT_MODULE', 'EVENT_TYPE', 'ENTITY_ID'],
+			'filter' => ['=ID' => $eventId]
+		])->fetch();
+
+		if ($event)
+		{
+			$this->unSubscribeOnEvent(
+				$event['WORKFLOW_ID'],
+				$event['HANDLER'],
+				$event['EVENT_MODULE'],
+				$event['EVENT_TYPE'],
+				$entityKey ? [$entityKey => $event['ENTITY_ID']] : $event['ENTITY_ID']
+			);
+		}
+	}
+
 	/**
 	 * @deprecated
 	 * @param $workflowId
 	 * @param $eventName
 	 * @param array $arEventParameters
 	 */
-	public static function OnEvent($workflowId, $eventName, $arEventParameters = array())
+	public static function onEvent($workflowId, $eventName, $arEventParameters = array())
 	{
 		$num = func_num_args();
 		if ($num > 3)

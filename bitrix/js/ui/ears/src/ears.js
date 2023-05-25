@@ -1,25 +1,38 @@
-import {Tag, Dom, Cache} from 'main.core';
+import { Tag, Dom, Cache, Type } from 'main.core';
+import { EventEmitter } from 'main.core.events';
+import { TouchController } from	'./touch-controller';
 
-export class Ears
+export class Ears extends EventEmitter
 {
 	constructor(options)
 	{
-		this.container = options.container;
+		super(...arguments);
+		this.setEventNamespace('BX.UI.Ears');
+		this.container = options.container || null;
 		this.smallSize = options.smallSize || null;
 		this.noScrollbar = options.noScrollbar ? options.noScrollbar : false;
 		this.className = options.className ? options.className : null;
+		this.mousewheel = options.mousewheel || null;
+		this.touchScroll = options.touchScroll || null;
+
+		// layouts
 		this.wrapper = null;
 		this.leftEar = null;
 		this.rightEar = null;
-		this.parentContainer = this.container.parentNode;
-		this.delay = 6;
+		this.parentContainer = Type.isDomNode(this.container) ? this.container.parentNode : null;
+		this.delay = 12;
 		this.scrollTimeout = null;
 		this.cache = new Cache.MemoryCache();
 	}
 
-	bindEvents() {
+	bindEvents()
+	{
 		this.container.addEventListener('scroll', this.toggleEars.bind(this));
-		this.container.addEventListener('wheel', this.onWheel.bind(this));
+
+		if (this.mousewheel)
+		{
+			this.container.addEventListener('wheel', this.onWheel.bind(this));
+		}
 
 		this.getLeftEar().addEventListener('mouseenter', this.scrollLeft.bind(this));
 		this.getLeftEar().addEventListener('mouseleave', this.stopScroll.bind(this));
@@ -32,9 +45,21 @@ export class Ears
 		this.getRightEar().addEventListener('mouseup', this.scrollRight.bind(this));
 	}
 
-	init() {
+	init(): this
+	{
+		if (!this.container)
+		{
+			console.warn('BX.UI.Ears.Preview: \'container\' is not defined');
+			return;
+		}
+
 		this.setWrapper();
 		this.bindEvents();
+
+		if (this.touchScroll)
+		{
+			this.initTouchScroll();
+		}
 
 		setTimeout(() => {
 			if (this.container.scrollWidth > this.container.offsetWidth)
@@ -46,6 +71,7 @@ export class Ears
 				activeItem ? this.scrollToActiveItem(activeItem) : null;
 			}
 		}, 600);
+		return this;
 	}
 
 	scrollToActiveItem(activeItem)
@@ -76,6 +102,7 @@ export class Ears
 
 		clearTimeout(this.scrollTimeout);
 		this.scrollTimeout = setTimeout(() => this.stopScroll(), 150);
+		event.preventDefault();
 	}
 
 	setWrapper() {
@@ -118,12 +145,14 @@ export class Ears
 		});
 	}
 
-	toggleEars() {
+	toggleEars() 
+	{
 		this.toggleRightEar();
 		this.toggleLeftEar();
 	}
 
-	toggleRightEar() {
+	toggleRightEar()
+	{
 		if (this.container.scrollWidth > this.container.offsetWidth
 			&& (this.container.offsetWidth + this.container.scrollLeft) < this.container.scrollWidth)
 		{
@@ -135,7 +164,8 @@ export class Ears
 		}
 	}
 
-	toggleLeftEar() {
+	toggleLeftEar()
+	{
 		if (this.container.scrollLeft > 0)
 		{
 			this.getLeftEar().classList.add('ui-ear-show');
@@ -146,10 +176,18 @@ export class Ears
 		}
 	}
 
-	scrollLeft() {
+	scrollLeft()
+	{
 		this.stopScroll('right');
 
+		let previous = this.container.scrollLeft;
 		this.container.scrollLeft -= 10;
+		this.emit('onEarsAreMoved');
+		if (this.container.scrollLeft <= 0 && previous > 0)
+		{
+			this.emit('onEarsAreHidden');
+		}
+
 		this.setDelay();
 		this.scrollInterval = setInterval(
 			this.scrollLeft.bind(this),
@@ -158,10 +196,17 @@ export class Ears
 		this.left = true;
 	}
 
-	scrollRight() {
+	scrollRight()
+	{
 		this.stopScroll('left');
 
 		this.container.scrollLeft += 10;
+		this.emit('onEarsAreMoved');
+		if (this.container.scrollLeft <= 10)
+		{
+			this.emit('onEarsAreShown');
+		}
+
 		this.setDelay();
 		this.scrollInterval = setInterval(
 			this.scrollRight.bind(this),
@@ -170,7 +215,8 @@ export class Ears
 		this.right = true;
 	}
 
-	setDelay() {
+	setDelay()
+	{
 		if (this.container.scrollWidth < this.container.offsetWidth * 1.6)
 		{
 			this.delay = 20;
@@ -183,7 +229,7 @@ export class Ears
 
 		if (this.container.scrollLeft === fullScrollLeft)
 		{
-			this.delay = 6;
+			this.delay = 12;
 		}
 
 		if (this.left)
@@ -193,7 +239,7 @@ export class Ears
 				this.delay = 25;
 			}
 			else {
-				this.delay = 6;
+				this.delay = 12;
 			}
 		}
 
@@ -204,7 +250,7 @@ export class Ears
 				this.delay = 25;
 			}
 			else {
-				this.delay = 6;
+				this.delay = 12;
 			}
 		}
 	}
@@ -224,5 +270,12 @@ export class Ears
 		{
 			this.left = false;
 		}
+	}
+
+	initTouchScroll()
+	{
+		new TouchController({
+			target: this.container
+		});
 	}
 }

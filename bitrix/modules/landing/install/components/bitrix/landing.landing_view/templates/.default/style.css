@@ -1,7 +1,7 @@
 .ui-btn.landing-btn-menu,
 .ui-btn-split.landing-btn-menu .ui-btn-main {
-	font-weight: normal;
-	font-family: "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-family: var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 }
 
 .landing-ui-panel-top {
@@ -30,10 +30,10 @@
 	vertical-align: middle;
 	white-space: nowrap;
 	font-size: 23px;
-	font-family: "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-family: var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 	letter-spacing: 0.13px;
 	position: relative;
-	top: -3px;
 }
 
 .landing-ui-panel-top-logo-link {
@@ -197,7 +197,8 @@ div#landing-popup-publication-error {
 /* region popup features */
 .landing-popup-features-content-block-link {
 	opacity: 0.66;
-	font: 11px/15px "OpenSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 11px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-regular, 400);
 	color: #525c69;
 	border-bottom: 1px dashed;
 }
@@ -234,9 +235,14 @@ div#landing-popup-publication-error {
 	cursor: pointer;
 }
 
+.landing-popup-features-content-block-settings-icon i {
+	background-size: 60%;
+}
+
 .landing-ui-panel-top-menu-link-help,
 .landing-popup-features-content-block-title {
-	font: 13px/15px "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 13px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 	color: #333;
 	flex-grow: 1;
 }
@@ -289,7 +295,8 @@ div#landing-popup-publication-error {
 
 /* region popup autopub */
 .landing-popup-publication-content-autopub-text {
-	font: 13px/15px "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 13px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 	color: #333;
 	flex-grow: 1;
 }
@@ -336,7 +343,8 @@ div#landing-popup-publication-error {
 	position: absolute;
 	top: 50%;
 	transform: translateY(-50%);
-	font: 8px "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 8px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 	letter-spacing: 0.27px;
 	transition: 190ms linear all;
 	z-index: 10;
@@ -366,14 +374,16 @@ div#landing-popup-publication-error {
 	opacity: 0;
 }
 
-.landing-popup-publication-content-autopub-btn {
+.landing-popup-publication-content-autopub-btn,
+.landing-popup-publication-content-preview-btn {
 	--ui-btn-height: 36px;
 	--ui-btn-font-size: 14px;
 	--ui-btn-padding: 0 24px;
-	width: 200px;
+	min-width: 210px;
 }
 
-.ui-btn-light.landing-popup-publication-content-autopub-btn {
+.ui-btn-light.landing-popup-publication-content-autopub-btn,
+.ui-btn-light.landing-popup-publication-content-preview-btn {
 	--ui-btn-background: #fff;
 	--ui-btn-background-hover: #fff;
 	--ui-btn-background-active: #fff;
@@ -385,7 +395,20 @@ div#landing-popup-publication-error {
 	--ui-btn-color: #535c69;
 	--ui-btn-color-hover: #535c69;
 	--ui-btn-color-active: #535c69;
+}
+.ui-btn-light.landing-popup-publication-content-preview-btn {
 	margin-bottom: 12px;
+}
+.landing-popup-publication-content-autopub-btn-container {
+	position: relative;
+}
+.landing-popup-publication-content-autopub-btn-clicker {
+	cursor: not-allowed;
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
 }
 
 .landing-popup-publication-content-hint {
@@ -400,7 +423,7 @@ div#landing-popup-publication-error {
 
 /* region popup preview */
 .landing-popup-preview-title {
-	font: bold 14px/20px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: var(--ui-font-weight-bold) 14px/20px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 	color: #333;
 	text-align: center;
 	margin-bottom: 25px;
@@ -414,7 +437,7 @@ div#landing-popup-publication-error {
 .landing-popup-preview-qr > div { display: inline-block; }
 
 .landing-popup-preview-text {
-	font: 14px/20px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 14px/20px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 	color: #525c69;
 	text-align: center;
 	padding: 0 30px 10px;
@@ -436,7 +459,7 @@ div#landing-popup-publication-error {
 }
 
 .landing-popup-preview-link-target {
-	font: 14px/20px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 14px/20px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 	color: #525c69;
 	text-align: center;
 	position: relative;
@@ -466,7 +489,7 @@ div#landing-popup-publication-error {
 .landing-popup-preview-link-target:hover:after { opacity: 1;}
 
 .landing-popup-preview-link-target-copy {
-	font: 13px/20px "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 13px/20px var(--ui-font-family-primary, var(--ui-font-family-helvetica));
 	color: #9b9b9b;
 	border-bottom: 1px dashed;
 	transition: 190ms linear all;
@@ -485,19 +508,22 @@ div#landing-popup-publication-error {
 }
 
 .landing-popup-publication-error-content-block-title {
-	font: 13px/15px "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 13px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 	color: #fff;
 	flex-grow: 1;
 }
 
 .landing-popup-publication-error-content-block-text {
-	font: 11px/15px "OpenSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 11px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-regular, 400);
 	color: #fff;
 }
 
 .landing-popup-publication-error-content-block-link {
 	opacity: 0.66;
-	font: 11px/15px "OpenSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font: 11px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-regular, 400);
 	color: #fff;
 	border-bottom: 1px dashed;
 }
@@ -576,7 +602,6 @@ div#landing-popup-publication-error {
 	border: 1px solid #c6cdd3;
 	background-color: transparent;
 	outline: none !important;
-	margin-top: -3px;
 }
 
 .landing-ui-panel-top-pub-btn:hover {
@@ -692,7 +717,8 @@ div#landing-popup-publication-error {
 	max-width: 138px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-family: "OpenSans-Semibold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-family: var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 }
 
 .landing-ui-panel-top-chain-link:hover,
@@ -704,35 +730,6 @@ div#landing-popup-publication-error {
 	color: #000 !important;
 }
 
-.landing-ui-panel-top-chain-link-site,
-.landing-ui-panel-top-chain-link-page,
-.landing-ui-panel-top-menu-link-settings { padding-right: 22px !important; }
-
-.landing-ui-panel-top-chain-link-site:before,
-.landing-ui-panel-top-chain-link-page:before,
-.landing-ui-panel-top-menu-link-settings:before {
-	position: absolute;
-	top: 50%;
-	right: 10px;
-	width: 0;
-	height: 0;
-	border: 3px solid transparent;
-	border-top-color: #535c69;
-	border-bottom-width: 0;
-	content: '';
-	opacity: .5;
-	transform: translateY(-50%);
-}
-
-.landing-ui-panel-top-chain-link-site.landing-ui-no-icon:before,
-.landing-ui-panel-top-chain-link-page.landing-ui-no-icon:before {
-	display: none;
-}
-
-.landing-ui-panel-top-chain-link-site.landing-ui-no-icon,
-.landing-ui-panel-top-chain-link-page.landing-ui-no-icon {
-	padding-right: 11px !important;
-}
 
 .landing-ui-panel-top-sitemap {
 	position: absolute;
@@ -858,10 +855,17 @@ div#landing-popup-publication-error {
 	color: #525c69;
 }
 
-.landing-ui-panel-top-menu-link-settings,
-.landing-ui-panel-top-menu-link-settings::before,
-.landing-ui-panel-top-menu-link-settings::after {
+.landing-ui-panel-top-menu-link-settings {
 	animation: none !important;
+}
+
+.landing-ui-panel-top-form .landing-ui-panel-top-menu-link-settings::after {
+	opacity: .6;
+	transition: 200ms opacity ease;
+}
+
+.landing-ui-panel-top-form .landing-ui-panel-top-menu-link-settings:hover::after {
+	opacity: 1;
 }
 
 .landing-ui-panel-top-menu-link-help-icon {
@@ -870,7 +874,8 @@ div#landing-popup-publication-error {
 	left: 50%;
 	color: #535c69;
 	font-size: 19px;
-	font-family: "OpenSans-Bold", "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-family: var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-bold, 700);
 	transform: translateX(-38%) translateY(-50%);
 }
 
@@ -880,6 +885,7 @@ div#landing-popup-publication-error {
 	display: flex;
 	margin-right: 15px;
 	margin-left: 15px;
+	position: relative;
 }
 
 .landing-ui-panel-top-history-undo,
@@ -904,10 +910,6 @@ div#landing-popup-publication-error {
 .landing-ui-panel-top-history-undo.landing-ui-disabled,
 .landing-ui-panel-top-history-redo.landing-ui-disabled {
 	opacity: .4;
-}
-
-.ui-btn-icon-setting.landing-ui-panel-top-menu-link-settings {
-	display: none;
 }
 
 .landing-ui-panel-top-history-undo.landing-ui-onload,
@@ -1038,8 +1040,8 @@ div#landing-popup-publication-error {
 .landing-license-info-text {
 	margin-bottom: 33px;
 	color: #525c69;
-	font: 30px/40px 'Open Sans', "Helvetica Neue", Arial, Helvetica, sans-serif;
-	font-weight: 300;
+	font: 30px/40px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-regular, 400);
 }
 
 .landing-license-info-btn {
@@ -1050,8 +1052,8 @@ div#landing-popup-publication-error {
 	border-radius: 60px;
 	background: #fff;
 	text-align: center;
-	font: 22px/30px 'Open Sans', "Helvetica Neue", Arial, Helvetica, sans-serif;
-	font-weight: 300;
+	font: 22px/30px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-regular, 400);
 }
 
 .landing-license-info-link {
@@ -1073,7 +1075,8 @@ div#landing-popup-publication-error {
 
 .landing-view-loader-text {
 	color: #0063c6;
-	font: 28px/34px 'OpenSans-Light', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+	font: 28px/34px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-light, 300);
 	text-align: center;
 	max-width: 400px;
 	margin-top: 30px;
@@ -1217,7 +1220,8 @@ div#landing-popup-publication-error {
 
 .landing-error-page-title {
 	margin-bottom: 62px;
-	font: 37px/52px 'OpenSans-Light', "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font: 37px/52px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-light, 300);
 }
 
 .landing-error-page-img {

@@ -2,6 +2,7 @@
 import {EventEmitter, BaseEvent} from 'main.core.events';
 import {Util} from 'calendar.util';
 import {Type, Dom, Tag} from 'main.core';
+import { EventDragAndDrop } from 'calendar.ui.tools.draganddrop';
 
 export class Selector extends EventEmitter
 {
@@ -11,6 +12,9 @@ export class Selector extends EventEmitter
 	currentDateTo = new Date();
 	currentFullDay = false;
 	useAnimation = true;
+	magnetDuration = 50;
+	stickDistanceInMinutes = 30;
+	magnetizeDistanceInMinutes = 15;
 
 	constructor(params = {})
 	{
@@ -25,8 +29,11 @@ export class Selector extends EventEmitter
 		this.getScaleInfo = params.getScaleInfo;
 		this.solidStatus = params.solidStatus;
 
+		this.eventDragAndDrop = new EventDragAndDrop(params.getDateByPos, params.getPosByDate, params.getEvents);
+
 		this.useAnimation = params.useAnimation !== false;
 		this.DOM.timelineWrap = params.timelineWrap;
+		this.DOM.timelineFixedWrap = params.timelineFixedWrap;
 
 		this.render();
 	}
@@ -90,16 +97,18 @@ export class Selector extends EventEmitter
 
 		if (Type.isDate(from) && Type.isDate(to))
 		{
-			this.currentDateFrom = from;
-			this.currentDateTo = to;
 			this.currentFullDay = this.fullDayMode;
 
 			if (this.fullDayMode)
 			{
-				to = new Date(to.getTime() + Util.getDayLength());
-				from.setHours(0, 0, 0,0);
-				to.setHours(0, 0, 0,0);
+				from.setHours(0, 0, 0, 0);
+				const dayCount = Math.ceil((to.getTime() - from.getTime() + 1) / (1000 * 3600 * 24));
+				to = new Date(from.getTime() + (dayCount - 1) * 24 * 3600 * 1000);
+				to.setHours(23, 55, 0, 0);
 			}
+
+			this.currentDateFrom = from;
+			this.currentDateTo = to;
 
 			// Update selector
 			this.show(
@@ -111,12 +120,19 @@ export class Selector extends EventEmitter
 				}
 			);
 		}
+
+		const isSelectorInThePast = this.currentDateTo.getTime() < this.getScaleInfo().scaleDateFrom.getTime();
+		const isSelectorInTheFuture = this.currentDateFrom.getTime() > this.getScaleInfo().scaleDateTo.getTime();
+		if (isSelectorInThePast || isSelectorInTheFuture)
+		{
+			this.DOM.wrap.style.display = 'none';
+		}
 	}
 
 	show(from, to, params)
 	{
 		const animation = params.animation && this.useAnimation !== false;
-		const focus = params.focus !== false;
+		const focus = params.focus === true;
 		const alignCenter = params.alignCenter !== false;
 
 		this.DOM.wrap.style.display = 'block';
@@ -143,7 +159,7 @@ export class Selector extends EventEmitter
 				this.DOM.wrap.style.width = (toPos - fromPos) + 'px';
 				if (focus)
 				{
-					this.focus(false, 200, alignCenter);
+					this.focus(true, 200, alignCenter);
 				}
 				this.checkStatus(fromPos, true);
 			}
@@ -157,10 +173,12 @@ export class Selector extends EventEmitter
 
 	startMove()
 	{
+		document.addEventListener('pointermove', this.preventDefault, { passive:false });
 		this.selectorIsDraged = true;
-		this.selectorRoundedPos = false;
 		this.selectorStartLeft = parseInt(this.DOM.wrap.style.left);
 		this.selectorStartScrollLeft = this.DOM.timelineWrap.scrollLeft;
+
+		this.eventDragAndDrop.onDragStart(this.currentDateTo.getTime() - this.currentDateFrom.getTime(), this.selectorStartLeft);
 
 		Dom.addClass(document.body, 'calendar-planner-unselectable');
 	}
@@ -169,54 +187,174 @@ export class Selector extends EventEmitter
 	{
 		if (this.selectorIsDraged)
 		{
-			let selectorWidth = parseInt(this.DOM.wrap.style.width), pos = this.selectorStartLeft + x;
+			let pos = this.selectorStartLeft + x;
 
 			// Correct cursor position acording to changes of scrollleft
 			pos -= this.selectorStartScrollLeft - this.DOM.timelineWrap.scrollLeft;
+			pos = this.checkPosition(pos);
 
-			if (this.getPosDateMap()[pos])
+			if (!this.getDateByPos(pos) || !this.getDateByPos(pos + parseInt(this.DOM.wrap.style.width)))
 			{
-				this.selectorRoundedPos = pos;
-			}
-			else
-			{
-				let roundedPos = Selector.roundPos(pos);
-				if (this.getPosDateMap()[roundedPos])
-				{
-					this.selectorRoundedPos = roundedPos;
-				}
+				return;
 			}
 
-			let checkedPos = this.checkPosition(this.selectorRoundedPos);
-			if (checkedPos !== this.selectorRoundedPos)
-			{
-				this.selectorRoundedPos = checkedPos;
-				pos = checkedPos;
-			}
-
-			this.DOM.wrap.style.left = pos + 'px';
-			this.showTitle({fromPos: pos, toPos: this.selectorRoundedPos + selectorWidth});
-
-			this.checkStatus(this.selectorRoundedPos, true);
+			let boundary = this.eventDragAndDrop.getDragBoundary(pos);
+			boundary = this.getAutoScrollBoundary(boundary);
+			boundary = this.getConstrainedBoundary(boundary);
+			this.setBoundary(boundary);
 		}
+	}
+
+	getAutoScrollBoundary(boundary)
+	{
+		const boundaryLeft = boundary.position - this.DOM.timelineWrap.scrollLeft;
+		const containerLeft = this.getPosByDate(this.getScaleInfo().scaleDateFrom);
+		const boundaryRight = boundaryLeft + boundary.size;
+		const containerRight = this.DOM.timelineFixedWrap.offsetWidth;
+
+		if (boundaryRight > containerRight)
+		{
+			this.scrollSpeed = this.getSpeed(boundaryRight, containerRight);
+			boundary.position = containerRight + this.DOM.timelineWrap.scrollLeft - boundary.size;
+			this.setAutoScrollInterval(boundary, 1);
+		}
+		else if (boundaryLeft < containerLeft)
+		{
+			this.scrollSpeed = this.getSpeed(boundaryLeft, containerLeft);
+			boundary.position = containerLeft + this.DOM.timelineWrap.scrollLeft;
+			this.setAutoScrollInterval(boundary, -1);
+		}
+		else
+		{
+			this.stopAutoScroll();
+		}
+
+		return boundary;
+	}
+
+	getSpeed(x1, x2)
+	{
+		return Math.floor(Math.sqrt(Math.abs(x1 - x2))) + 1;
+	}
+
+	setAutoScrollInterval(boundary, direction)
+	{
+		if (!this.scrollInterval)
+		{
+			this.scrollInterval = setInterval(() => {
+				if (!this.getDateByPos(boundary.position + this.scrollSpeed * direction)
+					|| !this.getDateByPos(boundary.position + boundary.size + this.scrollSpeed * direction)
+				)
+				{
+					this.stopAutoScroll();
+					return;
+				}
+
+				this.DOM.timelineWrap.scrollLeft += this.scrollSpeed * direction;
+				boundary.position += this.scrollSpeed * direction;
+				boundary.from = this.getDateByPos(boundary.position);
+				boundary.to = this.getDateByPos(boundary.position + boundary.size);
+				this.eventDragAndDrop.setFinalTimeInterval(boundary.from, boundary.to);
+				this.setBoundary(boundary);
+			}, 13);
+		}
+	}
+
+	stopAutoScroll()
+	{
+		clearInterval(this.scrollInterval);
+		this.scrollInterval = false;
+	}
+
+	setBoundary(boundary)
+	{
+		if (boundary.wasMagnetized)
+		{
+			this.DOM.wrap.style.transition = 'left .05s, width .1s';
+		}
+		else
+		{
+			this.DOM.wrap.style.transition = 'width .1s';
+		}
+
+		this.DOM.wrap.style.width = boundary.size + 'px';
+		this.DOM.wrap.style.left = boundary.position + 'px';
+
+		this.showTitle(boundary.from, boundary.to);
+
+		this.checkStatus(boundary.position, true);
+	}
+
+	getConstrainedBoundary(boundary)
+	{
+		if (boundary.wasMagnetized || this.fullDayMode)
+		{
+			return boundary;
+		}
+
+		let from = new Date(boundary.from.getTime());
+		let to = new Date(boundary.to.getTime());
+		const duration = to.getTime() - from.getTime();
+		let position = boundary.position;
+		let size = boundary.size;
+		let wasMagnetized = false;
+
+		if (from.getHours() < this.getScaleInfo().shownTimeFrom)
+		{
+			from.setHours(this.getScaleInfo().shownTimeFrom, 0, 0, 0);
+			to = new Date(from.getTime() + duration);
+			wasMagnetized = true;
+			position = this.getPosByDate(from);
+			size = this.getPosByDate(to) - position;
+		}
+
+		if (to.getHours() > this.getScaleInfo().shownTimeTo
+			|| (to.getHours() === this.getScaleInfo().shownTimeTo && to.getMinutes() > 0))
+		{
+			to.setHours(this.getScaleInfo().shownTimeTo, 0, 0, 0);
+			from = new Date(to.getTime() - duration);
+			wasMagnetized = true;
+			position = this.getPosByDate(from);
+			size = this.getPosByDate(to) - position;
+		}
+
+		return { from, to, position, size, wasMagnetized };
 	}
 
 	endMove()
 	{
-		if (this.selectorIsDraged && this.selectorRoundedPos)
+		document.removeEventListener('pointermove', this.preventDefault, { passive:false });
+		this.stopAutoScroll();
+		if (this.selectorIsDraged)
 		{
-			this.DOM.wrap.style.left = this.selectorRoundedPos + 'px';
-			this.selectorRoundedPos = false;
+			this.selectorIsDraged = false;
+
+			const left = this.getPosByDate(this.eventDragAndDrop.getFinalFrom());
+			const right = this.getPosByDate(this.eventDragAndDrop.getFinalTo());
+
+			const finalBoundary = this.getConstrainedBoundary({
+				from: this.eventDragAndDrop.getFinalFrom(),
+				to: this.eventDragAndDrop.getFinalTo(),
+				position: left,
+				size: right - left
+			});
+
+			this.DOM.wrap.style.left = finalBoundary.position + 'px';
+			this.DOM.wrap.style.width = finalBoundary.size + 'px';
+			this.DOM.wrap.style.transition = 'none';
+
+			this.checkStatus(left, true);
 			this.hideTitle();
-			this.setValue(this.selectorRoundedPos);
+			this.setValue();
 		}
 		this.selectorIsDraged = false;
 	}
 
 	startResize()
 	{
+		document.addEventListener('pointermove', this.preventDefault, { passive:false });
+
 		this.selectorIsResized = true;
-		this.selectorRoundedPos = false;
 
 		this.selectorStartLeft = parseInt(this.DOM.wrap.style.left);
 		this.selectorStartWidth = parseInt(this.DOM.wrap.style.width);
@@ -235,6 +373,10 @@ export class Selector extends EventEmitter
 			// Correct cursor position according to changes of scrollLeft
 			width -= this.selectorStartScrollLeft - this.DOM.timelineWrap.scrollLeft;
 			let rightPos = Math.min(this.selectorStartLeft + width, this.getTimelineWidth());
+			if (rightPos < this.selectorStartLeft)
+			{
+				rightPos = this.selectorStartLeft;
+			}
 
 			toDate = this.getDateByPos(rightPos, true);
 
@@ -248,26 +390,15 @@ export class Selector extends EventEmitter
 					toDate.setHours(0, 0, 0, 0);
 				}
 				rightPos = this.getPosByDate(toDate);
-				width = rightPos - this.selectorStartLeft;
-
-				if (width <= 10)
-				{
-					toDate = this.getDateByPos(this.selectorStartLeft);
-					toDate = new Date(toDate.getTime() + Util.getDayLength());
-					toDate.setHours(0, 0, 0, 0);
-					width = this.getPosByDate(toDate) - this.selectorStartLeft;
-					rightPos = this.selectorStartLeft + width;
-				}
 			}
-			else if (this.shownScaleTimeFrom !== 0 || this.shownScaleTimeTo !== 24)
+			else if (this.getScaleInfo().shownTimeFrom !== 0 || this.getScaleInfo().shownTimeTo !== 24)
 			{
 				let fromDate = this.getDateByPos(this.selectorStartLeft);
-				if (toDate && fromDate && Util.formatDate(fromDate) !== Util.formatDate(toDate))
+				if (toDate && fromDate && fromDate.getDate() !== toDate.getDate())
 				{
 					toDate = new Date(fromDate.getTime());
-					toDate.setHours(this.shownScaleTimeTo, 0, 0, 0);
+					toDate.setHours(this.getScaleInfo().shownTimeTo, 0, 0, 0);
 					rightPos = this.getPosByDate(toDate);
-					width = rightPos - this.selectorStartLeft;
 				}
 			}
 
@@ -283,23 +414,49 @@ export class Selector extends EventEmitter
 					this.selectorRoundedRightPos = roundedPos;
 				}
 			}
+			if (this.selectorRoundedRightPos < this.selectorStartLeft)
+			{
+				this.selectorRoundedRightPos = this.selectorStartLeft;
+			}
+
+			if (this.selectorRoundedRightPos - this.DOM.timelineWrap.scrollLeft > this.DOM.timelineFixedWrap.offsetWidth)
+			{
+				this.selectorRoundedRightPos = this.DOM.timelineWrap.scrollLeft + this.DOM.timelineFixedWrap.offsetWidth;
+			}
+
+			width = this.selectorRoundedRightPos - this.selectorStartLeft;
 
 			this.DOM.wrap.style.width = width + 'px';
-			this.showTitle({fromPos: this.selectorStartLeft, toPos: this.selectorRoundedRightPos});
+			this.showTitle(this.getDateByPos(this.selectorStartLeft), this.getDateByPos(this.selectorRoundedRightPos));
 			this.checkStatus(this.selectorStartLeft, true);
 		}
 	}
 
 	endResize()
 	{
-		if (this.selectorIsResized && this.selectorRoundedRightPos)
+		document.removeEventListener('pointermove', this.preventDefault, { passive:false });
+		if (this.selectorIsResized)
 		{
-			this.DOM.wrap.style.width = (this.selectorRoundedPos - parseInt(this.DOM.wrap.style.left)) + 'px';
-			this.selectorRoundedRightPos = false;
+			this.selectorIsResized = false;
+
+			let left = parseInt(this.DOM.wrap.style.left);
+			let right = left + parseInt(this.DOM.wrap.style.width);
+			const from = this.getDateByPos(left);
+			const to = this.getDateByPos(right);
+			left = this.getPosByDate(from);
+			right = this.getPosByDate(to);
+			this.DOM.wrap.style.width = (right - left) + 'px';
+
+			this.checkStatus(left, true);
 			this.hideTitle();
 			this.setValue();
 		}
 		this.selectorIsResized = false;
+	}
+
+	preventDefault(e)
+	{
+		e.preventDefault();
 	}
 
 	isDragged()
@@ -376,39 +533,48 @@ export class Selector extends EventEmitter
 		}
 	}
 
-	setValue(selectorPos, selectorWidth)
+	setValue(selectorPos = null, duration = null)
 	{
 		if (!selectorPos)
 		{
 			selectorPos = parseInt(this.DOM.wrap.style.left);
 		}
 		selectorPos = Math.max(0, selectorPos);
-
-		if (!selectorWidth)
-		{
-			selectorWidth = parseInt(this.DOM.wrap.style.width);
-		}
+		const selectorWidth = parseInt(this.DOM.wrap.style.width);
 
 		if (selectorPos + selectorWidth > parseInt(this.getTimelineWidth()))
 		{
 			selectorPos = parseInt(this.getTimelineWidth()) - selectorWidth;
 		}
 
-		let dateFrom = this.getDateByPos(selectorPos);
-		let dateTo = this.getDateByPos(selectorPos + selectorWidth, true);
+		const dateFrom = this.getDateByPos(selectorPos);
+		let dateTo;
+		if (duration)
+		{
+			dateTo = new Date(dateFrom.getTime() + duration);
+		}
+		else
+		{
+			dateTo = this.getDateByPos(selectorPos + selectorWidth, true);
+		}
 
 		if (dateFrom && dateTo)
 		{
+			if (this.fullDayMode)
+			{
+				const dayCount = Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 3600 * 24));
+				dateTo = new Date(dateFrom.getTime() + (dayCount - 1) * 24 * 3600 * 1000);
+				dateTo.setHours(23, 55, 0, 0);
+			}
+			if (!this.fullDayMode && dateFrom.getDate() !== dateTo.getDate() && dateTo.getHours() !== 0 && dateTo.getMinutes() !== 0)
+			{
+				const duration = this.currentDateTo.getTime() - this.currentDateFrom.getTime();
+				dateTo = new Date(dateFrom.getTime() + duration);
+			}
+
 			this.currentDateFrom = dateFrom;
 			this.currentDateTo = dateTo;
 			this.currentFullDay = this.fullDayMode;
-
-			if (this.fullDayMode)
-			{
-				const dateToTime = dateTo.getTime();
-				this.currentDateTo = new Date(dateToTime - 1000);
-				dateTo = new Date(dateToTime - Util.getDayLength());
-			}
 
 			this.emit('onChange', new BaseEvent({data: {
 				dateFrom: dateFrom,
@@ -421,81 +587,86 @@ export class Selector extends EventEmitter
 	checkPosition(fromPos, selectorWidth, toPos)
 	{
 		let scaleInfo = this.getScaleInfo();
-		if (
-			(scaleInfo.shownTimeFrom !== 0 || scaleInfo.shownTimeTo !== 24)
-			&&
-			(scaleInfo.type !== '1day' || this.fullDayMode)
-		)
+		if (!this.fullDayMode && scaleInfo.shownTimeFrom === 0 && scaleInfo.shownTimeTo === 24)
 		{
-			fromPos = fromPos || parseInt(this.DOM.wrap.style.left);
-			selectorWidth = selectorWidth || parseInt(this.DOM.wrap.style.width);
-			toPos = toPos || (fromPos + selectorWidth);
+			return fromPos;
+		}
 
-			if (toPos > parseInt(this.getTimelineWidth()))
-			{
-				fromPos = parseInt(this.getTimelineWidth()) - selectorWidth;
-			}
-			else
-			{
-				let
-					fromDate = this.getDateByPos(fromPos),
-					toDate = this.getDateByPos(toPos, true),
-					timeFrom, timeTo,
-					scaleTimeFrom = parseInt(scaleInfo.shownTimeFrom),
-					scaleTimeTo = parseInt(scaleInfo.shownTimeTo);
+		fromPos = fromPos || parseInt(this.DOM.wrap.style.left);
+		selectorWidth = selectorWidth || parseInt(this.DOM.wrap.style.width);
+		toPos = toPos || (fromPos + selectorWidth);
+		if (toPos > parseInt(this.getTimelineWidth()))
+		{
+			fromPos = parseInt(this.getTimelineWidth()) - selectorWidth;
+		}
+		else
+		{
+			let
+				fromDate = this.getDateByPos(fromPos),
+				toDate = this.getDateByPos(toPos, true),
+				timeFrom, timeTo,
+				scaleTimeFrom = parseInt(scaleInfo.shownTimeFrom),
+				scaleTimeTo = parseInt(scaleInfo.shownTimeTo);
 
-				if (fromDate && toDate)
+			if (fromDate && toDate)
+			{
+				if (this.fullDayMode)
 				{
-					if (this.fullDayMode)
+					if (fromDate.getHours() > 12)
 					{
-						timeFrom = parseInt(fromDate.getHours()) + Math.round((fromDate.getMinutes() / 60) * 10) / 10;
-						fromDate.setHours(0, 0, 0, 0);
-
-						if (timeFrom > 12)
-						{
-							fromDate = new Date(fromDate.getTime() + Util.getDayLength());
-							fromDate.setHours(0, 0, 0, 0);
-						}
-
-						fromPos = this.getPosByDate(fromDate);
+						fromDate = new Date(fromDate.getTime() + Util.getDayLength());
 					}
-					else if (fromDate.getDay() !== toDate.getDay())
+					fromDate.setHours(0, 0, 0, 0);
+
+					fromPos = this.getPosByDate(fromDate);
+				}
+				else if (fromDate.getDay() !== toDate.getDay())
+				{
+					timeFrom = parseInt(fromDate.getHours()) + Math.round((fromDate.getMinutes() / 60) * 10) / 10;
+					timeTo = parseInt(toDate.getHours()) + Math.round((toDate.getMinutes() / 60) * 10) / 10;
+
+					if (Math.abs(scaleTimeTo - timeFrom) > Math.abs(scaleTimeFrom - timeTo))
 					{
-						timeFrom = parseInt(fromDate.getHours()) + Math.round((fromDate.getMinutes() / 60) * 10) / 10;
-						timeTo = parseInt(toDate.getHours()) + Math.round((toDate.getMinutes() / 60) * 10) / 10;
-
-
-						if (Math.abs(scaleTimeTo - timeFrom) > Math.abs(scaleTimeFrom - timeTo))
-						{
-							fromDate.setHours(scaleInfo.shownTimeTo, 0, 0,0);
-							fromPos = this.getPosByDate(fromDate) - selectorWidth;
-						}
-						else
-						{
-							toDate.setHours(scaleInfo.shownTimeFrom, 0, 0,0);
-							fromPos = this.getPosByDate(toDate);
-						}
+						fromDate.setHours(scaleInfo.shownTimeTo, 0, 0,0);
+						fromPos = this.getPosByDate(fromDate) - selectorWidth;
+					}
+					else
+					{
+						toDate.setHours(scaleInfo.shownTimeFrom, 0, 0,0);
+						fromPos = this.getPosByDate(toDate);
 					}
 				}
 			}
 		}
-		return fromPos;
+		return Math.max(fromPos, 0);
 	}
 
 	transit(params = {})
 	{
-		let
-			fromX = params.fromX || parseInt(this.DOM.wrap.style.left),
-			toX = Selector.roundPos(params.toX || fromX),
-			triggerChangeEvents = params.triggerChangeEvents !== false,
-			focus = !!params.focus,
-			width = parseInt(this.DOM.wrap.offsetWidth);
+		this.DOM.wrap.style.display = 'block';
 
-		// triggerChangeEvents - it means that selector transition (animation caused from mouse ebents)
-		if (toX > (fromX + width) && triggerChangeEvents)
+		let duration;
+		if (Type.isDate(params.leftDate) && Type.isDate(params.rightDate))
 		{
-			toX -= width;
+			if (this.fullDayMode)
+			{
+				const dayCount = Math.ceil((this.currentDateTo.getTime() - this.currentDateFrom.getTime()) / (1000 * 3600 * 24));
+				params.leftDate.setHours(0, 0, 0, 0);
+				params.rightDate = new Date(params.leftDate.getTime() + (dayCount - 1) * 24 * 3600 * 1000);
+				params.rightDate.setHours(23, 55, 0, 0);
+			}
+			duration = params.rightDate.getTime() - params.leftDate.getTime();
+			const fromPos = this.getPosByDate(params.leftDate);
+			const toPos = this.getPosByDate(params.rightDate);
+			params.toX = fromPos;
+			this.DOM.wrap.style.width = (toPos - fromPos) + 'px';
 		}
+
+		let
+			fromX = params.fromX ?? parseInt(this.DOM.wrap.style.left),
+			toX = Selector.roundPos(params.toX ?? fromX),
+			triggerChangeEvents = params.triggerChangeEvents !== false,
+			focus = !!params.focus;
 
 		if (fromX !== toX)
 		{
@@ -523,7 +694,7 @@ export class Selector extends EventEmitter
 
 					if (triggerChangeEvents)
 					{
-						this.setValue(checkedPos);
+						this.setValue(checkedPos, duration);
 					}
 
 					if (focus)
@@ -553,7 +724,7 @@ export class Selector extends EventEmitter
 		{
 			if (triggerChangeEvents)
 			{
-				this.setValue();
+				this.setValue(false, duration);
 			}
 
 			if (focus === true)
@@ -565,63 +736,48 @@ export class Selector extends EventEmitter
 		}
 	}
 
-	showTitle(params = {})
+	showTitle(from, to)
 	{
 		let
-			fromPos = params.fromPos,
-			toPos = params.toPos,
-			selectorTitle = params.selectorTitle || this.getTitleNode(),
-			selector = params.selector || this.DOM.wrap,
-			timelineWidth = this.getTimelineWidth(),
-			fromDate, toDate;
+			fromDate = new Date(from.getTime()),
+			toDate = new Date(to.getTime()),
+			selectorTitle = this.getTitleNode(),
+			selector = this.DOM.wrap;
 
-		if (fromPos && toPos)
+		if (this.fullDayMode)
 		{
-			if (toPos > timelineWidth)
+			toDate = new Date(toDate.getTime() - 5 * 60 * 1000);
+			if (toDate.getDate() === fromDate.getDate())
 			{
-				fromPos = timelineWidth - parseInt(selector.style.width);
-				toPos = timelineWidth;
+				selectorTitle.innerHTML = BX.date.format('d F, D', fromDate.getTime() / 1000);
 			}
-
-			fromDate = this.getDateByPos(fromPos);
-			toDate = this.getDateByPos(toPos, true);
-			if (fromDate && toDate)
+			else
 			{
-				if (this.fullDayMode)
-				{
-					if (Math.abs(toDate.getTime() - fromDate.getTime() - Util.getDayLength()) < 1000)
-					{
-						selectorTitle.innerHTML = BX.date.format('d F, D', fromDate.getTime() / 1000);
-					}
-					else
-					{
-						selectorTitle.innerHTML =
-							BX.date.format('d F', fromDate.getTime() / 1000)
-							+ ' - '
-							+ BX.date.format('d F', toDate.getTime() / 1000);
-					}
-				}
-				else
-				{
-					selectorTitle.removeAttribute('style');
-					selectorTitle.innerHTML = Util.formatTime(fromDate) + ' - ' + Util.formatTime(toDate);
-				}
-
-				if (this.selectMode && this.lastTouchedEntry)
-				{
-					let
-						entriesListWidth = this.compactMode ? 0 : this.entriesListWidth,
-						selectorTitleLeft = parseInt(selector.style.left) - this.DOM.timelineWrap.scrollLeft + entriesListWidth + parseInt(selector.style.width) / 2,
-						selectorTitleTop = parseInt(this.timelineDataCont.offsetTop) + parseInt(this.lastTouchedEntry.style.top) - 12;
-
-					selectorTitle.style.top = selectorTitleTop + 'px';
-					selectorTitle.style.left = selectorTitleLeft + 'px';
-				}
-				else
-				{
-					selector.appendChild(selectorTitle);
-				}
+				selectorTitle.innerHTML =
+					BX.date.format('d F', fromDate.getTime() / 1000)
+					+ ' - '
+					+ BX.date.format('d F', toDate.getTime() / 1000);
 			}
+		}
+		else
+		{
+			selectorTitle.removeAttribute('style');
+			selectorTitle.innerHTML = Util.formatTime(fromDate) + ' - ' + Util.formatTime(toDate);
+		}
+
+		if (this.selectMode && this.lastTouchedEntry)
+		{
+			let
+				entriesListWidth = this.compactMode ? 0 : this.entriesListWidth,
+				selectorTitleLeft = parseInt(selector.style.left) - this.DOM.timelineWrap.scrollLeft + entriesListWidth + parseInt(selector.style.width) / 2,
+				selectorTitleTop = parseInt(this.timelineDataCont.offsetTop) + parseInt(this.lastTouchedEntry.style.top) - 12;
+
+			selectorTitle.style.top = selectorTitleTop + 'px';
+			selectorTitle.style.left = selectorTitleLeft + 'px';
+		}
+		else
+		{
+			selector.appendChild(selectorTitle);
 		}
 
 		if (selectorTitle === this.selectorTitle)

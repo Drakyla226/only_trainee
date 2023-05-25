@@ -1,4 +1,5 @@
-<?
+<?php
+
 class CSiteCheckerTest
 {
 	var $arTestVars;
@@ -195,8 +196,7 @@ class CSiteCheckerTest
 			else
 			{
 				$profile |= 16;
-				if ($GLOBALS['DB']->type == 'MYSQL')
-					$profile |= 32;
+				$profile |= 32;
 			}
 			$this->arTest = array();
 			$step0 = $step;
@@ -1009,15 +1009,14 @@ class CSiteCheckerTest
 
 		$ok = false;
 		$res = GetMessage('SC_NOT_LESS',array('#VAL#' => $last_success));
-		if (intval($last_success) > 32)
+		$last_success = (int)$last_success;
+		if ($last_success > 32)
 		{
 			$ok = true;
-			$cur = ini_get('memory_limit');
-			if (preg_match('#([0-9]+) *G#i', $cur, $regs))
-				$cur = $regs[1] * 1024;
-			if ($cur > 0 && $cur < $last_success)
+			$cur = \Bitrix\Main\Config\Ini::getInt('memory_limit');
+			if ($cur > 0 && $cur < $last_success * 1024 * 1024)
 			{
-				$res .= '<br> '.GetMessage('SC_MEMORY_CHANGED', array('#VAL0#' => $cur, '#VAL1#' => '512M'));
+				$res .= '<br> '.GetMessage('SC_MEMORY_CHANGED', array('#VAL0#' => ini_get('memory_limit'), '#VAL1#' => '512M'));
 				$ok = null;
 			}
 		}
@@ -1447,25 +1446,25 @@ class CSiteCheckerTest
 		}
 
 		if (COption::GetOptionString("im", "turn_server_self") == 'Y')
-			$host = COption::GetOptionString("im", "turn_server");
-		else
-			$host = 'turn.calls.bitrix24.com';
-		$port = 40001;
-
-		if (!$res = $this->ConnectToHost($host, $port))
-			$res = $this->ConnectToHost('udp://'.$host, $port);
-
-		$strRes = "";
-		if ($res)
 		{
-			stream_set_timeout($res, 5);
-			fwrite($res, "\r\n");
-			$strRes = fgets($res, 1024);
-			fclose($res);
+			$host = COption::GetOptionString("im", "turn_server");
+		}
+		else
+		{
+			$host = 'turn.calls.bitrix24.com';
+		}
+		$port = 3478;
+
+		if (!($res = $this->ConnectToHost($host, $port)))
+		{
+			$res = $this->ConnectToHost('udp://'.$host, $port);
 		}
 
-		if (false !== strpos($strRes, "OK"))
+		if ($res)
+		{
+			fclose($res);
 			return $this->Result(true, GetMessage("MAIN_SC_AVAIL"));
+		}
 		return $this->Result(null, GetMessage("MAIN_SC_NOT_AVAIL"));
 	}
 
@@ -2103,6 +2102,11 @@ class CSiteCheckerTest
 		$f = $res->Fetch();
 		$collation_connection = $f['Value'];
 
+		if ($collation_connection == 'utf8mb3_unicode_ci')
+		{
+			$collation_connection = 'utf8_unicode_ci';
+		}
+
 		$bAllIn1251 = true;
 		$res1 = $DB->Query('SELECT C.CHARSET FROM b_lang L, b_culture C WHERE C.ID=L.CULTURE_ID AND L.ACTIVE="Y"'); // for 'no kernel mode'
 		while($f1 = $res1->Fetch())
@@ -2324,6 +2328,12 @@ class CSiteCheckerTest
 					continue;
 
 				$f_charset = getCharsetByCollation($f_collation);
+
+				if ($f_charset == 'utf8mb3')
+				{
+					$f_charset = 'utf8';
+				}
+
 				if ($charset != $f_charset)
 				{
 					// field charset differs
@@ -3055,7 +3065,6 @@ function InitPureDB()
 	require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/autoload.php");
 
 	$application = \Bitrix\Main\HttpApplication::getInstance();
-	$application->initializeBasicKernel();
 
 	require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/mysql/database.php");
 
@@ -3141,5 +3150,3 @@ function PrintHTTP($strRequest, $strHeaders, $strRes)
 	(($l = strlen($strRes)) > 1000 ? substr($strRes, 0, 1000).' ... ('.$l.' bytes)' : $strRes)."\n".
 	"==========\n";
 }
-
-?>

@@ -1,5 +1,5 @@
 this.BX = this.BX || {};
-(function (exports,ui_forms,fileinput,catalog_skuTree,main_loader,ui_infoHelper,ui_entitySelector,catalog_productModel,catalog_productSelector,catalog_barcodeScanner,ui_notification,main_core,main_core_events,ui_qrauthorization,spotlight,ui_tour) {
+(function (exports,ui_designTokens,ui_forms,fileinput,catalog_skuTree,main_loader,ui_infoHelper,ui_entitySelector,catalog_productModel,catalog_productSelector,catalog_barcodeScanner,ui_notification,main_core,main_core_events,ui_qrauthorization,spotlight,ui_tour) {
 	'use strict';
 
 	let _ = t => t,
@@ -8,35 +8,46 @@ this.BX = this.BX || {};
 	    _t3,
 	    _t4,
 	    _t5,
-	    _t6;
+	    _t6,
+	    _t7,
+	    _t8;
 	class ProductSearchSelectorFooter extends ui_entitySelector.DefaultFooter {
 	  constructor(dialog, options) {
 	    super(dialog, options);
 	    this.loader = null;
+	    this.errorAdminHint = options.errorAdminHint || '';
 	    this.getDialog().subscribe('onSearch', this.handleOnSearch.bind(this));
 	  }
 
 	  getContent() {
 	    let phrase = '';
+	    const isViewCreateButton = this.options.allowCreateItem === true || this.options.allowEditItem === false;
 
-	    if (this.options.allowCreateItem === false) {
-	      phrase = this.getSaveContainer();
-	    } else {
+	    if (this.isViewEditButton() && isViewCreateButton) {
 	      phrase = main_core.Tag.render(_t || (_t = _`
 				<div>${0}</div>
-			`), main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER'));
+			`), main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_1'));
 	      const createButton = phrase.querySelector('create-button');
 	      main_core.Dom.replace(createButton, this.getLabelContainer());
 	      const changeButton = phrase.querySelector('change-button');
 	      main_core.Dom.replace(changeButton, this.getSaveContainer());
+	    } else if (this.isViewEditButton()) {
+	      phrase = this.getSaveContainer();
+	    } else {
+	      phrase = this.getLabelContainer();
 	    }
 
 	    return main_core.Tag.render(_t2 || (_t2 = _`
 			<div class="ui-selector-search-footer-box">
 				${0}
 				${0}
+				${0}
 			</div>
-		`), phrase, this.getLoaderContainer());
+		`), phrase, this.getHintContainer(), this.getLoaderContainer());
+	  }
+
+	  isViewEditButton() {
+	    return this.options.allowEditItem === true;
 	  }
 
 	  getLoader() {
@@ -106,7 +117,41 @@ this.BX = this.BX || {};
 	    });
 	  }
 
+	  getHintContainer() {
+	    return this.cache.remember('hint', () => {
+	      let message = null;
+
+	      if (!this.options.allowEditItem && !this.options.allowCreateItem) {
+	        message = main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_DISABLED_FOOTER_ALL_HINT', {
+	          '#ADMIN_HINT#': this.errorAdminHint
+	        });
+	      } else if (!this.options.allowEditItem) {
+	        message = main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_DISABLED_FOOTER_EDIT_HINT', {
+	          '#ADMIN_HINT#': this.errorAdminHint
+	        });
+	      } else if (!this.options.allowCreateItem) {
+	        message = main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_DISABLED_FOOTER_ADD_HINT', {
+	          '#ADMIN_HINT#': this.errorAdminHint
+	        });
+	      }
+
+	      if (!message) {
+	        return null;
+	      }
+
+	      const hintNode = main_core.Tag.render(_t7 || (_t7 = _`<span class="ui-btn ui-btn-icon-lock ui-btn-link"></span>`));
+	      hintNode.dataset.hint = message;
+	      hintNode.dataset.hintNoIcon = true;
+	      BX.UI.Hint.initNode(hintNode);
+	      return main_core.Tag.render(_t8 || (_t8 = _`<div class="product-search-selector-disabled-footer-hint">${0}</div>`), hintNode);
+	    });
+	  }
+
 	  onClickSaveChanges() {
+	    if (!this.options.allowEditItem) {
+	      return;
+	    }
+
 	    const lastQuery = this.getDialog().getActiveTab().getLastSearchQuery();
 	    this.getDialog().emit('ChangeItem:onClick', {
 	      query: lastQuery.query
@@ -116,6 +161,10 @@ this.BX = this.BX || {};
 	  }
 
 	  createItem() {
+	    if (!this.options.allowCreateItem) {
+	      return;
+	    }
+
 	    const tagSelector = this.getDialog().getTagSelector();
 
 	    if (tagSelector && tagSelector.isLocked()) {
@@ -169,9 +218,7 @@ this.BX = this.BX || {};
 	      this.show();
 	    }
 
-	    if (this.options.allowCreateItem !== false) {
-	      this.getQueryContainer().textContent = query;
-	    }
+	    this.getQueryContainer().textContent = " " + query;
 	  }
 
 	}
@@ -208,7 +255,12 @@ this.BX = this.BX || {};
 
 	}
 
-	class SelectorErrorCode {}
+	class SelectorErrorCode {
+	  static getCodes() {
+	    return [SelectorErrorCode.NOT_SELECTED_PRODUCT, SelectorErrorCode.FAILED_PRODUCT];
+	  }
+
+	}
 	SelectorErrorCode.NOT_SELECTED_PRODUCT = 'NOT_SELECTED_PRODUCT';
 	SelectorErrorCode.FAILED_PRODUCT = 'FAILED_PRODUCT';
 
@@ -219,15 +271,42 @@ this.BX = this.BX || {};
 	    _t4$1,
 	    _t5$1,
 	    _t6$1,
-	    _t7,
-	    _t8,
+	    _t7$1,
+	    _t8$1,
 	    _t9,
 	    _t10,
 	    _t11,
 	    _t12,
 	    _t13;
+
+	class DialogMode {}
+
+	DialogMode.SEARCHING = 'SEARCHING';
+	DialogMode.SHOW_PRODUCT_ITEM = 'SHOW_PRODUCT_ITEM';
+	DialogMode.SHOW_RECENT = 'SHOW_RECENT';
+
+	var _showSelectedItem = /*#__PURE__*/babelHelpers.classPrivateFieldLooseKey("showSelectedItem");
+
+	var _loadPreselectedItems = /*#__PURE__*/babelHelpers.classPrivateFieldLooseKey("loadPreselectedItems");
+
+	var _showPreselectedItems = /*#__PURE__*/babelHelpers.classPrivateFieldLooseKey("showPreselectedItems");
+
+	var _searchItem = /*#__PURE__*/babelHelpers.classPrivateFieldLooseKey("searchItem");
+
 	class ProductSearchInput {
 	  constructor(id, options = {}) {
+	    Object.defineProperty(this, _searchItem, {
+	      value: _searchItem2
+	    });
+	    Object.defineProperty(this, _showPreselectedItems, {
+	      value: _showPreselectedItems2
+	    });
+	    Object.defineProperty(this, _loadPreselectedItems, {
+	      value: _loadPreselectedItems2
+	    });
+	    Object.defineProperty(this, _showSelectedItem, {
+	      value: _showSelectedItem2
+	    });
 	    this.cache = new main_core.Cache.MemoryCache();
 	    this.id = id || main_core.Text.getRandom();
 	    this.selector = options.selector;
@@ -247,6 +326,8 @@ this.BX = this.BX || {};
 	    }
 
 	    this.ajaxInProcess = false;
+	    this.loadedSelectedItem = null;
+	    this.handleSearchInput = main_core.Runtime.debounce(this.searchInDialog, 500, this);
 	  }
 
 	  destroy() {}
@@ -305,7 +386,7 @@ this.BX = this.BX || {};
 
 	  getNameInput() {
 	    return this.cache.remember('nameInput', () => {
-	      return main_core.Tag.render(_t3$2 || (_t3$2 = _$2`
+	      const input = main_core.Tag.render(_t3$2 || (_t3$2 = _$2`
 				<input type="text"
 					class="ui-ctl-element ui-ctl-textbox"
 					autocomplete="off"
@@ -316,6 +397,13 @@ this.BX = this.BX || {};
 					onchange="${0}"
 				>
 			`), main_core.Text.encode(this.inputName), main_core.Text.encode(this.getValue()), main_core.Text.encode(this.getPlaceholder()), main_core.Text.encode(this.getValue()), this.handleNameInputHiddenChange.bind(this));
+
+	      if (this.selector.getConfig('SELECTOR_INPUT_DISABLED', false)) {
+	        main_core.Dom.addClass(input, 'ui-ctl-disabled');
+	        input.setAttribute('disabled', true);
+	      }
+
+	      return input;
 	    });
 	  }
 
@@ -360,7 +448,7 @@ this.BX = this.BX || {};
 
 	  getSearchIcon() {
 	    return this.cache.remember('searchIcon', () => {
-	      return main_core.Tag.render(_t7 || (_t7 = _$2`
+	      return main_core.Tag.render(_t7$1 || (_t7$1 = _$2`
 				<button
 					class="ui-ctl-after ui-ctl-icon-search"
 					onclick="${0}"
@@ -371,7 +459,7 @@ this.BX = this.BX || {};
 
 	  layout() {
 	    this.clearInputCache();
-	    const block = main_core.Tag.render(_t8 || (_t8 = _$2`<div class="ui-ctl ui-ctl-w100 ui-ctl-after-icon"></div>`));
+	    const block = main_core.Tag.render(_t8$1 || (_t8$1 = _$2`<div class="ui-ctl ui-ctl-w100 ui-ctl-after-icon"></div>`));
 	    this.toggleIcon(this.getClearIcon(), 'none');
 	    main_core.Dom.append(this.getClearIcon(), block);
 
@@ -382,10 +470,11 @@ this.BX = this.BX || {};
 
 	      this.toggleIcon(this.getSearchIcon(), main_core.Type.isStringFilled(this.getFilledValue()) ? 'none' : 'block');
 	      main_core.Dom.append(this.getSearchIcon(), block);
-	      main_core.Event.bind(this.getNameInput(), 'click', this.handleShowSearchDialog.bind(this));
-	      main_core.Event.bind(this.getNameInput(), 'input', this.handleShowSearchDialog.bind(this));
+	      main_core.Event.bind(this.getNameInput(), 'click', this.handleClickNameInput.bind(this));
+	      main_core.Event.bind(this.getNameInput(), 'input', this.handleSearchInput);
 	      main_core.Event.bind(this.getNameInput(), 'blur', this.handleNameInputBlur.bind(this));
 	      main_core.Event.bind(this.getNameInput(), 'keydown', this.handleNameInputKeyDown.bind(this));
+	      this.dialogMode = this.model.isCatalogExisted() ? DialogMode.SHOW_PRODUCT_ITEM : DialogMode.SHOW_RECENT;
 	    }
 
 	    if (this.showDetailLink() && main_core.Type.isStringFilled(this.getValue())) {
@@ -455,11 +544,13 @@ this.BX = this.BX || {};
 
 	      if (main_core.Type.isObject(settingsCollection.get('limitInfo'))) {
 	        params.footer = ProductCreationLimitedFooter;
-	      } else if (this.model && this.model.isSaveable() && this.model.isCatalogExisted()) {
+	      } else if (this.model && this.model.isCatalogExisted()) {
 	        params.footer = ProductSearchSelectorFooter;
 	        params.footerOptions = {
 	          inputName: this.inputName,
+	          allowEditItem: this.isAllowedEditProduct(),
 	          allowCreateItem: this.isAllowedCreateProduct(),
+	          errorAdminHint: settingsCollection.get('errorAdminHint'),
 	          creationLabel: main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE'),
 	          currentValue: this.getValue()
 	        };
@@ -474,32 +565,38 @@ this.BX = this.BX || {};
 	  }
 
 	  initHasDialogItems() {
-	    if (!main_core.Type.isNil(this.isHasDialogItems)) {
+	    if (!main_core.Type.isNil(this.selector.getConfig('EXIST_DIALOG_ITEMS'))) {
 	      return;
 	    }
 
 	    if (!this.selector.getModel().isEmpty()) {
-	      this.isHasDialogItems = true;
+	      this.selector.setConfig('EXIST_DIALOG_ITEMS', true);
 	      return;
 	    } // is null, that not send ajax
 
 
-	    this.isHasDialogItems = false;
+	    this.selector.setConfig('EXIST_DIALOG_ITEMS', false);
 	    const dialog = this.getDialog();
 
 	    if (dialog.hasDynamicLoad()) {
-	      dialog.hasRecentItems().then(isHasItems => {
-	        if (isHasItems === true) {
-	          this.isHasDialogItems = true;
+	      babelHelpers.classPrivateFieldLooseBase(this, _loadPreselectedItems)[_loadPreselectedItems]();
+
+	      dialog.subscribeOnce('onLoad', () => {
+	        if (dialog.getPreselectedItems().length > 1) {
+	          this.selector.setConfig('EXIST_DIALOG_ITEMS', true);
 	        }
 	      });
 	    } else {
-	      this.isHasDialogItems = true;
+	      this.selector.setConfig('EXIST_DIALOG_ITEMS', true);
 	    }
 	  }
 
 	  isAllowedCreateProduct() {
-	    return this.selector.getConfig('IS_ALLOWED_CREATION_PRODUCT', true);
+	    return this.selector.getConfig('IS_ALLOWED_CREATION_PRODUCT', true) && this.selector.checkProductAddRights();
+	  }
+
+	  isAllowedEditProduct() {
+	    return this.selector.checkProductEditRights();
 	  }
 
 	  handleNameInputKeyDown(event) {
@@ -539,11 +636,16 @@ this.BX = this.BX || {};
 	  }
 
 	  handleClearIconClick(event) {
+	    this.selector.emit('onBeforeClear', {
+	      selectorId: this.selector.getId(),
+	      rowId: this.selector.getRowId()
+	    });
+	    this.loadedSelectedItem = null;
+
 	    if (this.selector.isProductSearchEnabled() && !this.model.isEmpty()) {
 	      this.selector.clearState();
 	      this.selector.clearLayout();
 	      this.selector.layout();
-	      this.selector.searchInDialog();
 	    } else {
 	      const newValue = '';
 	      this.toggleIcon(this.getClearIcon(), 'none');
@@ -593,34 +695,53 @@ this.BX = this.BX || {};
 	    requestAnimationFrame(() => this.getNameInput().focus());
 	  }
 
-	  searchInDialog(searchQuery = '') {
-	    if (!this.selector.isProductSearchEnabled()) {
+	  searchInDialog() {
+	    const searchQuery = this.getFilledValue().trim();
+
+	    if (searchQuery === '') {
+	      if (this.isHasDialogItems === false) {
+	        this.getDialog().hide();
+	        return;
+	      }
+
+	      this.loadedSelectedItem = null;
+
+	      babelHelpers.classPrivateFieldLooseBase(this, _showPreselectedItems)[_showPreselectedItems]();
+
 	      return;
 	    }
 
-	    const dialog = this.getDialog();
+	    this.dialogMode = DialogMode.SEARCHING;
 
-	    if (dialog) {
-	      dialog.removeItems();
-	      searchQuery = searchQuery.trim();
+	    babelHelpers.classPrivateFieldLooseBase(this, _searchItem)[_searchItem](searchQuery);
 
-	      if (searchQuery === '') {
-	        if (this.isHasDialogItems === false) {
-	          dialog.hide();
-	          return;
-	        }
-
-	        dialog.loadState = 'UNSENT';
-	        dialog.load();
-	      }
-
-	      dialog.show();
-	      dialog.search(searchQuery);
-	    }
+	    this.isSearchingInProcess = true;
 	  }
 
-	  handleShowSearchDialog(event) {
-	    this.searchInDialog(this.getNameInput().value);
+	  handleClickNameInput() {
+	    const dialog = this.getDialog();
+
+	    if (dialog.isOpen() || this.getFilledValue() === '' && this.isHasDialogItems === false) {
+	      dialog.hide();
+	      return;
+	    }
+
+	    this.showItems();
+	  }
+
+	  showItems() {
+	    if (this.getFilledValue() === '') {
+	      babelHelpers.classPrivateFieldLooseBase(this, _showPreselectedItems)[_showPreselectedItems]();
+
+	      return;
+	    }
+
+	    if (!this.model.isCatalogExisted() || this.dialogMode !== DialogMode.SHOW_PRODUCT_ITEM) {
+	      this.searchInDialog();
+	      return;
+	    }
+
+	    babelHelpers.classPrivateFieldLooseBase(this, _showSelectedItem)[_showSelectedItem]();
 	  }
 
 	  handleNameInputBlur(event) {
@@ -645,8 +766,8 @@ this.BX = this.BX || {};
 
 	    if (this.isSearchEnabled() && this.selector.isEnabledEmptyProductError()) {
 	      setTimeout(() => {
-	        if (!this.selector.inProcess() && (this.model.isEmpty() || !main_core.Type.isStringFilled(this.getNameInput().value))) {
-	          this.model.getErrorCollection().setError(SelectorErrorCode.NOT_SELECTED_PRODUCT, main_core.Loc.getMessage('CATALOG_SELECTOR_SELECTED_PRODUCT_TITLE'));
+	        if (!this.selector.inProcess() && (this.model.isEmpty() || !main_core.Type.isStringFilled(this.getFilledValue()))) {
+	          this.model.getErrorCollection().setError(SelectorErrorCode.NOT_SELECTED_PRODUCT, this.selector.getEmptySelectErrorMessage());
 	          this.selector.layoutErrors();
 	        }
 	      }, 200);
@@ -672,7 +793,7 @@ this.BX = this.BX || {};
 	    const item = event.getData().item;
 	    this.setInputValueOnProductSelect(item);
 	    this.toggleIcon(this.getSearchIcon(), 'none');
-	    this.model.getErrorCollection().clearErrors();
+	    this.clearErrors();
 
 	    if (this.selector) {
 	      const isNew = item.getCustomData().get('isNew');
@@ -691,7 +812,19 @@ this.BX = this.BX || {};
 	      this.selector.layout();
 	    }
 
+	    this.dialogMode = DialogMode.SHOW_PRODUCT_ITEM;
+	    this.loadedSelectedItem = item;
 	    this.cache.delete('dialog');
+	  }
+
+	  clearErrors() {
+	    const errors = this.model.getErrorCollection().getErrors();
+
+	    for (const code in errors) {
+	      if (catalog_productSelector.ProductSelector.ErrorCodes.getCodes().includes(code)) {
+	        this.model.getErrorCollection().removeError(code);
+	      }
+	    }
 	  }
 
 	  createProductModelFromSearchQuery(searchQuery) {
@@ -823,6 +956,101 @@ this.BX = this.BX || {};
 	  removeQrAuth() {}
 
 	}
+
+	function _showSelectedItem2() {
+	  var _dialog$getFooter2;
+
+	  if (!this.selector.isProductSearchEnabled()) {
+	    return;
+	  }
+
+	  const dialog = this.getDialog();
+	  dialog.removeItems();
+	  new Promise(resolve => {
+	    if (!main_core.Type.isNil(this.loadedSelectedItem)) {
+	      resolve();
+	      return;
+	    }
+
+	    dialog.showLoader();
+	    main_core.ajax.runAction('catalog.productSelector.getSkuSelectorItem', {
+	      json: {
+	        id: this.selector.getModel().getSkuId(),
+	        options: {
+	          iblockId: this.model.getIblockId(),
+	          basePriceId: this.model.getBasePriceId(),
+	          currency: this.model.getCurrency()
+	        }
+	      }
+	    }).then(response => {
+	      dialog.hideLoader();
+	      this.loadedSelectedItem = null;
+
+	      if (main_core.Type.isObject(response.data) && !dialog.isLoading()) {
+	        this.loadedSelectedItem = dialog.addItem(response.data);
+	      }
+
+	      resolve();
+	    });
+	  }).then(() => {
+	    if (!main_core.Type.isNil(this.loadedSelectedItem)) {
+	      var _dialog$getFooter;
+
+	      dialog.setPreselectedItems([this.selector.getModel().getSkuId()]);
+	      dialog.getRecentTab().getRootNode().addItem(this.loadedSelectedItem);
+	      dialog.selectFirstTab();
+	      (_dialog$getFooter = dialog.getFooter()) == null ? void 0 : _dialog$getFooter.hide();
+	    } else {
+	      this.searchInDialog();
+	    }
+	  });
+	  dialog.getPopup().show();
+	  (_dialog$getFooter2 = dialog.getFooter()) == null ? void 0 : _dialog$getFooter2.hide();
+	}
+
+	function _loadPreselectedItems2() {
+	  const dialog = this.getDialog();
+
+	  if (dialog.isLoading()) {
+	    return;
+	  }
+
+	  if (this.loadedSelectedItem) {
+	    dialog.removeItems();
+	    dialog.loadState = 'UNSENT';
+	    this.loadedSelectedItem = null;
+	  }
+
+	  dialog.load();
+	}
+
+	function _showPreselectedItems2() {
+	  var _dialog$getFooter3;
+
+	  if (!this.selector.isProductSearchEnabled()) {
+	    return;
+	  }
+
+	  this.dialogMode = DialogMode.SHOW_RECENT;
+	  const dialog = this.getDialog();
+
+	  babelHelpers.classPrivateFieldLooseBase(this, _loadPreselectedItems)[_loadPreselectedItems]();
+
+	  dialog.selectFirstTab();
+	  (_dialog$getFooter3 = dialog.getFooter()) == null ? void 0 : _dialog$getFooter3.hide();
+	  dialog.show();
+	}
+
+	function _searchItem2(searchQuery = '') {
+	  if (!this.selector.isProductSearchEnabled()) {
+	    return;
+	  }
+
+	  const dialog = this.getDialog();
+	  dialog.getPopup().show();
+	  dialog.search(searchQuery);
+	}
+
 	ProductSearchInput.SEARCH_TYPE_ID = 'product';
 
 	let _$3 = t => t,
@@ -869,7 +1097,7 @@ this.BX = this.BX || {};
 	  }
 
 	  restoreDefaultInputHtml() {
-	    var _this$selector$getMod4;
+	    var _this$selector$getMod4, _this$selector$getMod5;
 
 	    const defaultInput = `
 			<div class='ui-image-input-container ui-image-input-img--disabled'>
@@ -879,10 +1107,11 @@ this.BX = this.BX || {};
 			</div>
 `;
 	    (_this$selector$getMod4 = this.selector.getModel()) == null ? void 0 : _this$selector$getMod4.getImageCollection().setEditInput(defaultInput);
+	    (_this$selector$getMod5 = this.selector.getModel()) == null ? void 0 : _this$selector$getMod5.getImageCollection().setPreview(defaultInput);
 	  }
 
 	  isViewMode() {
-	    return this.selector && this.selector.isViewMode();
+	    return this.selector && (this.selector.isViewMode() || !this.selector.model.isSaveable());
 	  }
 
 	  isEnabledLiveSaving() {
@@ -890,10 +1119,10 @@ this.BX = this.BX || {};
 	  }
 
 	  layout() {
-	    var _this$selector$getMod5, _this$selector$getMod6, _this$selector$getMod7, _this$selector$getMod8;
+	    var _this$selector$getMod6, _this$selector$getMod7, _this$selector$getMod8, _this$selector$getMod9;
 
 	    const imageContainer = main_core.Tag.render(_t$3 || (_t$3 = _$3`<div></div>`));
-	    const html = this.isViewMode() ? (_this$selector$getMod5 = this.selector.getModel()) == null ? void 0 : (_this$selector$getMod6 = _this$selector$getMod5.getImageCollection()) == null ? void 0 : _this$selector$getMod6.getPreview() : (_this$selector$getMod7 = this.selector.getModel()) == null ? void 0 : (_this$selector$getMod8 = _this$selector$getMod7.getImageCollection()) == null ? void 0 : _this$selector$getMod8.getEditInput();
+	    const html = this.isViewMode() ? (_this$selector$getMod6 = this.selector.getModel()) == null ? void 0 : (_this$selector$getMod7 = _this$selector$getMod6.getImageCollection()) == null ? void 0 : _this$selector$getMod7.getPreview() : (_this$selector$getMod8 = this.selector.getModel()) == null ? void 0 : (_this$selector$getMod9 = _this$selector$getMod8.getImageCollection()) == null ? void 0 : _this$selector$getMod9.getEditInput();
 	    main_core.Runtime.html(imageContainer, html);
 	    return imageContainer;
 	  }
@@ -910,19 +1139,23 @@ this.BX = this.BX || {};
 	  constructor(id, options = {}) {
 	    super(id, options);
 	    this.isEmptyBarcode = options.isEmptyBarcode;
+	    this.getDialog().subscribe('SearchTab:onLoad', this.handleOnSearchLoad.bind(this));
 	  }
 
 	  getContent() {
 	    this.barcodeContent = super.getContent();
 	    this.scannerContent = this.getScannerContent();
 	    main_core.Dom.style(this.barcodeContent, 'display', 'none');
-	    main_core.Dom.style(this.scannerContent, 'display', 'none');
 	    return main_core.Tag.render(_t$4 || (_t$4 = _$4`
 			<div class="catalog-footers-container">
 				${0}
 				${0}
 			</div>
 		`), this.barcodeContent, this.scannerContent);
+	  }
+
+	  isViewEditButton() {
+	    return !this.isEmptyBarcode && super.isViewEditButton();
 	  }
 
 	  getScannerContent() {
@@ -975,31 +1208,31 @@ this.BX = this.BX || {};
 	      query
 	    } = event.getData();
 
-	    if (this.isEmptyBarcode) {
-	      if (query === '') {
-	        this.show();
-	        main_core.Dom.style(this.scannerContent, 'display', '');
-	      } else {
-	        this.hide();
-	      }
+	    if (!main_core.Type.isStringFilled(query)) {
+	      this.show();
+	      main_core.Dom.style(this.scannerContent, 'display', '');
+	      main_core.Dom.style(this.barcodeContent, 'display', 'none');
+	    } else if (this.options.currentValue === query) {
+	      this.hide();
 	    } else {
-	      if (query === '') {
-	        this.show();
-	        main_core.Dom.style(this.barcodeContent, 'display', 'none');
-	        main_core.Dom.style(this.scannerContent, 'display', '');
-	      } else if (this.options.currentValue === query) {
-	        this.hide();
-	      } else {
-	        this.show();
-	        main_core.Dom.style(this.barcodeContent, 'display', '');
-	        main_core.Dom.style(this.scannerContent, 'display', 'none');
-	      }
+	      this.show();
+	      main_core.Dom.style(this.barcodeContent, 'display', '');
+	      main_core.Dom.style(this.scannerContent, 'display', 'none');
 	    }
 
-	    if (this.options.allowCreateItem !== false) {
-	      this.getQueryContainer().textContent = query;
-	      this.getScannerQueryContainer().textContent = query;
-	    }
+	    this.getQueryContainer().textContent = " " + query;
+	    this.getScannerQueryContainer().textContent = " " + query;
+	  }
+
+	  handleOnSearchLoad(event) {
+	    const {
+	      searchTab
+	    } = event.getData();
+	    this.getDialog().getItems().forEach(item => {
+	      if (item.getCustomData().get('BARCODE') === searchTab.getLastSearchQuery().getQuery()) {
+	        this.hide();
+	      }
+	    });
 	  }
 
 	}
@@ -1011,8 +1244,8 @@ this.BX = this.BX || {};
 	    _t4$3,
 	    _t5$3,
 	    _t6$2,
-	    _t7$1,
-	    _t8$1,
+	    _t7$2,
+	    _t8$2,
 	    _t9$1,
 	    _t10$1;
 	class BarcodeSearchInput extends ProductSearchInput {
@@ -1022,6 +1255,7 @@ this.BX = this.BX || {};
 	    this.onBlurHandler = this.handleBlurEvent.bind(this);
 	    this.focused = false;
 	    this.settingsCollection = main_core.Extension.getSettings('catalog.product-selector');
+	    this.isInstalledMobileApp = this.selector.getConfig('IS_INSTALLED_MOBILE_APP') || this.settingsCollection.get('isInstallMobileApp');
 
 	    if (!this.settingsCollection.get('isEnabledQrAuth') && this.selector.getConfig('ENABLE_BARCODE_QR_AUTH', true)) {
 	      this.qrAuth = new ui_qrauthorization.QrAuthorization();
@@ -1118,30 +1352,22 @@ this.BX = this.BX || {};
 
 	      if (main_core.Type.isObject(this.settingsCollection.get('limitInfo'))) {
 	        params.footer = ProductCreationLimitedFooter;
-	      } else if (this.model && this.model.isSaveable() && this.model.isCatalogExisted()) {
-	        params.footer = BarcodeSearchSelectorFooter;
-	        params.footerOptions = {
-	          inputEntity: this,
-	          isEmptyBarcode: false,
-	          inputName: this.inputName,
-	          allowCreateItem: this.isAllowedCreateProduct(),
-	          creationLabel: main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE'),
-	          currentValue: this.getValue()
-	        };
 	      } else {
 	        params.footer = BarcodeSearchSelectorFooter;
 	        params.footerOptions = {
 	          inputEntity: this,
-	          isEmptyBarcode: true,
+	          isEmptyBarcode: !this.model || !this.model.isCatalogExisted(),
 	          inputName: this.inputName,
+	          errorAdminHint: this.settingsCollection.get('errorAdminHint'),
+	          allowEditItem: this.isAllowedEditProduct(),
 	          allowCreateItem: this.isAllowedCreateProduct(),
 	          creationLabel: main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE'),
-	          currentValue: this.getValue()
-	        };
-	        params.searchOptions = {
-	          allowCreateItem: this.isAllowedCreateProduct(),
-	          footerOptions: {
-	            label: main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE')
+	          currentValue: this.getValue(),
+	          searchOptions: {
+	            allowCreateItem: this.isAllowedCreateProduct(),
+	            footerOptions: {
+	              label: main_core.Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_CREATE_WITH_BARCODE')
+	            }
 	          }
 	        };
 	      }
@@ -1176,7 +1402,7 @@ this.BX = this.BX || {};
 	        });
 	      }
 
-	      return main_core.Tag.render(_t7$1 || (_t7$1 = _$5`
+	      return main_core.Tag.render(_t7$2 || (_t7$2 = _$5`
 				<div data-role="mobile-popup">
 					<div class="product-selector-mobile-popup-overlay"></div>
 					<div class="product-selector-mobile-popup-content">
@@ -1201,14 +1427,17 @@ this.BX = this.BX || {};
 	    main_core.ajax.runAction('catalog.ProductSelector.isInstalledMobileApp', {
 	      json: {}
 	    }).then(result => {
+	      this.selector.emit('onBarcodeQrClose', {});
+
 	      if (result.data === true) {
-	        this.selector.emit('onBarcodeQrClose', {});
+	        this.selector.emit('onBarcodeScannerInstallChecked', {});
+	        this.isInstalledMobileApp = true;
 	      }
 	    });
 	    main_core.userOptions.save('product-selector', 'barcodeQrAuth', 'showed', 'Y');
 	  }
 
-	  handleShowSearchDialog(event) {
+	  handleClickNameInput(event) {
 	    if (this.qrAuth && this.getDialog().getContainer()) {
 	      if (!main_core.Dom.hasClass(this.getDialog().getContainer(), 'qr-barcode-info')) {
 	        main_core.Dom.addClass(this.getDialog().getContainer(), 'qr-barcode-info');
@@ -1219,7 +1448,11 @@ this.BX = this.BX || {};
 	      }
 	    }
 
-	    super.handleShowSearchDialog(event);
+	    super.handleClickNameInput(event);
+	  }
+
+	  showItems() {
+	    this.searchInDialog();
 	  }
 
 	  onChangeValue(value) {
@@ -1230,6 +1463,9 @@ this.BX = this.BX || {};
 	    main_core_events.EventEmitter.emit('ProductSelector::onBarcodeChange', {
 	      rowId: this.selector.getRowId(),
 	      fields
+	    });
+	    this.selector.emit('onBarcodeChange', {
+	      value
 	    });
 
 	    if (this.selector.isEnabledAutosave()) {
@@ -1248,30 +1484,34 @@ this.BX = this.BX || {};
 	    }
 	  }
 
-	  searchInDialog(searchQuery = '') {
+	  searchInDialog() {
+	    const searchQuery = this.getFilledValue().trim();
+	    this.searchByBarcode(searchQuery);
+	  }
+
+	  searchByBarcode(searchQuery = '') {
 	    if (!this.selector.isProductSearchEnabled()) {
 	      return;
 	    }
 
 	    const dialog = this.getDialog();
-	    /*if (searchQuery === '' && this.model.isEmpty())
-	    {
-	    	dialog.hide();
-	    	return;
-	    }*/
+
+	    if (!dialog) {
+	      return;
+	    }
 
 	    dialog.removeItems();
 
-	    if (dialog) {
-	      if (searchQuery === '') {
+	    if (!main_core.Type.isStringFilled(searchQuery)) {
+	      if (this.model && this.model.isCatalogExisted()) {
 	        dialog.setPreselectedItems([[BarcodeSearchInput.SEARCH_TYPE_ID, this.model.getSkuId()]]);
 	        dialog.loadState = 'UNSENT';
 	        dialog.load();
 	      }
-
-	      dialog.show();
-	      dialog.search(searchQuery);
 	    }
+
+	    dialog.show();
+	    dialog.search(searchQuery);
 	  }
 
 	  handleNameInputBlur(event) {
@@ -1336,14 +1576,22 @@ this.BX = this.BX || {};
 	  }
 
 	  startMobileScanner(event) {
-	    if (!this.settingsCollection.get('isInstallMobileApp') && this.selector.getConfig('ENABLE_BARCODE_QR_AUTH', true)) {
-	      this.qrAuth = new ui_qrauthorization.QrAuthorization();
-	      this.qrAuth.createQrCodeImage();
-	      this.handleShowSearchDialog(event);
+	    if (this.isInstalledMobileApp) {
+	      this.sendMobilePush(event);
 	      return;
 	    }
 
-	    this.sendMobilePush(event);
+	    if (!this.qrAuth) {
+	      this.qrAuth = new ui_qrauthorization.QrAuthorization();
+	      this.qrAuth.createQrCodeImage();
+	    }
+
+	    if (this.getDialog().isOpen()) {
+	      this.getDialog().hide();
+	      this.getDialog().subscribeOnce('onHide', this.handleClickNameInput.bind(this));
+	    } else {
+	      this.handleClickNameInput(event);
+	    }
 	  }
 
 	  sendMobilePush(event) {
@@ -1357,7 +1605,7 @@ this.BX = this.BX || {};
 
 	    const token = this.selector.getMobileScannerToken();
 	    catalog_barcodeScanner.BarcodeScanner.open(token);
-	    const repeatLink = main_core.Tag.render(_t8$1 || (_t8$1 = _$5`<span class='ui-notification-balloon-action'>${0}</span>`), main_core.Loc.getMessage('CATALOG_SELECTOR_SEND_PUSH_ON_SCANNER_NOTIFICATION_REPEAT'));
+	    const repeatLink = main_core.Tag.render(_t8$2 || (_t8$2 = _$5`<span class='ui-notification-balloon-action'>${0}</span>`), main_core.Loc.getMessage('CATALOG_SELECTOR_SEND_PUSH_ON_SCANNER_NOTIFICATION_REPEAT'));
 	    main_core.Event.bind(repeatLink, 'click', this.sendMobilePush.bind(this));
 	    const content = main_core.Tag.render(_t9$1 || (_t9$1 = _$5`
 			<div>
@@ -1387,7 +1635,7 @@ this.BX = this.BX || {};
 	      if (productId) {
 	        this.selectScannedBarcodeProduct(productId);
 	      } else {
-	        this.searchInDialog(barcode);
+	        this.searchByBarcode(barcode);
 	      }
 
 	      this.getNameInput().value = main_core.Text.encode(barcode);
@@ -1396,7 +1644,7 @@ this.BX = this.BX || {};
 
 	  selectScannedBarcodeProduct(productId) {
 	    this.toggleIcon(this.getSearchIcon(), 'none');
-	    this.model.getErrorCollection().clearErrors();
+	    this.clearErrors();
 
 	    if (this.selector) {
 	      this.selector.onProductSelect(productId, {
@@ -1416,7 +1664,7 @@ this.BX = this.BX || {};
 				<button	class="ui-ctl-before warehouse-barcode-icon" title="${0}"></button>
 			`), main_core.Loc.getMessage('CATALOG_SELECTOR_BARCODE_ICON_TITLE'));
 
-	      if (!this.settingsCollection.get('isShowedBarcodeSpotlightInfo') && this.selector.getConfig('ENABLE_INFO_SPOTLIGHT', true)) {
+	      if (!this.settingsCollection.get('isShowedBarcodeSpotlightInfo') && this.settingsCollection.get('isAllowedShowBarcodeSpotlightInfo') && this.selector.getConfig('ENABLE_INFO_SPOTLIGHT', true)) {
 	        this.spotlight = new BX.SpotLight({
 	          id: 'selector_barcode_scanner_info',
 	          targetElement: barcodeIcon,
@@ -1445,7 +1693,7 @@ this.BX = this.BX || {};
 	        event.preventDefault();
 
 	        if (this.qrAuth) {
-	          this.handleShowSearchDialog(event);
+	          this.handleClickNameInput(event);
 	        } else {
 	          this.startMobileScanner(event);
 	        }
@@ -1495,7 +1743,8 @@ this.BX = this.BX || {};
 	    _t4$4,
 	    _t5$4,
 	    _t6$3,
-	    _t7$2;
+	    _t7$3,
+	    _t8$3;
 	const instances = new Map();
 	const iblockSkuTreeProperties = new Map();
 
@@ -1520,10 +1769,12 @@ this.BX = this.BX || {};
 	    this.onSaveImageHandler = this.onSaveImage.bind(this);
 	    this.onChangeFieldsHandler = main_core.Runtime.debounce(this.onChangeFields, 500, this);
 	    this.onUploaderIsInitedHandler = this.onUploaderIsInited.bind(this);
+	    this.onNameChangeFieldHandler = main_core.Runtime.debounce(this.onNameChange, 500, this);
 	    this.setEventNamespace('BX.Catalog.ProductSelector');
 	    this.id = id || main_core.Text.getRandom();
 	    options.inputFieldName = options.inputFieldName || ProductSelector.INPUT_FIELD_NAME;
 	    this.options = options || {};
+	    this.settings = main_core.Extension.getSettings('catalog.product-selector');
 	    this.type = this.options.type || ProductSelector.INPUT_FIELD_NAME;
 	    this.setMode(options.mode);
 
@@ -1555,7 +1806,7 @@ this.BX = this.BX || {};
 	    }
 
 	    if (this.isShowableEmptyProductError()) {
-	      this.model.getErrorCollection().setError(SelectorErrorCode.NOT_SELECTED_PRODUCT, main_core.Loc.getMessage('CATALOG_SELECTOR_SELECTED_PRODUCT_TITLE'));
+	      this.model.getErrorCollection().setError(SelectorErrorCode.NOT_SELECTED_PRODUCT, this.getEmptySelectErrorMessage());
 	    }
 
 	    if (options.fileView) {
@@ -1576,9 +1827,7 @@ this.BX = this.BX || {};
 	      this.setMobileScannerToken(options.scannerToken);
 	    }
 
-	    main_core_events.EventEmitter.subscribe('ProductList::onChangeFields', this.onChangeFieldsHandler);
-	    main_core_events.EventEmitter.subscribe('Catalog.ImageInput::save', this.onSaveImageHandler);
-	    main_core_events.EventEmitter.subscribe('onUploaderIsInited', this.onUploaderIsInitedHandler);
+	    this.subscribeEvents();
 	    instances.set(this.id, this);
 	  }
 
@@ -1600,6 +1849,10 @@ this.BX = this.BX || {};
 	    return this.mode === ProductSelector.MODE_VIEW;
 	  }
 
+	  isShortViewFormat() {
+	    return this.getConfig('VIEW_FORMAT', ProductSelector.FULL_VIEW_FORMAT) === ProductSelector.SHORT_VIEW_FORMAT;
+	  }
+
 	  isSaveable() {
 	    return !this.isViewMode() && this.model.isSaveable();
 	  }
@@ -1612,8 +1865,30 @@ this.BX = this.BX || {};
 	    return !this.isViewMode() && this.getConfig('ENABLE_MOBILE_SCANNING', true);
 	  }
 
+	  getEmptySelectErrorMessage() {
+	    return this.checkProductAddRights() ? main_core.Loc.getMessage('CATALOG_SELECTOR_SELECTED_PRODUCT_TITLE') : main_core.Loc.getMessage('CATALOG_SELECTOR_SELECT_PRODUCT_TITLE');
+	  }
+
 	  getMobileScannerToken() {
 	    return this.mobileScannerToken || main_core.Text.getRandom(16);
+	  }
+
+	  checkProductViewRights() {
+	    var _this$model$checkAcce;
+
+	    return (_this$model$checkAcce = this.model.checkAccess(catalog_productModel.RightActionDictionary.ACTION_PRODUCT_VIEW)) != null ? _this$model$checkAcce : true;
+	  }
+
+	  checkProductEditRights() {
+	    var _this$model$checkAcce2;
+
+	    return (_this$model$checkAcce2 = this.model.checkAccess(catalog_productModel.RightActionDictionary.ACTION_PRODUCT_EDIT)) != null ? _this$model$checkAcce2 : false;
+	  }
+
+	  checkProductAddRights() {
+	    var _this$model$checkAcce3;
+
+	    return (_this$model$checkAcce3 = this.model.checkAccess(catalog_productModel.RightActionDictionary.ACTION_PRODUCT_ADD)) != null ? _this$model$checkAcce3 : false;
 	  }
 
 	  setMobileScannerToken(token) {
@@ -1657,7 +1932,7 @@ this.BX = this.BX || {};
 	  }
 
 	  isProductSearchEnabled() {
-	    return this.getConfig('ENABLE_SEARCH', false) && this.model.getIblockId() > 0;
+	    return this.getConfig('ENABLE_SEARCH', false) && this.model.getIblockId() > 0 && this.checkProductViewRights();
 	  }
 
 	  isSkuTreeEnabled() {
@@ -1689,7 +1964,7 @@ this.BX = this.BX || {};
 	  }
 
 	  isInputDetailLinkEnabled() {
-	    return this.getConfig('ENABLE_INPUT_DETAIL_LINK', false) && main_core.Type.isStringFilled(this.model.getDetailPath());
+	    return this.getConfig('ENABLE_INPUT_DETAIL_LINK', false) && main_core.Type.isStringFilled(this.model.getDetailPath()) && this.checkProductViewRights();
 	  }
 
 	  getWrapper() {
@@ -1742,8 +2017,10 @@ this.BX = this.BX || {};
 	      }
 
 	      main_core.Dom.append(this.getImageContainer(), wrapper);
-	    } else {
-	      main_core.Dom.addClass(wrapper, 'catalog-product-field-no-image');
+	    }
+
+	    if (this.isViewMode()) {
+	      main_core.Dom.append(block, wrapper);
 	    }
 
 	    if (this.isViewMode()) {
@@ -1784,6 +2061,10 @@ this.BX = this.BX || {};
 	    const errors = this.model.getErrorCollection().getErrors();
 
 	    for (const code in errors) {
+	      if (!ProductSelector.ErrorCodes.getCodes().includes(code)) {
+	        continue;
+	      }
+
 	      if (code === 'EMPTY_IMAGE') {
 	        this.setImageErrorBorder();
 	      } else {
@@ -1840,17 +2121,30 @@ this.BX = this.BX || {};
 	    this.unsubscribeToVariationChange();
 	  }
 
+	  subscribeEvents() {
+	    main_core_events.EventEmitter.subscribe('ProductList::onChangeFields', this.onChangeFieldsHandler);
+	    main_core_events.EventEmitter.subscribe('ProductSelector::onNameChange', this.onNameChangeFieldHandler);
+	    main_core_events.EventEmitter.subscribe('Catalog.ImageInput::save', this.onSaveImageHandler);
+	    main_core_events.EventEmitter.subscribe('onUploaderIsInited', this.onUploaderIsInitedHandler);
+	  }
+
 	  unsubscribeEvents() {
 	    this.unsubscribeToVariationChange();
 	    main_core_events.EventEmitter.unsubscribe('Catalog.ImageInput::save', this.onSaveImageHandler);
 	    main_core_events.EventEmitter.unsubscribe('ProductList::onChangeFields', this.onChangeFieldsHandler);
 	    main_core_events.EventEmitter.unsubscribe('onUploaderIsInited', this.onUploaderIsInitedHandler);
+	    main_core_events.EventEmitter.unsubscribe('onUploaderIsInited', this.onUploaderIsInitedHandler);
+	    main_core_events.EventEmitter.unsubscribe('ProductSelector::onNameChange', this.onNameChangeFieldHandler);
 	  }
 
 	  defineWrapperClass(wrapper) {
 	    if (this.isViewMode()) {
 	      main_core.Dom.addClass(wrapper, 'catalog-product-view');
 	      main_core.Dom.removeClass(wrapper, 'catalog-product-edit');
+
+	      if (this.isShortViewFormat()) {
+	        main_core.Dom.addClass(wrapper, '--short-format');
+	      }
 	    } else {
 	      main_core.Dom.addClass(wrapper, 'catalog-product-edit');
 	      main_core.Dom.removeClass(wrapper, 'catalog-product-view');
@@ -1879,7 +2173,7 @@ this.BX = this.BX || {};
 	  }
 
 	  layoutNameBlock() {
-	    const block = main_core.Tag.render(_t7$2 || (_t7$2 = _$6`<div class="catalog-product-field-input"></div>`));
+	    const block = main_core.Tag.render(_t7$3 || (_t7$3 = _$6`<div class="catalog-product-field-input"></div>`));
 
 	    if (this.isViewMode()) {
 	      main_core.Dom.append(this.getNameBlockView(), block);
@@ -1944,7 +2238,8 @@ this.BX = this.BX || {};
 	      this.skuTreeInstance = new catalog_skuTree.SkuTree({
 	        skuTree: this.getModel().getSkuTree(),
 	        selectable: this.getConfig('ENABLE_SKU_SELECTION', true),
-	        hideUnselected: this.getConfig('HIDE_UNSELECTED_ITEMS', false)
+	        hideUnselected: this.getConfig('HIDE_UNSELECTED_ITEMS', false),
+	        isShortView: this.isViewMode() && this.isShortViewFormat()
 	      });
 	    }
 
@@ -2023,6 +2318,25 @@ this.BX = this.BX || {};
 	    });
 	  }
 
+	  onNameChange(event) {
+	    const eventData = event.getData();
+
+	    if (eventData.rowId !== this.getRowId() || !this.isEnabledAutosave()) {
+	      return;
+	    }
+
+	    const fields = eventData.fields;
+	    this.getModel().setFields(fields);
+	    this.getModel().save().then(() => {
+	      BX.UI.Notification.Center.notify({
+	        id: 'saving_field_notify_name',
+	        closeButton: false,
+	        content: main_core.Tag.render(_t8$3 || (_t8$3 = _$6`<div>${0}</div>`), main_core.Loc.getMessage('CATALOG_SELECTOR_SAVING_NOTIFICATION_NAME_CHANGED')),
+	        autoHide: true
+	      });
+	    });
+	  }
+
 	  onSaveImage(event) {
 	    const [, inputId, response] = event.getData();
 
@@ -2085,12 +2399,22 @@ this.BX = this.BX || {};
 	  processResponse(response, config = {}, isProductAction = false) {
 	    const data = (response == null ? void 0 : response.data) || null;
 	    babelHelpers.classPrivateFieldLooseBase(this, _inAjaxProcess)[_inAjaxProcess] = false;
+	    const fields = (data == null ? void 0 : data.fields) || [];
+
+	    if (main_core.Type.isArray(config.immutableFields)) {
+	      config.immutableFields.forEach(field => {
+	        fields[field] = this.getModel().getField(field);
+	      });
+	      data.fields = fields;
+	    }
+
+	    if (isProductAction) {
+	      this.clearState();
+	    }
 
 	    if (data) {
 	      this.changeSelectedElement(data, config);
-	    } else if (isProductAction) {
-	      this.clearState();
-	    } else {
+	    } else if (!isProductAction) {
 	      this.productSelectAjaxAction(this.getModel().getProductId());
 	    }
 
@@ -2101,19 +2425,12 @@ this.BX = this.BX || {};
 	      this.layout();
 	    }
 
-	    const fields = (data == null ? void 0 : data.fields) || null;
-
-	    if (main_core.Type.isArray(config.immutableFields)) {
-	      config.immutableFields.forEach(field => {
-	        fields[field] = this.getModel().getField(field);
-	      });
-	    }
-
 	    this.emit('onChange', {
 	      selectorId: this.id,
 	      rowId: this.getRowId(),
 	      isNew: config.isNew || false,
-	      fields
+	      fields,
+	      morePhoto: this.getModel().getImageCollection().getMorePhotoValues()
 	    });
 	  }
 
@@ -2126,18 +2443,6 @@ this.BX = this.BX || {};
 	      this.getModel().setOption('skuId', main_core.Text.toInteger(data.skuId));
 	      this.getModel().setOption('isSimpleModel', false);
 	      this.getModel().setOption('isNew', config.isNew);
-	    }
-
-	    if (main_core.Type.isArray(this.options.immutableFields)) {
-	      this.options.immutableFields.forEach(field => {
-	        data.fields[field] = this.getModel().getField(field);
-	      });
-	    }
-
-	    if (main_core.Type.isArray(config.immutableFields)) {
-	      config.immutableFields.forEach(field => {
-	        data.fields[field] = this.getModel().getField(field);
-	      });
 	    }
 
 	    this.getModel().initFields(data.fields);
@@ -2195,11 +2500,13 @@ this.BX = this.BX || {};
 	}
 	ProductSelector.MODE_VIEW = 'view';
 	ProductSelector.MODE_EDIT = 'edit';
+	ProductSelector.SHORT_VIEW_FORMAT = 'short';
+	ProductSelector.FULL_VIEW_FORMAT = 'full';
 	ProductSelector.INPUT_FIELD_NAME = 'NAME';
 	ProductSelector.INPUT_FIELD_BARCODE = 'BARCODE';
 	ProductSelector.ErrorCodes = SelectorErrorCode;
 
 	exports.ProductSelector = ProductSelector;
 
-}((this.BX.Catalog = this.BX.Catalog || {}),BX,BX,BX.Catalog.SkuTree,BX,BX,BX.UI.EntitySelector,BX.Catalog,BX.Catalog,BX.Catalog,BX,BX,BX.Event,BX.UI,BX,BX.UI.Tour));
+}((this.BX.Catalog = this.BX.Catalog || {}),BX,BX,BX,BX.Catalog.SkuTree,BX,BX,BX.UI.EntitySelector,BX.Catalog,BX.Catalog,BX.Catalog,BX,BX,BX.Event,BX.UI,BX,BX.UI.Tour));
 //# sourceMappingURL=product-selector.bundle.js.map

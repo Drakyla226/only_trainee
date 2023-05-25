@@ -13,7 +13,7 @@
  * @global CAdminPage $adminPage
  */
 
-require_once(dirname(__FILE__)."/../include/prolog_admin_before.php");
+require_once(__DIR__."/../include/prolog_admin_before.php");
 define("HELP_FILE", "settings/settings/settings.php");
 
 if(!$USER->CanDoOperation('view_other_settings') && !$USER->CanDoOperation('edit_other_settings'))
@@ -70,7 +70,7 @@ require_once ($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/include/prolog_ad
 ?>
 
 <form action="">
-<select name="mid" onchange="window.location='settings.php?lang=<?=LANGUAGE_ID.($_REQUEST["mid_menu"]<>""? "&amp;mid_menu=1":"")?>&amp;mid='+this[this.selectedIndex].value;">
+<select name="mid" onchange="window.location='settings.php?lang=<?=LANGUAGE_ID.(isset($_REQUEST["mid_menu"]) && $_REQUEST["mid_menu"] != ''? "&amp;mid_menu=1":"")?>&amp;mid='+this[this.selectedIndex].value;">
 <?foreach($arModules as $k=>$m):?>
 	<option value="<?echo htmlspecialcharsbx($k)?>"<?if($mid == $k) echo " selected"?>><?echo htmlspecialcharsbx($m["NAME"])?></option>
 <?endforeach;?>
@@ -257,7 +257,7 @@ function __AdmSettingsDrawRow($module_id, $Option)
 			<tr>
 				<td width="50%">
 					<a href="javascript:void(0)" onclick="addSiteSelector(this)" class="bx-action-href">
-						<?=GetMessage("MAIN_ADMIN_ADD_SITE_SELECTOR")?>
+						<?=GetMessage("MAIN_ADMIN_ADD_SITE_SELECTOR_1")?>
 					</a>
 				</td>
 				<td width="50%"></td>
@@ -342,9 +342,9 @@ function renderInput($Option, $arControllerOption, $fieldName, $val)
 	$disabled = array_key_exists(4, $Option) && $Option[4] == 'Y' ? ' disabled' : '';
 	?><td width="50%"><?
 	if($type[0]=="checkbox"):
-		?><input type="checkbox" <?if(isset($arControllerOption[$Option[0]]))echo ' disabled title="'.GetMessage("MAIN_ADMIN_SET_CONTROLLER_ALT").'"';?> id="<?echo htmlspecialcharsbx($Option[0])?>" name="<?=htmlspecialcharsbx($fieldName)?>" value="Y"<?if($val=="Y")echo" checked";?><?=$disabled?><?if($type[2]<>'') echo " ".$type[2]?>><?
+		?><input type="checkbox" <?if(isset($arControllerOption[$Option[0]]))echo ' disabled title="'.GetMessage("MAIN_ADMIN_SET_CONTROLLER_ALT").'"';?> id="<?echo htmlspecialcharsbx($Option[0])?>" name="<?=htmlspecialcharsbx($fieldName)?>" value="Y"<?if($val=="Y")echo" checked";?><?=$disabled?><?if(isset($type[2]) && $type[2]<>'') echo " ".$type[2]?>><?
 	elseif($type[0]=="text" || $type[0]=="password"):
-		?><input type="<?echo $type[0]?>"<?if(isset($arControllerOption[$Option[0]]))echo ' disabled title="'.GetMessage("MAIN_ADMIN_SET_CONTROLLER_ALT").'"';?> size="<?echo $type[1]?>" maxlength="255" value="<?echo htmlspecialcharsbx($val)?>" name="<?=htmlspecialcharsbx($fieldName)?>"<?=$disabled?><?=($type[0]=="password" || $type["noautocomplete"]? ' autocomplete="new-password"':'')?>><?
+		?><input type="<?echo $type[0]?>"<?if(isset($arControllerOption[$Option[0]]))echo ' disabled title="'.GetMessage("MAIN_ADMIN_SET_CONTROLLER_ALT").'"';?> size="<?echo $type[1]?>" maxlength="255" value="<?echo htmlspecialcharsbx($val)?>" name="<?=htmlspecialcharsbx($fieldName)?>"<?=$disabled?><?=($type[0]=="password" || isset($type["noautocomplete"]) && $type["noautocomplete"]? ' autocomplete="new-password"':'')?>><?
 	elseif($type[0]=="selectbox"):
 		$arr = $type[1];
 		if(!is_array($arr))

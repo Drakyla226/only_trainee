@@ -30,11 +30,13 @@ Loc::loadMessages(__FILE__);
 Manager::setPageTitle(Loc::getMessage('LANDING_TPL_TITLE'));
 
 \Bitrix\Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
 	'landing_master',
 	'sidepanel',
 	'ui.forms',
 	'ui.alerts',
-	'ui.switcher'
+	'ui.switcher',
 ]);
 
 $row = $arResult['FOLDER'];
@@ -167,6 +169,8 @@ $row = $arResult['FOLDER'];
 	BX.ready(function()
 	{
 		// rich url toggler
+
+		BX.Landing.Env.getInstance().setOptions({params: {type: '<?php echo $arParams['TYPE']?>'}});
 
 		var editableSelectors = document.querySelectorAll('[data-landing-edit-control]');
 		var editModeClass = 'landing-folder-edit__edit-mode';

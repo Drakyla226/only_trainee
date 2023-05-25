@@ -31,11 +31,21 @@ class Chat
 
 	public static function getType($chatData)
 	{
-		$messageType = isset($chatData["TYPE"])? $chatData["TYPE"]: $chatData["CHAT_TYPE"];
-		$entityType = isset($chatData["ENTITY_TYPE"])? $chatData["ENTITY_TYPE"]: $chatData["CHAT_ENTITY_TYPE"];
+		$messageType = $chatData["TYPE"] ?? $chatData["CHAT_TYPE"];
+		$entityType = $chatData["ENTITY_TYPE"] ?? $chatData["CHAT_ENTITY_TYPE"];
 
 		$messageType = trim($messageType);
 		$entityType = trim($entityType);
+
+		$chatId = null;
+		if (isset($chatData['ID']))
+		{
+			$chatId = (int)$chatData['ID'];
+		}
+		else if (isset($chatData['CHAT_ID']))
+		{
+			$chatId = (int)$chatData['CHAT_ID'];
+		}
 
 		if ($messageType == IM_MESSAGE_PRIVATE)
 		{
@@ -46,7 +56,7 @@ class Chat
 			// convert to camelCase
 			$result = str_replace('_', '', lcfirst(ucwords(mb_strtolower($entityType), '_')));
 		}
-		else if ($chatData['ID'] && $chatData['ID'] == \CIMChat::GetGeneralChatId())
+		else if ($chatId && $chatId === (int)\CIMChat::GetGeneralChatId())
 		{
 			$result = 'general';
 		}
@@ -106,14 +116,14 @@ class Chat
 		}
 		$skipUsers = false;
 		$skipUserInactiveSql = '';
-		if ($params['SKIP_INACTIVE_USER'] === 'Y')
+		if (isset($params['SKIP_INACTIVE_USER']) && $params['SKIP_INACTIVE_USER'] === 'Y')
 		{
 			$skipUsers = true;
 			$skipUserInactiveSql = "AND U.ACTIVE = 'Y'";
 		}
 
 		$skipUserTypes = $params['SKIP_USER_TYPES'] ?? [];
-		if ($params['SKIP_CONNECTOR'] === 'Y')
+		if (isset($params['SKIP_CONNECTOR']) && $params['SKIP_CONNECTOR'] === 'Y')
 		{
 			$skipUserTypes[] = 'imconnector';
 		}
@@ -191,8 +201,11 @@ class Chat
 			else
 			{
 				$customCounter = true;
-				$query = \Bitrix\Main\Application::getInstance()->getConnection()->query("
-					SELECT ID FROM b_im_message M WHERE M.CHAT_ID = {$chatId} ORDER BY ID DESC LIMIT 100
+				$query = $connection->query("
+					SELECT ID FROM b_im_message 
+					WHERE CHAT_ID = {$chatId} 
+					ORDER BY DATE_CREATE DESC, ID DESC
+					LIMIT 100
 				");
 				$messageCounter = 0;
 				while ($row = $query->fetch())
@@ -229,7 +242,7 @@ class Chat
 			{$limit} {$offset}
 		";
 		$relations = array();
-		$query = \Bitrix\Main\Application::getInstance()->getConnection()->query($sql);
+		$query = $connection->query($sql);
 		while ($row = $query->fetch())
 		{
 			if ($customCounter)
@@ -487,7 +500,8 @@ class Chat
 
 		if (isset($options['FIRST_ID']))
 		{
-			$order = array();
+			$orderId = [];
+			$orderResult = [];
 
 			if ($chatData['RELATION_START_ID'] > 0 && intval($options['FIRST_ID']) < $chatData['RELATION_START_ID'])
 			{
@@ -504,7 +518,8 @@ class Chat
 		else
 		{
 			$fileSort = 'DESC';
-			$order = Array('CHAT_ID' => 'ASC', 'ID' => 'DESC');
+			$orderId = Array('CHAT_ID' => 'ASC', 'ID' => 'DESC');
+			$orderResult = Array('ID' => 'DESC');
 
 			if ($chatData['RELATION_START_ID'] > 0)
 			{
@@ -518,6 +533,28 @@ class Chat
 		}
 
 		$orm = \Bitrix\Im\Model\MessageTable::getList(array(
+			'select' => ['ID'],
+			'filter' => $filter,
+			'order' => $orderId,
+			'limit' => $limit
+		));
+		$ids = array_map(fn ($item) => $item['ID'], $orm->fetchAll());
+		if (empty($ids))
+		{
+			$result = [
+				'CHAT_ID' => (int)$chatId,
+				'MESSAGES' => [],
+				'USERS' => [],
+				'FILES' => [],
+			];
+			if ($options['JSON'])
+			{
+				$result = array_change_key_case($result, CASE_LOWER);
+			}
+			return $result;
+		}
+
+		$orm = \Bitrix\Im\Model\MessageTable::getList(array(
 			'select' => [
 				'ID', 'AUTHOR_ID', 'DATE_CREATE', 'NOTIFY_EVENT', 'MESSAGE',
 				'USER_LAST_ACTIVITY_DATE' => 'AUTHOR.LAST_ACTIVITY_DATE',
@@ -526,9 +563,8 @@ class Chat
 				'USER_DESKTOP_LAST_DATE' => 'STATUS.DESKTOP_LAST_DATE',
 				'MESSAGE_UUID' => 'UUID.UUID',
 			],
-			'filter' => $filter,
-			'order' => $order,
-			'limit' => $limit
+			'filter' => ['=ID' => $ids],
+			'order' => $orderResult,
 		));
 
 		$users = Array();
@@ -739,9 +775,10 @@ class Chat
 			return false;
 		}
 
+		$checkAccessParam = $params['CHECK_ACCESS'] ?? null;
 		$chats = self::getList(Array(
 			'FILTER' => Array('ID' => $id),
-			'SKIP_ACCESS_CHECK' => $params['CHECK_ACCESS'] === 'Y'? 'N': 'Y',
+			'SKIP_ACCESS_CHECK' => $checkAccessParam === 'Y'? 'N': 'Y',
  		));
 		if ($chats)
 		{
@@ -790,7 +827,7 @@ class Chat
 			}
 		}
 
-		if ($params['JSON'])
+		if ($params['JSON'] ?? null)
 		{
 			$chat = self::toJson($chat);
 		}
@@ -855,7 +892,7 @@ class Chat
 			$chats[] = self::formatChatData($row);
 		}
 
-		if ($params['JSON'])
+		if (isset($params['JSON']) && $params['JSON'])
 		{
 			$chats = self::toJson($chats);
 		}

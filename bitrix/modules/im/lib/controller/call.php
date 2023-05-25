@@ -3,8 +3,10 @@
 namespace Bitrix\Im\Controller;
 
 use Bitrix\Im\Call\CallUser;
+use Bitrix\Im\Call\Integration\EntityType;
 use Bitrix\Im\Call\Registry;
 use Bitrix\Im\Call\Util;
+use Bitrix\Im\Common;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
@@ -23,7 +25,7 @@ class Call extends Engine\Controller
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
 
-		$lockName = "call_create_{$entityType}_{$entityId}";
+		$lockName = static::getLockNameWithEntityId($entityType, $entityId, $currentUserId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->errorCollection[] = new Error("Could not get exclusive lock", "could_not_lock");
@@ -219,7 +221,7 @@ class Call extends Engine\Controller
 			'IS_MOBILE' => ($isLegacyMobile ? 'Y' : 'N')
 		]);
 
-		$lockName = static::getLockName($callId);
+		$lockName = static::getLockNameWithCallId($callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
@@ -309,7 +311,7 @@ class Call extends Engine\Controller
 
 		$callUser = $call->getUser($currentUserId);
 
-		$lockName = static::getLockName($callId);
+		$lockName = static::getLockNameWithCallId($callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
@@ -344,7 +346,7 @@ class Call extends Engine\Controller
 		if(!$this->checkCallAccess($call, $currentUserId))
 			return null;
 
-		$lockName = static::getLockName($callId);
+		$lockName = static::getLockNameWithCallId($callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
@@ -359,7 +361,7 @@ class Call extends Engine\Controller
 			return null;
 		}
 
-		if ($callUser->getState() !== CallUser::STATE_CALLING)
+		if ($callUser->getState() === CallUser::STATE_READY)
 		{
 			$this->addError(new Error("Can not decline in {$callUser->getState()} user state", "wrong_user_state"));
 			Application::getConnection()->unlock($lockName);
@@ -570,7 +572,7 @@ class Call extends Engine\Controller
 		if(!$this->checkCallAccess($call, $currentUserId))
 			return null;
 
-		$lockName = static::getLockName($callId);
+		$lockName = static::getLockNameWithCallId($callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
@@ -650,7 +652,7 @@ class Call extends Engine\Controller
 			$userId = $currentUserId;
 		}
 
-		$lockName = static::getLockName($callId);
+		$lockName = static::getLockNameWithCallId($callId);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
@@ -669,23 +671,6 @@ class Call extends Engine\Controller
 		return $callUser->toArray();
 	}
 
-	public function getBackgroundAction()
-	{
-		$diskFolder = \Bitrix\Im\Call\Background::getUploadFolder();
-		$diskFolderId = $diskFolder? (int)$diskFolder->getId(): 0;
-		$infoHelperParams = \Bitrix\Main\Loader::includeModule('ui')? InfoHelper::getInitParams(): [];
-
-		return [
-			'list' => [
-				'default' => \Bitrix\Im\Call\Background::get(),
-				'custom' => \Bitrix\Im\Call\Background::getCustom(),
-			],
-			'diskFolderId' => $diskFolderId,
-			'limit' => \Bitrix\Im\Call\Background::getLimitForJs(),
-			'infohelper' => $infoHelperParams
-		];
-	}
-
 	public function getCallLimitsAction()
 	{
 		return [
@@ -694,11 +679,9 @@ class Call extends Engine\Controller
 		];
 	}
 
-	public function commitBackgroundAction(int $fileId)
+	public function reportConnectionStatusAction(int $callId, bool $connectionStatus)
 	{
-		\CIMDisk::CommitBackgroundFile($this->getCurrentUser()->getId(), $fileId);
-
-		return true;
+		AddEventToStatFile('im', 'call_connection', $callId, ($connectionStatus ? 'Y' : 'N'));
 	}
 
 	protected function checkCallAccess(\Bitrix\Im\Call\Call $call, $userId)
@@ -714,15 +697,36 @@ class Call extends Engine\Controller
 		}
 	}
 
-	protected static function getLockName(int $callId)
+	public static function getLockNameWithEntityId(string $entityType, $entityId, $currentUserId): string
 	{
-		return "im_call_{$callId}";
+		if($entityType === EntityType::CHAT && (Common::isChatId($entityId) || (int)$entityId > 0))
+		{
+			$chatId = \Bitrix\Im\Dialog::getChatId($entityId, $currentUserId);
+
+			return "call_entity_{$entityType}_{$chatId}";
+		}
+
+		return "call_entity_{$entityType}_{$entityId}";
+	}
+
+	protected static function getLockNameWithCallId($callId): string
+	{
+		//TODO: int|string after switching to php 8
+		if (is_string($callId) || is_numeric($callId))
+		{
+			return "im_call_{$callId}";
+		}
+
+		return '';
 	}
 
 	public function configureActions()
 	{
 		return [
 			'getUsers' => [
+				'+prefilters' => [new Engine\ActionFilter\CloseSession()],
+			],
+			'reportConnectionStatus' => [
 				'+prefilters' => [new Engine\ActionFilter\CloseSession()],
 			],
 		];

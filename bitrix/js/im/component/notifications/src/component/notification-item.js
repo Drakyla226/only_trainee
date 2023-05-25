@@ -1,3 +1,5 @@
+import 'ui.design-tokens';
+
 import 'im.view.element.attach';
 import 'im.view.element.keyboard';
 
@@ -73,7 +75,8 @@ export const NotificationItem = {
 			}
 			else if (this.isRealItem && this.rawListItem.authorId === 0)
 			{
-				return ''; //System notification
+				// System notification
+				return this.rawListItem.title;
 			}
 			else
 			{
@@ -108,6 +111,10 @@ export const NotificationItem = {
 		userData()
 		{
 			return this.$store.getters['users/get'](this.rawListItem.authorId, true);
+		},
+		isExtranet(): boolean
+		{
+			return this.userData.extranet;
 		},
 		avatarStyles()
 		{
@@ -248,12 +255,17 @@ export const NotificationItem = {
 				<div class="bx-im-notifications-item-content" @click="onContentClick">
 					<NotificationItemHeader 
 						:listItem="listItem"
+						:isExtranet="isExtranet"
 						@deleteClick="onDeleteClick"
 						@moreUsersClick="onMoreUsersClick"
 					/>
 					<div v-if="listItem.subtitle.value.length > 0" class="bx-im-notifications-item-content-bottom">
 						<div class="bx-im-notifications-item-bottom-subtitle">
-							<span v-if="!listItem.systemType" class="bx-im-notifications-item-bottom-subtitle-text" v-html="listItem.subtitle.value"></span>
+							<span
+								:class="[!listItem.title.value ? 'bx-im-notifications-item-bottom-subtitle-text' : 'bx-im-notifications-item-bottom-no-subtitle-text']"
+								v-html="listItem.subtitle.value"
+							>
+							</span>
 						</div>
 					</div>
 					<NotificationQuickAnswer v-if="isNeedQuickAnswer" :listItem="listItem"/>

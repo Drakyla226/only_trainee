@@ -1,8 +1,7 @@
-(function (exports,ui_vue,im_lib_localstorage,im_lib_utils,main_core,ui_vue_vuex,main_core_events,im_const) {
+(function (exports,ui_designTokens,ui_vue,im_lib_localstorage,im_lib_utils,main_core,ui_vue_vuex,main_core_events,im_const) {
 	'use strict';
 
 	function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
-
 	function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
 	ui_vue.BitrixVue.component('bx-im-component-textarea', {
 	  /**
@@ -16,6 +15,7 @@
 	   * @emits 'appButtonClick' {appId: string, event: object} -- 'appId' - application name, 'event' - event click
 	   * @emits 'fileSelected' {fileInput: domNode} -- 'fileInput' - dom node element
 	   */
+
 	  props: {
 	    siteId: {
 	      "default": 'default'
@@ -99,13 +99,11 @@
 	    buttonStyle: function buttonStyle() {
 	      var styles = Object.assign({}, this.stylesDefault, this.styles);
 	      var isIconDark = false;
-
 	      if (styles.button.iconColor) {
 	        isIconDark = im_lib_utils.Utils.isDarkColor(styles.button.iconColor);
 	      } else {
 	        isIconDark = !im_lib_utils.Utils.isDarkColor(styles.button.backgroundColor);
 	      }
-
 	      styles.button.className = isIconDark ? 'bx-im-textarea-send-button' : 'bx-im-textarea-send-button bx-im-textarea-send-button-bright-arrow';
 	      styles.button.style = styles.button.backgroundColor ? 'background-color: ' + styles.button.backgroundColor + ';' : '';
 	      return styles;
@@ -153,14 +151,11 @@
 	      var textarea = this.$refs.textarea;
 	      var selectionStart = textarea.selectionStart;
 	      var selectionEnd = textarea.selectionEnd;
-
 	      if (position == 'start') {
 	        if (breakline) {
 	          text = text + "\n";
 	        }
-
 	        textarea.value = text + textarea.value;
-
 	        if (focus) {
 	          if (cursor == 'after') {
 	            textarea.selectionStart = text.length;
@@ -175,16 +170,13 @@
 	          if (textarea.value.substring(0, selectionStart).trim().length > 0) {
 	            text = "\n" + text;
 	          }
-
 	          text = text + "\n";
 	        } else {
 	          if (textarea.value && !textarea.value.endsWith(' ')) {
 	            text = ' ' + text;
 	          }
 	        }
-
 	        textarea.value = textarea.value.substring(0, selectionStart) + text + textarea.value.substring(selectionEnd, textarea.value.length);
-
 	        if (focus) {
 	          if (cursor == 'after') {
 	            textarea.selectionStart = selectionStart + text.length;
@@ -199,16 +191,13 @@
 	          if (textarea.value.substring(0, selectionStart).trim().length > 0) {
 	            text = "\n" + text;
 	          }
-
 	          text = text + "\n";
 	        } else {
 	          if (textarea.value && !textarea.value.endsWith(' ')) {
 	            text = ' ' + text;
 	          }
 	        }
-
 	        textarea.value = textarea.value + text;
-
 	        if (focus) {
 	          if (cursor == 'after') {
 	            textarea.selectionStart = textarea.value.length;
@@ -219,7 +208,6 @@
 	          }
 	        }
 	      }
-
 	      if (focus) {
 	        if (cursor == 'start') {
 	          textarea.selectionStart = 0;
@@ -228,10 +216,8 @@
 	          textarea.selectionStart = textarea.value.length;
 	          textarea.selectionEnd = textarea.selectionStart;
 	        }
-
 	        textarea.focus();
 	      }
-
 	      this.textChangeEvent();
 	    },
 	    sendMessage: function sendMessage(event) {
@@ -240,49 +226,38 @@
 	        text: this.currentMessage.trim()
 	      });
 	      var textarea = this.$refs.textarea;
-
 	      if (textarea) {
 	        textarea.value = '';
 	      }
-
 	      if (this.autoFocus === null || this.autoFocus) {
 	        textarea.focus();
 	      }
-
 	      this.textChangeEvent();
 	    },
 	    textChangeEvent: function textChangeEvent() {
 	      var _this = this;
-
 	      var textarea = this.$refs.textarea;
-
 	      if (!textarea) {
 	        return;
 	      }
-
 	      var text = textarea.value.trim();
-
 	      if (this.currentMessage === text) {
 	        return;
 	      }
-
 	      if (this.writesEventLetter <= text.length) {
 	        main_core_events.EventEmitter.emit(im_const.EventType.textarea.startWriting, {
 	          text: text
 	        });
 	      }
-
 	      this.previousMessage = this.currentMessage;
 	      this.previousSelectionStart = textarea.selectionStart;
 	      this.previousSelectionEnd = this.previousSelectionStart;
 	      this.currentMessage = text;
-
 	      if (text.toString().length > 0) {
 	        this.textareaHistory[this.dialogId] = text;
 	      } else {
 	        delete this.textareaHistory[this.dialogId];
 	      }
-
 	      clearTimeout(this.messageStoreTimeout);
 	      this.messageStoreTimeout = setTimeout(function () {
 	        _this.localStorage.set(_this.siteId, _this.userId, 'textarea-history', _this.textareaHistory, _this.userId ? 0 : 10);
@@ -293,18 +268,17 @@
 	      var textarea = event.target;
 	      var text = textarea.value.trim();
 	      var isMac = im_lib_utils.Utils.platform.isMac();
-	      var isCtrlTEnable = im_lib_utils.Utils.platform.isBitrixDesktop() || !im_lib_utils.Utils.browser.isChrome(); // TODO see more im/install/js/im/im.js:12324
+	      var isCtrlTEnable = im_lib_utils.Utils.platform.isBitrixDesktop() || !im_lib_utils.Utils.browser.isChrome();
 
+	      // TODO see more im/install/js/im/im.js:12324
 	      if (this.commandListen) ; else if (this.mentionListen) ; else if (!(event.altKey && event.ctrlKey)) {
 	        if (this.enableMention && event.shiftKey && (event.keyCode == 61 || event.keyCode == 50 || event.keyCode == 187 || event.keyCode == 187) || event.keyCode == 107) ; else if (this.enableCommand && (event.keyCode == 191 || event.keyCode == 111 || event.keyCode == 220)) ;
 	      }
-
 	      if (event.keyCode == 27) {
 	        if (textarea.value != '' && textarea === document.activeElement) {
 	          event.preventDefault();
 	          event.stopPropagation();
 	        }
-
 	        if (event.shiftKey) {
 	          textarea.value = '';
 	        }
@@ -319,20 +293,17 @@
 	          var tagStart = '[' + event.key.toLowerCase() + ']';
 	          var tagEnd = '[/' + event.key.toLowerCase() + ']';
 	          var selected = textarea.value.substring(selectionStart, selectionEnd);
-
 	          if (selected.startsWith(tagStart) && selected.endsWith(tagEnd)) {
 	            selected = selected.substring(tagStart.length, selected.indexOf(tagEnd));
 	          } else {
 	            selected = tagStart + selected + tagEnd;
 	          }
-
 	          textarea.value = textarea.value.substring(0, selectionStart) + selected + textarea.value.substring(selectionEnd, textarea.value.length);
 	          textarea.selectionStart = selectionStart;
 	          textarea.selectionEnd = selectionStart + selected.length;
 	          event.preventDefault();
 	        }
 	      }
-
 	      if (event.keyCode == 9) {
 	        this.insertText("\t");
 	        event.preventDefault();
@@ -393,12 +364,10 @@
 	    },
 	    onInsertText: function onInsertText(_ref) {
 	      var _ref$data = _ref.data,
-	          event = _ref$data === void 0 ? {} : _ref$data;
-
+	        event = _ref$data === void 0 ? {} : _ref$data;
 	      if (!event.text) {
 	        return false;
 	      }
-
 	      this.insertText(event.text, event.breakline, event.position, event.cursor, event.focus);
 	      main_core_events.EventEmitter.emit(im_const.EventType.textarea.keyUp, {
 	        event: event,
@@ -425,7 +394,6 @@
 	    },
 	    log: function log(text, skip, event) {
 	      console.warn(text);
-
 	      if (skip == 1) {
 	        event.preventDefault();
 	      }
@@ -438,5 +406,5 @@
 	  template: "\n\t\t<div :class=\"textareaClassName\">\n\t\t\t<div class=\"bx-im-textarea-box\">\n\t\t\t\t<textarea ref=\"textarea\" class=\"bx-im-textarea-input\" @keydown=\"onKeyDown\" @keyup=\"onKeyUp\" @paste=\"onPaste\" @input=\"onInput\" @focus=\"onFocus\" @blur=\"onBlur\" v-bx-im-focus=\"autoFocus\" :placeholder=\"localize.BX_MESSENGER_TEXTAREA_PLACEHOLDER\">{{placeholderMessage}}</textarea>\n\t\t\t\t<transition enter-active-class=\"bx-im-textarea-send-button-show\" leave-active-class=\"bx-im-textarea-send-button-hide\">\n\t\t\t\t\t<button \n\t\t\t\t\t\tv-if=\"currentMessage\" \n\t\t\t\t\t\t:class=\"buttonStyle.button.className\" \n\t\t\t\t\t\t:style=\"buttonStyle.button.style\" \n\t\t\t\t\t\t:title=\"localize.BX_MESSENGER_TEXTAREA_BUTTON_SEND\"\n\t\t\t\t\t\t@click=\"sendMessage\" \n\t\t\t\t\t\t@touchend=\"sendMessage\" \n\t\t\t\t\t\t@mousedown=\"preventDefault\" \n\t\t\t\t\t\t@touchstart=\"preventDefault\" \n\t\t\t\t\t/>\n\t\t\t\t</transition>\n\t\t\t</div>\n\t\t\t<div class=\"bx-im-textarea-app-box\">\n\t\t\t\t<label v-if=\"enableFile && !isIE11\" class=\"bx-im-textarea-app-button bx-im-textarea-app-file\" :title=\"localize.BX_MESSENGER_TEXTAREA_FILE\">\n\t\t\t\t\t<input type=\"file\" @click=\"onFileClick($event)\" @change=\"onFileSelect($event)\" multiple>\n\t\t\t\t</label>\n\t\t\t\t<button class=\"bx-im-textarea-app-button bx-im-textarea-app-smile\" :title=\"localize.BX_MESSENGER_TEXTAREA_SMILE\" @click=\"onAppButtonClick('smile', $event)\"></button>\n\t\t\t\t<button v-if=\"false\" class=\"bx-im-textarea-app-button bx-im-textarea-app-gif\" :title=\"localize.BX_MESSENGER_TEXTAREA_GIPHY\" @click=\"onAppButtonClick('giphy', $event)\"></button>\n\t\t\t</div>\n\t\t</div>\n\t"
 	});
 
-}((this.window = this.window || {}),BX,BX.Messenger.Lib,BX.Messenger.Lib,BX,BX,BX.Event,BX.Messenger.Const));
+}((this.window = this.window || {}),BX,BX,BX.Messenger.Lib,BX.Messenger.Lib,BX,BX,BX.Event,BX.Messenger.Const));
 //# sourceMappingURL=textarea.bundle.js.map

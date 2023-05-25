@@ -10,10 +10,11 @@ return [
 	'rel' => [
 		'calendar.controls',
 		'calendar.sectioninterface',
-		'main.core',
 		'main.core.events',
-		'ui.entity-selector',
+		'main.core',
 		'calendar.util',
+		'ui.entity-selector',
+		'ui.dialogs.messagebox',
 	],
 	'skip_core' => false,
 ];

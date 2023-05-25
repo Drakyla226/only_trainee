@@ -4,17 +4,53 @@ require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/catalog/prolog.php");
 global $APPLICATION;
 global $DB;
 global $USER;
+/** @global CAdminPage $adminPage */
+global $adminPage;
+/** @global CAdminSidePanelHelper $adminSidePanelHelper */
+global $adminSidePanelHelper;
 
 use Bitrix\Catalog;
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\v2\Contractor\Provider\Manager;
+
+/**
+ * @var CAdminPage $adminPage
+ * @var CAdminSidePanelHelper $adminSidePanelHelper
+ */
 
 $selfFolderUrl = $adminPage->getSelfFolderUrl();
 $listUrl = $selfFolderUrl."cat_contractor_list.php?lang=".LANGUAGE_ID;
 $listUrl = $adminSidePanelHelper->editUrlToPublicPage($listUrl);
 
-if (!($USER->CanDoOperation('catalog_read') || $USER->CanDoOperation('catalog_store')))
-	$APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 CModule::IncludeModule("catalog");
-$bReadOnly = !$USER->CanDoOperation('catalog_store');
+
+$publicMode = $adminPage->publicMode || $adminSidePanelHelper->isPublicSidePanel();
+$accessController = AccessController::getCurrent();
+
+if ($publicMode)
+{
+	$hasAccess = $accessController->check(ActionDictionary::ACTION_INVENTORY_MANAGEMENT_ACCESS);
+	$bReadOnly = false;
+}
+else
+{
+	$hasAccess =
+		$accessController->check(ActionDictionary::ACTION_CATALOG_READ)
+		|| $accessController->check(ActionDictionary::ACTION_STORE_VIEW)
+	;
+	$bReadOnly = !$accessController->check(ActionDictionary::ACTION_STORE_VIEW);
+}
+
+if (!$hasAccess)
+{
+	$APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+}
+
+if (Manager::getActiveProvider())
+{
+	LocalRedirect($listUrl);
+}
 
 if ($ex = $APPLICATION->GetException())
 {
@@ -36,7 +72,7 @@ $ID = (isset($_REQUEST["ID"]) ? (int)$_REQUEST["ID"] : 0);
 $typeReadOnly = false;
 $userId = (int)$USER->GetID();
 
-$typeList = Catalog\ContractorTable::getTypeList(true);
+$typeList = Catalog\ContractorTable::getTypeDescriptions();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST" && check_bitrix_sessid() && $_REQUEST["Update"] <> '' && !$bReadOnly)
 {
@@ -151,7 +187,7 @@ if ($bVarsFromForm)
 if(isset($str_ADDRESS))
 	$str_ADDRESS = (trim($str_ADDRESS) != '') ? $str_ADDRESS : '';
 
-$str_PERSON_TYPE = (isset($str_PERSON_TYPE)) ? $str_PERSON_TYPE : CONTRACTOR_INDIVIDUAL;
+$str_PERSON_TYPE = (int)($str_PERSON_TYPE ?? CONTRACTOR_INDIVIDUAL);
 
 $aMenu = array(
 	array(
@@ -218,10 +254,15 @@ $context->Show();
 		}
 
 	</script>
-	<?
-	$actionUrl = $APPLICATION->GetCurPage();
-	$actionUrl = $adminSidePanelHelper->setDefaultQueryParams($actionUrl);
-	?>
+<?
+$actionUrl = $APPLICATION->GetCurPage();
+$actionUrl = $adminSidePanelHelper->setDefaultQueryParams($actionUrl);
+
+$juridicalHideCss = $str_PERSON_TYPE === CONTRACTOR_INDIVIDUAL
+	? 'style="display: none;"'
+	: ''
+;
+?>
 	<form enctype="multipart/form-data" method="POST" action="<?=$actionUrl?>" name="contractor_edit">
 		<?echo GetFilterHiddens("filter_");?>
 		<input type="hidden" name="Update" value="Y">
@@ -259,31 +300,31 @@ $context->Show();
 		<tr class="adm-detail-required-field">
 			<td width="40%"><?= GetMessage("CONTRACTOR_TYPE") ?>:</td>
 			<td width="60%">
-				<input type="hidden" name="PERSON_TYPE" value="<?=$str_PERSON_TYPE?>">
+				<input type="hidden" name="PERSON_TYPE" value="<?=htmlspecialcharsbx($str_PERSON_TYPE); ?>">
 				<select <?if($typeReadOnly) echo " disabled";?> name="PERSON_TYPE" onchange="fContractorChangeType(this);"><?
 					foreach ($typeList as $typeId => $item)
 					{
-						?><option value="<?=(int)$typeId; ?>"<?=($str_PERSON_TYPE == $typeId ? ' selected' : ''); ?>><?=htmlspecialcharsbx($item); ?></option><?
+						?><option value="<?=htmlspecialcharsbx($typeId); ?>"<?=($str_PERSON_TYPE === $typeId ? ' selected' : ''); ?>><?=htmlspecialcharsbx($item); ?></option><?
 					}
-				?></select>
+					?></select>
 			</td>
 		</tr>
 
-		<tr class="adm-detail-required-field" id="company-name-tr" <? if($str_PERSON_TYPE == 1) echo "style=\"display: none\"";?>>
+		<tr class="adm-detail-required-field" id="company-name-tr" <?=$juridicalHideCss; ?>>
 			<td width="40%"><?= GetMessage("CONTRACTOR_COMPANY") ?>:</td>
 			<td width="60%">
 				<input type="text" name="COMPANY" value="<?=$str_COMPANY?>" size="30" />
 			</td>
 
 		</tr>
-		<tr id="company-inn-tr"<? if($str_PERSON_TYPE == CONTRACTOR_INDIVIDUAL) echo "style=\"display: none\"";?>>
+		<tr id="company-inn-tr"<?=$juridicalHideCss; ?>>
 			<td><?= GetMessage("CONTRACTOR_INN") ?>:</td>
 			<td>
 				<input type="text" name="INN" value="<?=$str_INN?>" size="30" />
 			</td>
 		</tr>
 		<?if(trim(GetMessage("CONTRACTOR_KPP")) != ''):?>
-			<tr id="company-kpp-tr" <? if($str_PERSON_TYPE == CONTRACTOR_INDIVIDUAL) echo "style=\"display: none\"";?>>
+			<tr id="company-kpp-tr" <?=$juridicalHideCss; ?>>
 				<td><?= GetMessage("CONTRACTOR_KPP") ?>:</td>
 				<td>
 					<input type="text" name="KPP" value="<?=$str_KPP?>" size="30" />
@@ -293,11 +334,11 @@ $context->Show();
 		<tr class="adm-detail-required-field">
 			<td> <span id="title_span">
 			<?
-					if($str_PERSON_TYPE == CONTRACTOR_JURIDICAL)
-						echo GetMessage("CONTRACTOR_TITLE_JURIDICAL");
-					else
-						echo GetMessage("CONTRACTOR_TITLE");
-					?>:</span></td>
+			if($str_PERSON_TYPE == CONTRACTOR_JURIDICAL)
+				echo GetMessage("CONTRACTOR_TITLE_JURIDICAL");
+			else
+				echo GetMessage("CONTRACTOR_TITLE");
+			?>:</span></td>
 			<td>
 				<input type="text" name="PERSON_NAME" id="BREAK_LAST_NAME" size="50" value="<?=$str_PERSON_NAME?>" />
 			</td>
@@ -322,7 +363,7 @@ $context->Show();
 		<tr>
 			<td  class="adm-detail-valign-top"><span id="address_span"><? 	if($str_PERSON_TYPE == CONTRACTOR_JURIDICAL) echo GetMessage("CONTRACTOR_ADDRESS_JURIDICAL"); else echo GetMessage("CONTRACTOR_ADDRESS"); ?>:</span></td>
 			<td>
-				<textarea cols="35" rows="3" class="typearea" name="ADDRESS" wrap="virtual"><?= $str_ADDRESS ?></textarea>
+				<textarea cols="35" rows="3" class="typearea" name="ADDRESS"><?= $str_ADDRESS ?></textarea>
 			</td>
 		</tr>
 
@@ -336,4 +377,4 @@ $context->Show();
 		?>
 	</form>
 
-<?require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_admin.php");?>
+<?require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_admin.php");

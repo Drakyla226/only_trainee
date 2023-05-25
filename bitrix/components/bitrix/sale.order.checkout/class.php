@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Crm\Binding\DealContactTable;
+use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -69,6 +71,11 @@ class SaleOrderCheckout extends \CBitrixComponent
 				? $arParams['URL_PATH_TO_MAIN_PAGE']
 				: ''
 		;
+
+		if (empty($arParams['SHOW_RETURN_BUTTON']))
+		{
+			$arParams['SHOW_RETURN_BUTTON'] = 'Y';
+		}
 
 		return parent::onPrepareComponentParams($arParams);
 	}
@@ -424,6 +431,10 @@ class SaleOrderCheckout extends \CBitrixComponent
 			{
 				$aggregateData['PROPERTIES'][$id]['TYPE'] = 'EMAIL';
 			}
+			elseif ($property['TIME'] === 'Y')
+			{
+				$aggregateData['PROPERTIES'][$id]['TYPE'] = 'DATETIME';
+			}
 		}
 
 		if (!empty($aggregateData['BASKET_ITEMS']))
@@ -532,9 +543,9 @@ class SaleOrderCheckout extends \CBitrixComponent
 
 		$scheme = [
 			'ORDER' => [
-				'HASH' => $aggregateData['HASH'],
-				'ID' => $aggregateData['ORDER']['ID'],
-				'ACCOUNT_NUMBER' => $aggregateData['ORDER']['ACCOUNT_NUMBER'],
+				'HASH' => $aggregateData['HASH'] ?? null,
+				'ID' => $aggregateData['ORDER']['ID'] ?? null,
+				'ACCOUNT_NUMBER' => $aggregateData['ORDER']['ACCOUNT_NUMBER'] ?? null,
 				'PAID' => $aggregateData['ORDER']['PAYED'] === 'Y' ? 'Y' : 'N',
 			],
 			'USER_ID' => $this->getUserId(),
@@ -545,6 +556,7 @@ class SaleOrderCheckout extends \CBitrixComponent
 			'PERSON_TYPE_ID' => $this->getPersonTypeId($this->getSiteId()),
 			'BASKET' => [],
 			'PROPERTIES' => [],
+			'VARIANTS' => [],
 			'TOTAL' => [],
 			'DISCOUNT' => [],
 			'PAYMENTS' => [],
@@ -588,6 +600,7 @@ class SaleOrderCheckout extends \CBitrixComponent
 					'AVAILABLE_QUANTITY' => $basketItem['CATALOG_PRODUCT']['AVAILABLE_QUANTITY'],
 					'RATIO' => $basketItem['CATALOG_PRODUCT']['RATIO'],
 					'CHECK_MAX_QUANTITY' => $basketItem['CATALOG_PRODUCT']['CHECK_MAX_QUANTITY'],
+					'TYPE' => $basketItem['CATALOG_PRODUCT']['TYPE'],
 				],
 				'SKU' => $basketItem['CATALOG_PRODUCT']['SKU'],
 			];
@@ -600,8 +613,12 @@ class SaleOrderCheckout extends \CBitrixComponent
 				'NAME' => $property['NAME'],
 				'TYPE' => $property['TYPE'],
 				'VALUE' => $model['PROPERTIES'][$property['ID']] ?? null,
+				'REQUIRED' => $property['REQUIRED'],
+				'MULTIPLE' => $property['MULTIPLE'],
 			];
 		}
+
+		$scheme['VARIANTS'] = $aggregateData['VARIANTS'];
 
 		$orderPriceTotal = $aggregateData['ORDER_PRICE_TOTAL'];
 		$scheme['TOTAL'] = [

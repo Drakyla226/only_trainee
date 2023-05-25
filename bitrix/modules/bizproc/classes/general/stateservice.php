@@ -1,15 +1,13 @@
-<?
-include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/bizproc/classes/general/runtimeservice.php");
+<?php
 
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Main;
 
-class CBPAllStateService
-	extends CBPRuntimeService
+class CBPStateService extends CBPRuntimeService
 {
 	const COUNTERS_CACHE_TAG_PREFIX = 'b_bp_wfi_cnt_';
 
-	public function SetStateTitle($workflowId, $stateTitle)
+	public function setStateTitle($workflowId, $stateTitle)
 	{
 		global $DB;
 
@@ -19,13 +17,13 @@ class CBPAllStateService
 
 		$DB->Query(
 			"UPDATE b_bp_workflow_state SET ".
-			"	STATE_TITLE = ".($stateTitle <> '' ? "'".$DB->ForSql($stateTitle)."'" : "NULL").", ".
+			"	STATE_TITLE = ".($stateTitle && is_string($stateTitle) ? "'".$DB->ForSql($stateTitle)."'" : "NULL").", ".
 			"	MODIFIED = ".$DB->CurrentTimeFunction()." ".
 			"WHERE ID = '".$DB->ForSql($workflowId)."' "
 		);
 	}
 
-	public function SetStatePermissions($workflowId, $arStatePermissions = array(), $bRewrite = true)
+	public function setStatePermissions($workflowId, $arStatePermissions = array(), $bRewrite = true)
 	{
 		global $DB;
 
@@ -61,7 +59,7 @@ class CBPAllStateService
 		}
 	}
 
-	public function GetStateTitle($workflowId)
+	public function getStateTitle($workflowId)
 	{
 		global $DB;
 
@@ -76,7 +74,7 @@ class CBPAllStateService
 		return "";
 	}
 
-	public static function GetStateDocumentId($workflowId)
+	public static function getStateDocumentId($workflowId)
 	{
 		global $DB;
 
@@ -127,7 +125,7 @@ class CBPAllStateService
 			self::cleanRunningCountersCache($starterUserId);
 	}
 
-	public static function DeleteWorkflow($workflowId)
+	public static function deleteWorkflow($workflowId)
 	{
 		global $DB;
 
@@ -150,7 +148,7 @@ class CBPAllStateService
 		);
 	}
 
-	public function DeleteAllDocumentWorkflows($documentId)
+	public function deleteAllDocumentWorkflows($documentId)
 	{
 		self::DeleteByDocument($documentId);
 	}
@@ -167,7 +165,11 @@ class CBPAllStateService
 			}
 
 			foreach (GetModuleEvents('bizproc', 'OnWorkflowComplete', true) as $event)
+			{
 				ExecuteModuleEventEx($event, array($workflowId, $status));
+			}
+			//Clean workflow subscriptions
+			\Bitrix\Bizproc\SchedulerEventTable::deleteByWorkflow($workflowId);
 		}
 	}
 
@@ -204,7 +206,7 @@ class CBPAllStateService
 		}
 	}
 
-	public static function CountDocumentWorkflows($documentId)
+	public static function countDocumentWorkflows($documentId)
 	{
 		global $DB;
 
@@ -227,15 +229,14 @@ class CBPAllStateService
 		return 0;
 	}
 
-	public static function GetDocumentStates($documentId, $workflowId = "")
+	public static function getDocumentStates($documentId, $workflowId = "")
 	{
 		global $DB;
 
-		$arDocumentId = CBPHelper::ParseDocumentId($documentId);
+		[$moduleId, $entity, $ids] = $documentId;
 
-		$ids = (array) $arDocumentId[2];
-		$idsCondition = array();
-		foreach ($ids as $id)
+		$idsCondition = [];
+		foreach ((array)$ids as $id)
 		{
 			$idsCondition[] = 'WS.DOCUMENT_ID = \''.$DB->ForSql($id).'\'';
 		}
@@ -264,14 +265,15 @@ class CBPAllStateService
 			"	".$DB->DateToCharFunction("WS.MODIFIED", "FULL")." as MODIFIED, ".
 			"	WS.MODULE_ID, WS.ENTITY, WS.DOCUMENT_ID, ".
 			"	WT.NAME, WT.DESCRIPTION, WP.OBJECT_ID, WP.PERMISSION, WI.STATUS, ".
-			"	WS.STARTED, WS.STARTED_BY ".
+			"	WS.STARTED, ". $DB->DateToCharFunction("WS.STARTED", "FULL")
+			. " as STARTED_FORMATTED, WS.STARTED_BY ".
 			"FROM b_bp_workflow_state WS ".
 			"	LEFT JOIN b_bp_workflow_permissions WP ON (WS.ID = WP.WORKFLOW_ID) ".
 			"	LEFT JOIN b_bp_workflow_template WT ON (WS.WORKFLOW_TEMPLATE_ID = WT.ID) ".
 			"	LEFT JOIN b_bp_workflow_instance WI ON (WS.ID = WI.ID) ".
 			"WHERE (".implode(' OR ', $idsCondition).") ".
-			"	AND WS.ENTITY = '".$DB->ForSql($arDocumentId[1])."' ".
-			"	AND WS.MODULE_ID ".(($arDocumentId[0] <> '') ? "= '".$DB->ForSql($arDocumentId[0])."'" : "IS NULL")." ".
+			"	AND WS.ENTITY = '" . $DB->ForSql($entity) . "' " .
+			"	AND WS.MODULE_ID " . ($moduleId ? "= '" . $DB->ForSql($moduleId) . "'" : "IS NULL") . " ".
 			$sqlAdditionalFilter
 		);
 
@@ -304,7 +306,7 @@ class CBPAllStateService
 		return array_column($rows, 'ID');
 	}
 
-	public static function GetWorkflowState($workflowId)
+	public static function getWorkflowState($workflowId)
 	{
 		global $DB;
 
@@ -433,7 +435,7 @@ class CBPAllStateService
 		return false;
 	}
 
-	public static function DeleteByDocument($documentId)
+	public static function deleteByDocument($documentId)
 	{
 		global $DB;
 
@@ -492,7 +494,7 @@ class CBPAllStateService
 		));
 	}
 
-	public static function MergeStates($firstDocumentId, $secondDocumentId)
+	public static function mergeStates($firstDocumentId, $secondDocumentId)
 	{
 		global $DB;
 
@@ -511,7 +513,7 @@ class CBPAllStateService
 		);
 	}
 
-	public static function MigrateDocumentType($oldType, $newType, $workflowTemplateIds)
+	public static function migrateDocumentType($oldType, $newType, $workflowTemplateIds)
 	{
 		global $DB;
 
@@ -528,7 +530,7 @@ class CBPAllStateService
 		);
 	}
 
-	public function SetState($workflowId, $arState, $arStatePermissions = array())
+	public function setState($workflowId, $arState, $arStatePermissions = array())
 	{
 		global $DB;
 
@@ -581,7 +583,7 @@ class CBPAllStateService
 		}
 	}
 
-	public function SetStateParameters($workflowId, $arStateParameters = array())
+	public function setStateParameters($workflowId, $arStateParameters = array())
 	{
 		global $DB;
 
@@ -601,7 +603,7 @@ class CBPAllStateService
 		);
 	}
 
-	public function AddStateParameter($workflowId, $arStateParameter)
+	public function addStateParameter($workflowId, $arStateParameter)
 	{
 		global $DB;
 
@@ -634,7 +636,7 @@ class CBPAllStateService
 		}
 	}
 
-	public function DeleteStateParameter($workflowId, $name)
+	public function deleteStateParameter($workflowId, $name)
 	{
 		global $DB;
 
@@ -742,9 +744,4 @@ class CBPAllStateService
 			$cache->clean(self::COUNTERS_CACHE_TAG_PREFIX.$userId);
 		}
 	}
-}
-
-//Compatibility
-class CBPStateService extends CBPAllStateService
-{
 }

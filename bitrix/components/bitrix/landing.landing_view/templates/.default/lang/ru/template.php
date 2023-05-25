@@ -1,7 +1,9 @@
 <?php
 $MESS['LANDING_TPL_PREVIEW_URL'] = 'Предпросмотр';
 $MESS['LANDING_TPL_PREVIEW_URL_OPEN'] = 'Открыть сайт';
+$MESS['LANDING_TPL_PREVIEW_URL_OPEN_FORM'] = 'Открыть форму';
 $MESS['LANDING_TPL_PREVIEW_URL_HINT'] = 'Посмотрите, как будет выглядеть ваш сайт до публикации.';
+$MESS['LANDING_TPL_PREVIEW_EXIT'] = 'Выйти из редактора';
 $MESS['LANDING_TPL_FEATURES'] = 'Возможности сайта';
 $MESS['LANDING_TPL_FEATURES_STORE'] = 'Возможности магазина';
 $MESS['LANDING_TPL_FEATURES_KNOWLEDGE'] = 'Возможности базы знаний';
@@ -40,6 +42,7 @@ $MESS['LANDING_TPL_BUY_RENEW'] = 'Пожалуйста, #LINK1#продлите 
 $MESS['LANDING_WAIT_WHILE_CREATING'] = 'Пожалуйста, подождите, ваш сайт скоро опубликуется...';
 $MESS['LANDING_WAIT_WHILE_CREATING_FORCE'] = 'Перейти на сайт';
 $MESS['LANDING_FORM_EDITOR_SHARE_BUTTON'] = 'Поделиться';
+$MESS['LANDING_FORM_FEATURES'] = 'Возможности формы';
 $MESS['LANDING_PREVIEW_MOBILE_TITLE'] = 'Открыть на мобильном устройстве';
 $MESS['LANDING_PREVIEW_MOBILE_TEXT'] = 'Наведите камеру телефона на QR-код, чтобы открыть сайт';
 $MESS['LANDING_PREVIEW_MOBILE_NEW_TAB'] = 'Открыть в новой вкладке';

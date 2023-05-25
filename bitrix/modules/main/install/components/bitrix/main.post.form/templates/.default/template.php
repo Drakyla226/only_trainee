@@ -21,9 +21,12 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 
 Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
 	'ui.entity-selector',
-	'ui.buttons'
+	'ui.buttons',
 ]);
+
 Main\Page\Asset::getInstance()->addJs($templateFolder."/index.js");
 include_once(__DIR__."/functions.php");
 include_once(__DIR__."/message.php");
@@ -41,7 +44,7 @@ $controlId = htmlspecialcharsbx($arParams["divId"]);
 		</div>
 	</div>
 	<div class="feed-add-post-form feed-add-post-edit-form">
-		<?= $arParams["~HTML_BEFORE_TEXTAREA"]?>
+		<?= $arParams["~HTML_BEFORE_TEXTAREA"] ?? ''?>
 		<div class="feed-add-post-text">
 <script type="text/javascript">
 <?
@@ -66,8 +69,8 @@ BX.ready(function()
 			eventNode: BX('div<?=CUtil::JSEscape($controlId)?>')
 		},
 		<?=CUtil::PhpToJSObject([
-			'ctrlEnterHandler' => $arParams["LHE"]['ctrlEnterHandler'],
-			'showPanelEditor' => ($arParams["TEXT"]["SHOW"] == "Y"),
+			'ctrlEnterHandler' => $arParams["LHE"]['ctrlEnterHandler'] ?? '',
+			'showPanelEditor' => isset($arParams["TEXT"]["SHOW"]) && $arParams["TEXT"]["SHOW"] === "Y",
 			'lazyLoad' => !!$arParams["LHE"]['lazyLoad'],
 			'urlPreviewId' => $arParams['urlPreviewId'],
 			'parsers' => $arParams["PARSER"],
@@ -273,7 +276,7 @@ $visibleButtons = include(__DIR__.'/lhe.php');
 	<?php
 	}
 	?>
-	<div class="feed-add-post-buttons" id="lhe_buttons_<?=$arParams["FORM_ID"]?>">
+	<div class="feed-add-post-buttons --no-wrap" id="lhe_buttons_<?=$arParams["FORM_ID"]?>">
 		<button class="ui-btn ui-btn-sm ui-btn-primary" id="lhe_button_submit_<?=$arParams["FORM_ID"]?>"><?=GetMessage("MPF_BUTTON_SEND")?></button>
 		<button class="ui-btn ui-btn-sm ui-btn-link" id="lhe_button_cancel_<?=$arParams["FORM_ID"]?>"><?=GetMessage("MPF_BUTTON_CANCEL")?></button>
 

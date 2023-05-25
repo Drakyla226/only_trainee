@@ -1,10 +1,6 @@
-<?
-IncludeModuleLangFile(__FILE__);
+<?php
 
-include_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/bizproc/classes/general/runtimeservice.php");
-
-class CBPAllHistoryService
-	extends CBPRuntimeService
+class CBPHistoryService extends CBPRuntimeService
 {
 	protected $useGZipCompression = false;
 
@@ -13,7 +9,7 @@ class CBPAllHistoryService
 		$this->useGZipCompression = \CBPWorkflowTemplateLoader::useGZipCompression();
 	}
 
-	protected function ParseFields(&$arFields, $id = 0)
+	protected function parseFields(&$arFields, $id = 0)
 	{
 		global $DB;
 
@@ -63,7 +59,7 @@ class CBPAllHistoryService
 		unset($arFields["MODIFIED"]);
 	}
 
-	private function GetSerializedForm($arTemplate)
+	private function getSerializedForm($arTemplate)
 	{
 		$buffer = serialize($arTemplate);
 		if ($this->useGZipCompression)
@@ -71,19 +67,19 @@ class CBPAllHistoryService
 		return $buffer;
 	}
 
-	public static function Add($arFields)
+	public static function add($arFields)
 	{
 		$h = new CBPHistoryService();
 		return $h->AddHistory($arFields);
 	}
 
-	public static function Update($id, $arFields)
+	public static function update($id, $arFields)
 	{
 		$h = new CBPHistoryService();
 		return $h->UpdateHistory($id, $arFields);
 	}
 
-	private static function GenerateFilePath($documentId)
+	private static function generateFilePath($documentId)
 	{
 		$arDocumentId = CBPHelper::ParseDocumentId($documentId);
 
@@ -98,7 +94,7 @@ class CBPAllHistoryService
 		return $dest;
 	}
 
-	public function DeleteHistory($id, $documentId = null)
+	public function deleteHistory($id, $documentId = null)
 	{
 		global $DB;
 
@@ -141,13 +137,13 @@ class CBPAllHistoryService
 		}
 	}
 
-	public static function Delete($id, $documentId = null)
+	public static function delete($id, $documentId = null)
 	{
 		$h = new CBPHistoryService();
 		$h->DeleteHistory($id, $documentId);
 	}
 
-	public function DeleteHistoryByDocument($documentId)
+	public function deleteHistoryByDocument($documentId)
 	{
 		global $DB;
 
@@ -167,13 +163,13 @@ class CBPAllHistoryService
 		);
 	}
 
-	public static function DeleteByDocument($documentId)
+	public static function deleteByDocument($documentId)
 	{
 		$h = new CBPHistoryService();
 		$h->DeleteHistoryByDocument($documentId);
 	}
 
-	public static function GetById($id)
+	public static function getById($id)
 	{
 		$id = intval($id);
 		if ($id <= 0)
@@ -184,13 +180,13 @@ class CBPAllHistoryService
 		return $db->GetNext();
 	}
 
-	public static function GetList($arOrder = array("ID" => "DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	public static function getList($arOrder = array("ID" => "DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		$h = new CBPHistoryService();
 		return $h->GetHistoryList($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields);
 	}
 
-	public static function RecoverDocumentFromHistory($id)
+	public static function recoverDocumentFromHistory($id)
 	{
 		$arHistory = self::GetById($id);
 		if (!$arHistory)
@@ -207,7 +203,7 @@ class CBPAllHistoryService
 		return false;
 	}
 
-	public static function PrepareFileForHistory($documentId, $arFileId, $historyIndex)
+	public static function prepareFileForHistory($documentId, $arFileId, $historyIndex)
 	{
 		$dest = self::GenerateFilePath($documentId);
 
@@ -241,7 +237,7 @@ class CBPAllHistoryService
 		return $result;
 	}
 
-	public static function MergeHistory($firstDocumentId, $secondDocumentId)
+	public static function mergeHistory($firstDocumentId, $secondDocumentId)
 	{
 		global $DB;
 
@@ -259,7 +255,7 @@ class CBPAllHistoryService
 		);
 	}
 
-	public static function MigrateDocumentType($oldType, $newType, $workflowTemplateIds)
+	public static function migrateDocumentType($oldType, $newType, $workflowTemplateIds)
 	{
 		global $DB;
 
@@ -276,7 +272,7 @@ class CBPAllHistoryService
 		);
 	}
 
-	public function AddHistory($arFields)
+	public function addHistory($arFields)
 	{
 		global $DB;
 
@@ -301,7 +297,7 @@ class CBPAllHistoryService
 		return $ID;
 	}
 
-	public function UpdateHistory($id, $arFields)
+	public function updateHistory($id, $arFields)
 	{
 		global $DB;
 
@@ -323,7 +319,7 @@ class CBPAllHistoryService
 		return $id;
 	}
 
-	public function GetHistoryList($arOrder = array("ID" => "DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
+	public function getHistoryList($arOrder = array("ID" => "DESC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		global $DB;
 
@@ -447,7 +443,7 @@ class CBPHistoryResult extends CDBResult
 		parent::__construct($res);
 	}
 
-	private function GetFromSerializedForm($value)
+	private function getFromSerializedForm($value)
 	{
 		if ($value <> '')
 		{
@@ -465,7 +461,7 @@ class CBPHistoryResult extends CDBResult
 		return $value;
 	}
 
-	function Fetch()
+	function fetch()
 	{
 		$res = parent::Fetch();
 
@@ -480,6 +476,3 @@ class CBPHistoryResult extends CDBResult
 		return $res;
 	}
 }
-
-//Compatibility
-class CBPHistoryService extends CBPAllHistoryService {}

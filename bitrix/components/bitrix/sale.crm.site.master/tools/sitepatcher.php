@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Sale\CrmSiteMaster\Tools;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -1481,13 +1482,5 @@ class SitePatcher
 		}
 
 		return true;
-	}
-
-	/**
-	 * @throws Main\ArgumentOutOfRangeException
-	 */
-	public static function crmShopEnable()
-	{
-		Option::set("crm", "crm_shop_enabled", "Y");
 	}
 }

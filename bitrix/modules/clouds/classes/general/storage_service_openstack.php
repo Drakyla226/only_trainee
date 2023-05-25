@@ -428,7 +428,13 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 		}
 	}
 
-	function GetFileSRC($arBucket, $arFile)
+	/**
+	 * @param array[string]string $arBucket
+	 * @param mixed $arFile
+	 * @param boolean $encoded
+	 * @return string
+	*/
+	function GetFileSRC($arBucket, $arFile, $encoded = true)
 	{
 		global $APPLICATION;
 
@@ -473,7 +479,14 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 				$URI = $arBucket["PREFIX"]."/".$URI;
 		}
 
-		return $host."/".CCloudUtil::URLEncode($URI, "UTF-8", true);
+		if ($encoded)
+		{
+			return $host."/".CCloudUtil::URLEncode($URI, "UTF-8", true);
+		}
+		else
+		{
+			return $host."/".$URI;
+		}
 	}
 
 	function FileExists($arBucket, $filePath)
@@ -542,15 +555,6 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 			return false;
 	}
 
-	function DownloadToFile($arBucket, $arFile, $filePath)
-	{
-		$request = new Bitrix\Main\Web\HttpClient(array(
-			"streamTimeout" => $this->streamTimeout,
-		));
-		$url = $this->GetFileSRC($arBucket, $arFile);
-		return $request->download($url, $filePath);
-	}
-
 	function DeleteFile($arBucket, $filePath)
 	{
 		global $APPLICATION;
@@ -615,7 +619,7 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 				$arFile["content"],
 				array(
 					"Content-Type" => $arFile["type"],
-					"Content-Length" => CUtil::BinStrlen($arFile["content"]),
+					"Content-Length" => strlen($arFile["content"]),
 				)
 			);
 		}
@@ -712,12 +716,12 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 								if($a["#"]["content_type"][0]["#"] === "application/directory")
 								{
 									$dir_name = trim(mb_substr($a["#"]["name"][0]["#"], mb_strlen($filePath)), "/");
-									$result["dir"][$APPLICATION->ConvertCharset(urldecode($dir_name), "UTF-8", LANG_CHARSET)] = true;
+									$result["dir"][$APPLICATION->ConvertCharset($dir_name, "UTF-8", LANG_CHARSET)] = true;
 								}
 								else
 								{
 									$file_name = mb_substr($a["#"]["name"][0]["#"], mb_strlen($filePath));
-									$file_name = $APPLICATION->ConvertCharset(urldecode($file_name), "UTF-8", LANG_CHARSET);
+									$file_name = $APPLICATION->ConvertCharset($file_name, "UTF-8", LANG_CHARSET);
 									if (!in_array($file_name, $result["file"]))
 									{
 										$result["file"][] = $file_name;
@@ -741,7 +745,7 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 							{
 								$new_marker = $a["@"]["name"];
 								$dir_name = trim(mb_substr($a["@"]["name"], mb_strlen($filePath)), "/");
-								$result["dir"][$APPLICATION->ConvertCharset(urldecode($dir_name), "UTF-8", LANG_CHARSET)] = true;
+								$result["dir"][$APPLICATION->ConvertCharset(rawurldecode($dir_name), "UTF-8", LANG_CHARSET)] = true;
 							}
 						}
 					}
@@ -760,7 +764,9 @@ class CCloudStorageService_OpenStackStorage extends CCloudStorageService
 
 			$marker = $new_marker;
 		}
+
 		$result["dir"] = array_keys($result["dir"]);
+
 		return $result;
 	}
 

@@ -138,8 +138,9 @@ class User extends Base
 	{
 		if ($value !== null && !is_array($value))
 		{
-			if (strpos($value, '[') !== false || strpos($value, '{') !== false)
+			if (self::isRawValue($value))
 			{
+				$errors = [];
 				$value = \CBPHelper::UsersStringToArray($value, $fieldType->getDocumentType(), $errors);
 			}
 			else
@@ -163,18 +164,19 @@ class User extends Base
 			$name = static::generateControlName($field);
 			$controlId = static::generateControlId($field);
 
+			$settings = $fieldType->getSettings();
+
 			$config = [
 				'valueInputName' => $name,
 				'value' => $valueString,
-				'items' => $value ? static::getSelectedItems($value) : [],
+				'items' => $value ? static::getSelectedItems($value, $settings) : [],
 				'multiple' => $fieldType->isMultiple(),
 				'required' => $fieldType->isRequired(),
 			];
 
-			$additional = $fieldType->getSettings();
-			if ($additional && is_array($additional))
+			if ($settings)
 			{
-				$config += $additional;
+				$config += $settings;
 			}
 
 			$groups = \CBPRuntime::GetRuntime()
@@ -202,7 +204,9 @@ class User extends Base
 			$controlIdHtml = htmlspecialcharsbx($controlId);
 			$configHtml = htmlspecialcharsbx(Main\Web\Json::encode($config));
 			$className = htmlspecialcharsbx(static::generateControlClassName($fieldType, $field));
-			$propertyHtml = htmlspecialcharsbx(Main\Web\Json::encode($fieldType->getProperty()));
+			$property = $fieldType->getProperty();
+			$property['Type'] = static::getType();
+			$propertyHtml = htmlspecialcharsbx(Main\Web\Json::encode($property));
 
 			return <<<HTML
 				<script>
@@ -210,7 +214,7 @@ class User extends Base
 						var c = document.getElementById('{$controlIdJs}');
 						if (c)
 						{
-							BX.Bizproc.UserSelector.decorateNode(c);
+							BX.Bizproc.FieldType.initControl(c.parentNode, JSON.parse(c.dataset.property));
 						}
 					});
 				</script>
@@ -220,6 +224,7 @@ HTML;
 
 		$renderResult = parent::renderControl($fieldType, $field, $valueString, $allowSelection, $renderMode);
 		$renderResult .= static::renderControlSelector($field, null, false, '', $fieldType);
+
 		return $renderResult;
 	}
 
@@ -260,9 +265,9 @@ HTML;
 		$value = parent::extractValue($fieldType, $field, $request);
 		$result = null;
 
-		if (is_string($value) && $value <> '')
+		if (is_string($value) && $value !== '')
 		{
-			$errors = array();
+			$errors = [];
 			$result = \CBPHelper::usersStringToArray($value, $fieldType->getDocumentType(), $errors);
 			if (sizeof($errors) > 0)
 			{
@@ -283,7 +288,8 @@ HTML;
 	{
 		static::cleanErrors();
 		$result = static::extractValue($fieldType, $field, $request);
-		return is_array($result)? $result[0] : $result;
+
+		return is_array($result)? array_shift($result) : $result;
 	}
 
 	/**
@@ -322,7 +328,7 @@ HTML;
 		return parent::externalizeValueMultiple($fieldType, $context, $value);
 	}
 
-	private static function getSelectedItems(array $value): ?array
+	private static function getSelectedItems(array $value, array $settings): ?array
 	{
 		if (!class_exists(\Bitrix\UI\EntitySelector\Dialog::class))
 		{
@@ -331,11 +337,11 @@ HTML;
 
 		$mapCallback = function ($value)
 		{
-			if (strpos($value, 'user_') === 0)
+			if ($value && strpos($value, 'user_') === 0)
 			{
 				return ['user', \CBPHelper::StripUserPrefix($value)];
 			}
-			if (strpos($value, 'group_d') === 0)
+			if ($value && strpos($value, 'group_d') === 0)
 			{
 				return ['department', preg_replace('|[^0-9]+|', '', $value)];
 			}
@@ -345,6 +351,77 @@ HTML;
 
 		$preselectedItems = array_filter(array_map($mapCallback, $value));
 
-		return \Bitrix\UI\EntitySelector\Dialog::getSelectedItems($preselectedItems)->toArray();
+		if (!$preselectedItems)
+		{
+			return [];
+		}
+
+		$options = [];
+
+		if (!empty($settings['allowEmailUsers']))
+		{
+			$options['entities'] = [
+				[
+					'id' => 'user',
+					'options' => [
+						'emailUsers' => true,
+						'myEmailUsers' => true,
+					]
+				]
+			];
+		}
+
+		return \Bitrix\UI\EntitySelector\Dialog::getSelectedItems($preselectedItems, $options)->toArray();
+	}
+
+	public static function validateValueSingle($value, FieldType $fieldType)
+	{
+		$value = static::toSingleValue($fieldType, $value);
+
+		$value = trim($value);
+
+		$isUser = (mb_strpos($value, 'user_') !== false);
+		if ($isUser)
+		{
+			return $value;
+		}
+
+		$isGroup = (mb_strpos($value, 'group_') !== false);
+		if ($isGroup)
+		{
+			return $value;
+		}
+
+		$isNumber = preg_match('#^[0-9]+$#', $value);
+		if ($isNumber)
+		{
+			return $value;
+		}
+
+		$isDocumentGroup = Automation\Helper::isDocumentUserGroup($value, $fieldType->getDocumentType());
+		if ($isDocumentGroup)
+		{
+			return $value;
+		}
+
+		return null;
+	}
+
+	public static function validateValueMultiple($value, FieldType $fieldType): array
+	{
+		$value = parent::validateValueMultiple($value, $fieldType);
+		$value = array_filter($value, fn($v) => (!is_null($v)));
+
+		return array_unique($value);
+	}
+
+	private static function isRawValue($value): bool
+	{
+		return (
+			is_string($value)
+			&& !is_numeric($value)
+			&& strpos($value, 'user_') === false
+			&& strpos($value, 'group_') === false
+		);
 	}
 }

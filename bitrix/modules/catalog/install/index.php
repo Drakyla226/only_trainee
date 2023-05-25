@@ -205,6 +205,14 @@ class catalog extends CModule
 			'getBuilderList'
 		);
 
+		$eventManager->registerEventHandler(
+			'seo',
+			'OnCatalogWebhook',
+			'catalog',
+			'\Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade',
+			'onCatalogWebhookHandler'
+		);
+
 		if ($this->bitrix24mode)
 		{
 			Main\Config\Option::set('catalog', 'enable_viewed_products', 'Y');
@@ -460,14 +468,21 @@ class catalog extends CModule
 		$eventManager->unRegisterEventHandler('report', 'onReportsCollect', 'catalog', '\Bitrix\Catalog\Integration\Report\EventHandler', 'onReportHandlerCollect');
 		$eventManager->unRegisterEventHandler('report', 'onReportViewCollect', 'catalog', '\Bitrix\Catalog\Integration\Report\EventHandler', 'onViewsCollect');
 
+		$eventManager->unRegisterEventHandler(
+			'seo',
+			'OnCatalogWebhook',
+			'catalog',
+			'\Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade',
+			'onCatalogWebhookHandler'
+		);
 
-		if ($this->bitrix24mode)
+		if (Main\Loader::includeModule('catalog'))
 		{
-			\Bitrix\Catalog\Compatible\EventCompatibility::unRegisterEvents();
-		}
-		else
-		{
-			if ($enableDeprecatedEvents)
+			if ($this->bitrix24mode)
+			{
+				\Bitrix\Catalog\Compatible\EventCompatibility::unRegisterEvents();
+			}
+			elseif ($enableDeprecatedEvents)
 			{
 				\Bitrix\Catalog\Compatible\EventCompatibility::unRegisterEvents();
 			}
@@ -651,6 +666,7 @@ class catalog extends CModule
 				],
 				'b_catalog_store_docs' => [
 					'ID' => [
+						'b_catalog_docs_barcode' => 'DOC_ID',
 						'b_catalog_docs_element' => 'DOC_ID',
 						'b_catalog_store_document_file' => 'DOCUMENT_ID',
 					],

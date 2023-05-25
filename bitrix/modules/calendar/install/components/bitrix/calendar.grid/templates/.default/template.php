@@ -2,9 +2,13 @@
 <?
 use \Bitrix\Main\Localization\Loc;
 
-Bitrix\Main\UI\Extension::load("ui.icons.b24");
+\Bitrix\Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
+	'ui.icons.b24',
+]);
 
-$APPLICATION->SetPageProperty('BodyClass', $APPLICATION->GetPageProperty('BodyClass').' pagetitle-toolbar-field-view calendar-pagetitle-view');
+$APPLICATION->SetPageProperty('BodyClass', $APPLICATION->GetPageProperty('BodyClass').' pagetitle-toolbar-field-view calendar-pagetitle-view no-background');
 
 $isBitrix24Template = (SITE_TEMPLATE_ID === "bitrix24");
 if($isBitrix24Template)
@@ -47,15 +51,22 @@ if($isBitrix24Template)
 	$this->SetViewTarget("below_pagetitle");
 }
 ?>
-<div class="calendar-view-switcher-list">
-	<div id="<?= $arResult['ID']?>-view-switcher-container"></div>
+<div class="calendar-interface-toolbar">
+	<div class="calendar-view-switcher">
+		<div id="<?= $arResult['ID']?>-view-switcher-container"></div>
+	</div>
 
-	<? if ($arParams["SHOW_FILTER"]):?>
-		<div id="<?= $arResult['ID']?>-counter-container" class="pagetitle-container" style="overflow: hidden;"></div>
+	<? if (
+		$arParams["SHOW_FILTER"]
+		&& $arParams['CALENDAR_TYPE'] === 'user'
+		&& (int)$arParams['OWNER_ID'] === (int)$arParams['USER_ID']
+	):?>
+		<div id="<?= $arResult['ID']?>-counter-container" class="pagetitle-container calendar-counter"></div>
 	<? endif;?>
-</div>
 
-<div id="<?= $arResult['ID']?>-sync-container" class="calendar-view-switcher pagetitle-align-right-container"></div>
+	<div id="<?= $arResult['ID']?>-sync-container" style="margin: auto 0 auto auto"></div>
+	<div id="<?= $arResult['ID']?>-sharing-container" style="margin: auto 0 auto 5px"></div>
+</div>
 <?
 if($isBitrix24Template)
 {
@@ -77,18 +88,18 @@ if($ex = $APPLICATION->GetException())
 }
 
 // Set title and navigation
-$arParams["SET_TITLE"] = $arParams["SET_TITLE"] === "Y" ? "Y" : "N";
-$arParams["SET_NAV_CHAIN"] = $arParams["SET_NAV_CHAIN"] === "Y" ? "Y" : "N"; //Turn OFF by default
+$arParams["SET_TITLE"] = ($arParams["SET_TITLE"] ?? null) === "Y" ? "Y" : "N";
+$arParams["SET_NAV_CHAIN"] = ($arParams["SET_NAV_CHAIN"] ?? null) === "Y" ? "Y" : "N"; //Turn OFF by default
 
-if ($arParams["STR_TITLE"])
+if (($arParams["STR_TITLE"] ?? null))
 {
 	$arParams["STR_TITLE"] = trim($arParams["STR_TITLE"]);
 }
 else
 {
-	if (!$arParams['OWNER_ID'] && $arParams['CALENDAR_TYPE'] === "group")
+	if (!($arParams['OWNER_ID'] ?? null) && $arParams['CALENDAR_TYPE'] === "group")
 		return CCalendarSceleton::showCalendarGridError(GetMessage('EC_GROUP_ID_NOT_FOUND'));
-	if (!$arParams['OWNER_ID'] && $arParams['CALENDAR_TYPE'] === "user")
+	if (!($arParams['OWNER_ID'] ?? null) && $arParams['CALENDAR_TYPE'] === "user")
 		return CCalendarSceleton::showCalendarGridError(GetMessage('EC_USER_ID_NOT_FOUND'));
 
 	if ($arParams['CALENDAR_TYPE'] === "group" || $arParams['CALENDAR_TYPE'] === "user")
@@ -213,33 +224,3 @@ else
 	}
 }
 ?>
-
-<?$spotlight = new \Bitrix\Main\UI\Spotlight("CALENDAR_NEW_ROOM");?>
-<?if(!$spotlight->isViewed(CCalendar::GetCurUserId()))
-{
-	CJSCore::init("spotlight");
-	?>
-	<script type="text/javascript">
-		BX.ready(function ()
-		{
-			var target = BX("top_menu_id_calendar_menu_rooms");
-			if (target)
-			{
-				target =  target.querySelector(".main-buttons-item-link");
-			}
-			if (target && BX.type.isDomNode(target))
-			{
-				setTimeout(function(){
-					var calendarRoomSpotlight = new BX.SpotLight({
-						targetElement: target,
-						targetVertex: "middle-center",
-						content: '<?=Loc::getMessage('EC_CALENDAR_SPOTLIGHT_ROOMS')?>',
-						id: "CALENDAR_NEW_ROOM",
-						autoSave: true
-					});
-					calendarRoomSpotlight.show();
-				}, 2000);
-			}
-		});
-	</script>
-<? }?>

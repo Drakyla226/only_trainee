@@ -1,4 +1,5 @@
 import { Tag } from 'main.core';
+import 'ui.design-tokens';
 import Item from './item';
 import ItemMarketing from './itemMarketing';
 import Scroller from './scroller';
@@ -16,8 +17,6 @@ export class SiteTile
 		this.scroller = null;
 		this.setData(this.items);
 		this.init();
-
-		setTimeout(this.refreshPreview, 3000);
 	}
 
 	getItems()
@@ -52,6 +51,7 @@ export class SiteTile
 				ordersCount: parseInt(item.ordersCount) || null,
 				phone: item.phone || null,
 				preview: item.preview || null,
+				cloudPreview: item.cloudPreview || null,
 				published: item.published || null,
 				deleted: item.deleted || null,
 				domainStatus: item.domainStatus || null,
@@ -109,23 +109,5 @@ export class SiteTile
 	init()
 	{
 		this.draw();
-	}
-
-	refreshPreview()
-	{
-		const previews = document.querySelectorAll('.landing-sites__preview-image');
-
-		if (previews)
-		{
-			[...previews].map(node => {
-				let url = node.style.backgroundImage.match(/url\(["']?([^"']*)["']?\)/);
-				if (url)
-				{
-					url = url[1];
-					url += (url.indexOf('?') > 0) ? '&' : '?';
-					node.style.backgroundImage = 'url(' + url + 'refreshed)';
-				}
-			});
-		}
 	}
 }

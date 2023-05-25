@@ -348,6 +348,7 @@ class UserTable extends DataManager
 			'shop',
 			'call',
 			'document_editor',
+			'calendar_sharing',
 		];
 
 		return $types;
@@ -443,7 +444,6 @@ class UserTable extends DataManager
 	{
 		$text = implode(' ', [
 			$fields['NAME'],
-			$fields['SECOND_NAME'],
 			$fields['LAST_NAME'],
 			$fields['WORK_POSITION'],
 		]);

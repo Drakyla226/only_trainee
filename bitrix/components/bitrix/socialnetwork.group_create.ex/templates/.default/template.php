@@ -17,6 +17,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI;
 
 UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
 	'ui.buttons',
 	'ui.alerts',
 	'ui.icons.b24',
@@ -143,6 +145,7 @@ else
 						confidentialityTypes: <?= CUtil::phpToJSObject($arResult['ConfidentialityTypes']) ?>,
 						expandableSettingsNodeId: 'sonet_group_create_settings_expandable',
 						stepsCount: <?= ($arResult['USE_PRESETS'] === 'Y' && $arParams['GROUP_ID'] <= 0 ? 4 : 1) ?>,
+						focus: '<?= CUtil::JSEscape(\Bitrix\Main\Context::getCurrent()->getRequest()->get('focus')) ?>',
 					});
 				}
 			);

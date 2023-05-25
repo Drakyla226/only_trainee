@@ -18,7 +18,7 @@
 
 .sonet-group-join-successfull-request-popup-title {
 	font-size: 14px;
-	font-weight: bold;
+	font-weight: var(--ui-font-weight-bold);
 	padding-bottom: 10px;
 }
 .sonet-group-join-successfull-request-popup-text {
@@ -71,7 +71,8 @@
 	-webkit-box-align: center;
 	-ms-flex-align: center;
 	align-items: center;
-	font: 13px/15px "OpenSans-SemiBold", "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font: 13px/15px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-semi-bold, 600);
 	color: rgba(82,92,105,.87);
 }
 
@@ -87,17 +88,22 @@
 	vertical-align: top;
 	position: relative;
 	width: 40px;
+	min-width: 40px;
 	height: 40px;
 	margin: 0 8px 8px 0;
 	border-radius: 100%;
 	background: rgba(82,92,105,.04) center no-repeat;
-	cursor: pointer;
 	--blue: rgba(22,181,232,1);
 	--green: rgba(157,207,0,1);
+	--dark-blue: #478EE4;
+}
+
+a.sonet-common-workgroup-avatar {
+	cursor: pointer;
 }
 
 .sonet-common-workgroup-avatar.--folder {
-	background-color: var(--blue);
+	background-color: var(--dark-blue);
 	background-image: url(images/workgroup-avatar/folder.svg);
 	background-position: center 11px;
 }

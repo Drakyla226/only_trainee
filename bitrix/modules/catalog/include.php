@@ -55,10 +55,25 @@ const BX_CATALOG_FILENAME_REG = '/[^a-zA-Z0-9\s!#\$%&\(\)\[\]\{\}+\.;=@\^_\~\/\\
 // Constants for the store control: //
 const CONTRACTOR_INDIVIDUAL = 1;
 const CONTRACTOR_JURIDICAL = 2;
+/** @deprecated
+ *	@see \Bitrix\Catalog\StoreDocumentTable::TYPE_ARRIVAL
+ */
 const DOC_ARRIVAL = 'A';
+/** @deprecated
+ *	@see \Bitrix\Catalog\StoreDocumentTable::TYPE_MOVING
+ */
 const DOC_MOVING = 'M';
+/** @deprecated
+ * @see \Bitrix\Catalog\StoreDocumentTable::TYPE_RETURN
+ */
 const DOC_RETURNS = 'R';
+/** @deprecated
+ *	@see \Bitrix\Catalog\StoreDocumentTable::TYPE_DEDUCT
+ */
 const DOC_DEDUCT = 'D';
+/** @deprecated
+ *	@see \CCatalogDocsTypes::TYPE_INVENTORY
+ */
 const DOC_INVENTORY = 'I';
 
 //**********************************//
@@ -88,6 +103,7 @@ CJSCore::RegisterExt('core_condtree', $arTreeDescr);
 const CATALOG_VALUE_EPSILON = 1e-6;
 const CATALOG_VALUE_PRECISION = 2;
 const CATALOG_CACHE_DEFAULT_TIME = 10800;
+const CATALOG_PAGE_SIZE = 500;
 
 require_once __DIR__.'/autoload.php';
 
@@ -430,7 +446,7 @@ function CatalogViewedProductCallback($productID, $UserID, $strSiteID = SITE_ID)
 	{
 		$arPrice = CCatalogProduct::GetOptimalPrice($productID, 1, ($UserID > 0 ? $arUserCache[$UserID] : $USER->GetUserGroupArray()), "N", array(), ($UserID > 0 ? $strSiteID : false), array());
 
-		if (count($arPrice) > 0)
+		if (!empty($arPrice) && is_array($arPrice))
 		{
 			$currentPrice = $arPrice["PRICE"]["PRICE"];
 			$currentDiscount = 0.0;
@@ -1462,7 +1478,7 @@ function Add2BasketByProductID($productId, $quantity = 1, $rewriteFields = array
 			{
 				$basketItem->setFieldNoDemand('ORDER_ID', intval($rewriteFields['ORDER_ID']));
 			}
-			
+
 			if ($basketItems)
 			{
 				$r = $basket->save();

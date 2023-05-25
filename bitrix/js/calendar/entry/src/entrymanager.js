@@ -1,13 +1,11 @@
-import {Entry} from "calendar.entry";
-import {SectionManager} from "calendar.sectionmanager";
-import {Util} from 'calendar.util';
-import {Loc, Type, Event} from "main.core";
-import {EventEmitter} from 'main.core.events';
-import {CompactEventForm} from "calendar.compacteventform";
-import "ui.notification";
-import { EventViewForm } from 'calendar.eventviewform';
+import { Entry } from 'calendar.entry';
+import { SectionManager } from 'calendar.sectionmanager';
+import { Util } from 'calendar.util';
+import { Event, Loc, Type } from 'main.core';
+import { EventEmitter } from 'main.core.events';
+import { CompactEventForm } from 'calendar.compacteventform';
+import 'ui.notification';
 import { RoomsManager } from 'calendar.roomsmanager';
-
 
 export class EntryManager {
 	static newEntryName = '';
@@ -75,7 +73,10 @@ export class EntryManager {
 					|| dateTime > displayedViewRange.end.getTime()
 				)
 				{
-					date = Util.getUsableDateTime(displayedViewRange.start);
+					const startDate = new Date(displayedViewRange.start.getTime());
+					const workTime = calendarContext.util.getWorkTime();
+					startDate.setHours(workTime.start, 0, 0,0);
+					date = Util.getUsableDateTime(startDate);
 				}
 			}
 		}
@@ -86,9 +87,9 @@ export class EntryManager {
 		}
 	}
 
-	static getNewEntryName()
+	static getNewEntryName(): string
 	{
-		return EntryManager.newEntryName || Loc.getMessage('CALENDAR_DEFAULT_ENTRY_NAME');
+		return (EntryManager.newEntryName || '');
 	}
 
 	static setNewEntryName(newEntryName)
@@ -150,6 +151,13 @@ export class EntryManager {
 		}
 	}
 
+	static showReleaseLocationNotification()
+	{
+		BX.UI.Notification.Center.notify({
+			content: Loc.getMessage('CALENDAR_RELEASE_LOCATION_NOTIFICATION'),
+		});
+	}
+
 	static closeDeleteNotificationBalloon(entry)
 	{
 		if (entry && entry instanceof Entry)
@@ -171,6 +179,7 @@ export class EntryManager {
 			new bx.Calendar.SliderLoader(
 				options.entry ? 'EDIT' + options.entry.id : 'NEW',
 				{
+					calendarContext: options.calendarContext,
 					entry: options.entry || null,
 					type: options.type,
 					isLocationCalendar: options.isLocationCalendar || false,
@@ -198,6 +207,7 @@ export class EntryManager {
 					timezoneOffset: options.timezoneOffset,
 					dayOfWeekMonthFormat: options.dayOfWeekMonthFormat || false,
 					calendarContext: options.calendarContext || null,
+					link: options.link,
 				}).show();
 			}
 		}
@@ -302,8 +312,7 @@ export class EntryManager {
 	{
 		if (!this.confirmDeclineDialog)
 		{
-			const bx = Util.getBX();
-			this.confirmDeclineDialog = new bx.Calendar.Controls.ConfirmStatusDialog();
+			this.confirmDeclineDialog = this.createConfirmStatusDialog();
 		}
 
 		this.confirmDeclineDialog.show();
@@ -330,8 +339,7 @@ export class EntryManager {
 	{
 		if (!this.confirmEditDialog)
 		{
-			const bx = Util.getBX();
-			this.confirmEditDialog = new bx.Calendar.Controls.ConfirmEditDialog();
+			this.confirmEditDialog = this.createConfirmEditDialog();
 		}
 		this.confirmEditDialog.show();
 
@@ -351,8 +359,7 @@ export class EntryManager {
 	{
 		if (!this.reinviteUsersDialog)
 		{
-			const bx = Util.getBX();
-			this.reinviteUsersDialog = new bx.Calendar.Controls.ReinviteUserDialog();
+			this.reinviteUsersDialog = this.createReinviteUserDialog();
 		}
 		this.reinviteUsersDialog.show();
 
@@ -373,8 +380,7 @@ export class EntryManager {
 	{
 		if (!this.confirmedEmailDialog)
 		{
-			const bx = Util.getBX();
-			this.confirmedEmailDialog = new bx.Calendar.Controls.ConfirmedEmailDialog();
+			this.confirmedEmailDialog = this.createConfirmedEmailDialog();
 		}
 		this.confirmedEmailDialog.show();
 
@@ -395,8 +401,7 @@ export class EntryManager {
 	{
 		if (!this.limitationEmailDialog)
 		{
-			const bx = Util.getBX();
-			this.limitationEmailDialog = new bx.Calendar.Controls.EmailLimitationDialog();
+			this.limitationEmailDialog = this.createEmailLimitationDialog();
 		}
 		this.limitationEmailDialog.subscribe('onClose', ()=>{
 			if (Type.isFunction(options.callback))
@@ -483,9 +488,16 @@ export class EntryManager {
 
 	handlePullChanges(params)
 	{
+		if (!BX.Calendar.Util.checkRequestId(params.requestUid))
+		{
+			return;
+		}
+
 		const compactForm = EntryManager.getCompactViewForm();
-		if (compactForm
-			&& compactForm.isShown())
+		if (
+			compactForm
+			&& compactForm.isShown()
+		)
 		{
 			compactForm.handlePull(params);
 		}
@@ -499,15 +511,12 @@ export class EntryManager {
 				&& data.entry.parentId === parseInt(params?.fields?.PARENT_ID)
 			)
 			{
-				if (params.command === 'delete_event'
+				if (
+					params.command === 'delete_event'
 					&& data.entry.getType() === params?.fields?.CAL_TYPE
 				)
 				{
 					slider.close();
-				}
-				else if (data.control instanceof EventViewForm)
-				{
-					data.control.reloadSlider(params);
 				}
 			}
 		});
@@ -526,7 +535,7 @@ export class EntryManager {
 			{
 				top.BX.Event.EventEmitter.emit('BX.Calendar:doReloadCounters');
 			}
-			
+
 			if (params?.fields?.CAL_TYPE === 'location' && top.BX.Calendar?.Controls?.Location)
 			{
 				top.BX.Calendar.Controls.Location.handlePull(params);
@@ -540,13 +549,15 @@ export class EntryManager {
 				return section.id === entrySectionId && section.isShown();
 			});
 
-		let loadedEntry = EntryManager.getEntryInstance(
-			calendarContext.getView().getEntryById(EntryManager.getEntryUniqueId(params?.fields))
-		);
+		let loadedEntry = params?.fields
+			? EntryManager.getEntryInstance(
+				calendarContext.getView().getEntryById(EntryManager.getEntryUniqueId(params.fields)),
+			)
+			: null;
 
 		if ((sectionDisplayed || loadedEntry) && calendarContext)
 		{
-			calendarContext.reload();
+			calendarContext.reloadDebounce();
 		}
 	}
 
@@ -611,12 +622,7 @@ export class EntryManager {
 
 				EntryManager.unregisterDeleteTimeout({action, data, params});
 			});
-
-
-
-
 		});
-
 	}
 
 	static getEntryUniqueId(entryData, entry)
@@ -666,5 +672,36 @@ export class EntryManager {
 			userSettings.defaultReminders[type] = reminders;
 		}
 		Util.setUserSettings(userSettings);
+	}
+
+	//this is because extensions cant be loaded in iframe with import
+	static createConfirmEditDialog()
+	{
+		const bx = Util.getBX();
+		return new bx.Calendar.Controls.ConfirmEditDialog();
+	}
+
+	static createConfirmStatusDialog()
+	{
+		const bx = Util.getBX();
+		return new bx.Calendar.Controls.ConfirmStatusDialog();
+	}
+
+	static createReinviteUserDialog()
+	{
+		const bx = Util.getBX();
+		return new bx.Calendar.Controls.ReinviteUserDialog();
+	}
+
+	static createConfirmedEmailDialog()
+	{
+		const bx = Util.getBX();
+		return new bx.Calendar.Controls.ConfirmedEmailDialog();
+	}
+
+	static createEmailLimitationDialog()
+	{
+		const bx = Util.getBX();
+		return new bx.Calendar.Controls.EmailLimitationDialog();
 	}
 }

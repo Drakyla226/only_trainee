@@ -31,6 +31,10 @@
 	color: #e6e6e6;
 }
 
+.bx-messenger-dark .bx-im-notifications-item-bottom-no-subtitle-text {
+	color: #e6e6e6;
+}
+
 .bx-messenger-dark .bx-im-notifications-item-header-date {
 	color: #b3b3b3;
 }
@@ -39,6 +43,19 @@
 	color: #bde0ff;
 }
 .bx-messenger-dark .bx-im-notifications-item-header-title-text:hover {
+	color: #bde0ff;
+}
+
+.bx-messenger-dark .bx-im-notifications-item-header-title-text-link {
+	color: #bde0ff;
+}
+
+.bx-messenger-dark .bx-im-notifications-item-header-title-text-link.--extranet:hover,
+.bx-messenger-dark .bx-im-notifications-item-header-title-text-link.--extranet {
+	color: #ff9b00;
+}
+
+.bx-messenger-dark .bx-im-notifications-item-header-title-text-link:hover {
 	color: #bde0ff;
 }
 

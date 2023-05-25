@@ -68,7 +68,7 @@ export default class SyncStatusPopup extends EventEmitter
 
 			const options = {};
 
-			options.syncTime = this.getTime(connection.getSyncTimestamp());
+			options.syncTime = this.getFormattedTime(connection.getSyncDate());
 			options.classStatus = connection.getSyncStatus()
 				? 'calendar-sync-popup-item-status-success'
 				: 'calendar-sync-popup-item-status-fail'
@@ -108,21 +108,32 @@ export default class SyncStatusPopup extends EventEmitter
 		return this.popup;
 	}
 
-	getTime(timestamp)
+	getFormattedTime(date)
 	{
-		var format = [
-			["tommorow", "tommorow, H:i:s"],
-			["s" , Loc.getMessage('CAL_JUST')],
-			["i" , "iago"],
-			["H", "Hago"],
-			["d", "dago"],
-			["m100", "mago"],
-			["m", "mago"],
-			// ["m5", Loc.getMessage('CAL_JUST')],
-			["-", ""]
-		];
+		const now = new Date();
+		let timestamp = date;
+		if (Type.isDate(date))
+		{
+			timestamp = Math.round(date.getTime() / 1000);
+			let secondsAgo = parseInt((now - date) / 1000);
+			if (secondsAgo < 60)
+			{
+				return Loc.getMessage('CAL_JUST');
+			}
+		}
 
-		return BX.date.format(format, timestamp);
+		return BX.date.format(
+			[
+				["tommorow", "tommorow, H:i:s"],
+				["i" , "iago"],
+				["H", "Hago"],
+				["d", "dago"],
+				["m100", "mago"],
+				["m", "mago"],
+				["-", ""]
+			],
+			timestamp
+		);
 	}
 
 	getSyncElement(options)
@@ -151,7 +162,7 @@ export default class SyncStatusPopup extends EventEmitter
 			this.removeRefreshStatusBlock();
 			this.enableRefreshButton();
 			SyncStatusPopup.IS_RUN_REFRESH = false;
-		}, 300000);
+		}, 120000);
 	}
 
 	removeRefreshStatusBlock()

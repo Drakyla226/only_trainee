@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Bizproc\Workflow\Template\Packer;
 
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
@@ -153,8 +154,14 @@ class Bpt extends BasePacker
 		{
 			$variable['Default'] = self::replaceValueDocumentFieldsAliases($variable['Default'], $aliases);
 			//Type Internalselect use options as link to document field.
-			if (is_scalar($variable['Options']) && array_key_exists($variable['Options'], $aliases))
+			if (
+				isset($variable['Options'])
+				&& is_scalar($variable['Options'])
+				&& array_key_exists($variable['Options'], $aliases)
+			)
+			{
 				$variable['Options'] = $aliases[$variable['Options']];
+			}
 		}
 	}
 
@@ -205,7 +212,7 @@ class Bpt extends BasePacker
 		return $conditions;
 	}
 
-	private static function ConvertValueCharset($s, $direction)
+	private static function convertValueCharset($s, $direction)
 	{
 		if ("utf-8" == mb_strtolower(LANG_CHARSET))
 			return $s;
@@ -225,7 +232,7 @@ class Bpt extends BasePacker
 		return $s;
 	}
 
-	private static function ConvertArrayCharset($value, $direction = self::DIRECTION_EXPORT)
+	private static function convertArrayCharset($value, $direction = self::DIRECTION_EXPORT)
 	{
 		if (is_array($value))
 		{

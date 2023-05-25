@@ -1,277 +1,7 @@
 this.BX = this.BX || {};
 this.BX.Catalog = this.BX.Catalog || {};
-(function (exports,ui_entityEditor,ui_notification,ui_hint,translit,main_core_events,main_popup,main_core,catalog_storeUse) {
+(function (exports,ui_entityEditor,ui_feedback_form,ui_hint,ui_fonts_opensans,ui_designTokens,translit,ui_notification,main_popup,main_core,main_core_events,catalog_storeUse) {
 	'use strict';
-
-	function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
-
-	function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
-
-	var LazyLoader = /*#__PURE__*/function () {
-	  function LazyLoader(id, settings) {
-	    babelHelpers.classCallCheck(this, LazyLoader);
-	    this.id = main_core.Type.isStringFilled(id) ? id : main_core.Text.getRandom();
-	    this.settings = main_core.Type.isObjectLike(settings) ? settings : {};
-	    this.container = this.settings.container;
-
-	    if (!this.container) {
-	      throw 'Error: Could not find container.';
-	    }
-
-	    this.serviceUrl = this.settings.serviceUrl || '';
-
-	    if (!main_core.Type.isStringFilled(this.serviceUrl)) {
-	      throw 'Error. Could not find service url.';
-	    }
-
-	    this.tabId = this.settings.tabId || '';
-
-	    if (!main_core.Type.isStringFilled(this.tabId)) {
-	      throw 'Error: Could not find tab id.';
-	    }
-
-	    this.params = main_core.Type.isObjectLike(this.settings.componentData) ? this.settings.componentData : {};
-	    this.isRequestRunning = false;
-	    this.loaded = false;
-	  }
-
-	  babelHelpers.createClass(LazyLoader, [{
-	    key: "isLoaded",
-	    value: function isLoaded() {
-	      return this.loaded;
-	    }
-	  }, {
-	    key: "load",
-	    value: function load() {
-	      if (!this.isLoaded()) {
-	        this.startRequest(_objectSpread(_objectSpread({}, this.params), {
-	          'TABID': this.tabId
-	        }));
-	      }
-	    }
-	  }, {
-	    key: "startRequest",
-	    value: function startRequest(params) {
-	      if (this.isRequestRunning) {
-	        return false;
-	      }
-
-	      this.isRequestRunning = true;
-	      BX.ajax({
-	        url: this.serviceUrl,
-	        method: 'POST',
-	        dataType: 'html',
-	        data: {
-	          'LOADERID': this.id,
-	          'PARAMS': params
-	        },
-	        onsuccess: this.onRequestSuccess.bind(this),
-	        onfailure: this.onRequestFailure.bind(this)
-	      });
-	      return true;
-	    }
-	  }, {
-	    key: "onRequestSuccess",
-	    value: function onRequestSuccess(data) {
-	      this.isRequestRunning = false;
-	      this.container.innerHTML = data;
-	      this.loaded = true;
-	    }
-	  }, {
-	    key: "onRequestFailure",
-	    value: function onRequestFailure() {
-	      this.isRequestRunning = false;
-	      this.loaded = true;
-	    }
-	  }]);
-	  return LazyLoader;
-	}();
-
-	function ownKeys$1(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
-
-	function _objectSpread$1(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$1(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$1(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
-
-	var Tab = /*#__PURE__*/function () {
-	  function Tab(id, settings) {
-	    babelHelpers.classCallCheck(this, Tab);
-	    this.id = main_core.Type.isStringFilled(id) ? id : main_core.Text.getRandom();
-	    this.settings = main_core.Type.isObjectLike(settings) ? settings : {};
-	    this.data = main_core.Type.isObjectLike(this.settings.data) ? this.settings.data : {};
-	    this.manager = settings.manager || null;
-	    this.container = this.settings.container;
-	    this.menuContainer = this.settings.menuContainer;
-	    this.active = main_core.Type.isBoolean(this.data.active) ? this.data.active : false;
-	    this.enabled = main_core.Type.isBoolean(this.data.enabled) ? this.data.enabled : true;
-	    main_core.Event.bind(this.menuContainer.querySelector('a.catalog-entity-section-tab-link'), 'click', this.onMenuClick.bind(this));
-	    this.loader = null;
-
-	    if (main_core.Type.isObjectLike(this.data.loader)) {
-	      this.loader = new LazyLoader(this.id, _objectSpread$1(_objectSpread$1({}, this.data.loader), {
-	        tabId: this.id,
-	        container: this.container
-	      }));
-	    }
-	  }
-
-	  babelHelpers.createClass(Tab, [{
-	    key: "isEnabled",
-	    value: function isEnabled() {
-	      return this.enabled;
-	    }
-	  }, {
-	    key: "isActive",
-	    value: function isActive() {
-	      return this.active;
-	    }
-	  }, {
-	    key: "setActive",
-	    value: function setActive(active) {
-	      active = !!active;
-
-	      if (this.isActive() === active) {
-	        return;
-	      }
-
-	      this.active = active;
-
-	      if (this.isActive()) {
-	        this.showTab();
-	      } else {
-	        this.hideTab();
-	      }
-	    }
-	  }, {
-	    key: "showTab",
-	    value: function showTab() {
-	      var _this = this;
-
-	      main_core.Dom.addClass(this.container, 'catalog-entity-section-tab-content-show');
-	      main_core.Dom.removeClass(this.container, 'catalog-entity-section-tab-content-hide');
-	      main_core.Dom.addClass(this.menuContainer, 'catalog-entity-section-tab-current');
-	      this.container.style.display = '';
-	      this.container.style.position = 'absolute';
-	      this.container.style.top = 0;
-	      this.container.style.left = 0;
-	      this.container.style.width = '100%';
-	      new BX.easing({
-	        duration: 350,
-	        start: {
-	          opacity: 0,
-	          translateX: 100
-	        },
-	        finish: {
-	          opacity: 100,
-	          translateX: 0
-	        },
-	        transition: BX.easing.makeEaseOut(BX.easing.transitions.quart),
-	        step: function step(state) {
-	          _this.container.style.opacity = state.opacity / 100;
-	          _this.container.style.transform = 'translateX(' + state.translateX + '%)';
-	        },
-	        complete: function complete() {
-	          main_core.Dom.removeClass(_this.container, 'catalog-entity-section-tab-content-show');
-	          _this.container.style.cssText = '';
-	          main_core.Event.EventEmitter.emit(window, 'onEntityDetailsTabShow', [_this]);
-	        }
-	      }).animate();
-	    }
-	  }, {
-	    key: "hideTab",
-	    value: function hideTab() {
-	      var _this2 = this;
-
-	      main_core.Dom.addClass(this.container, 'catalog-entity-section-tab-content-hide');
-	      main_core.Dom.removeClass(this.container, 'catalog-entity-section-tab-content-show');
-	      main_core.Dom.removeClass(this.menuContainer, 'catalog-entity-section-tab-current');
-	      new BX.easing({
-	        duration: 350,
-	        start: {
-	          opacity: 100
-	        },
-	        finish: {
-	          opacity: 0
-	        },
-	        transition: BX.easing.makeEaseOut(BX.easing.transitions.quart),
-	        step: function step(state) {
-	          _this2.container.style.opacity = state.opacity / 100;
-	        },
-	        complete: function complete() {
-	          _this2.container.style.display = 'none';
-	          _this2.container.style.transform = 'translateX(100%)';
-	          _this2.container.style.opacity = 0;
-	        }
-	      }).animate();
-	    }
-	  }, {
-	    key: "onMenuClick",
-	    value: function onMenuClick(event) {
-	      if (this.isEnabled()) {
-	        if (this.loader && !this.loader.isLoaded()) {
-	          this.loader.load();
-	        }
-
-	        this.manager.selectItem(this);
-	      }
-
-	      event.preventDefault();
-	    }
-	  }]);
-	  return Tab;
-	}();
-
-	var Manager = /*#__PURE__*/function () {
-	  function Manager(id, settings) {
-	    var _this = this;
-
-	    babelHelpers.classCallCheck(this, Manager);
-	    this.id = main_core.Type.isStringFilled(id) ? id : main_core.Text.getRandom();
-	    this.settings = main_core.Type.isObjectLike(settings) ? settings : {};
-	    this.container = this.settings.container;
-	    this.menuContainer = this.settings.menuContainer;
-	    this.items = [];
-
-	    if (main_core.Type.isArray(this.settings.data)) {
-	      this.settings.data.forEach(function (item) {
-	        _this.items.push(new Tab(item.id, {
-	          manager: _this,
-	          data: item,
-	          container: _this.container.querySelector('[data-tab-id="' + item.id + '"]'),
-	          menuContainer: _this.menuContainer.querySelector('[data-tab-id="' + item.id + '"]')
-	        }));
-	      });
-	    }
-
-	    main_core_events.EventEmitter.subscribe('BX.Catalog.EntityCard.TabManager:onOpenTab', function (event) {
-	      var tabId = event.data.tabId;
-
-	      var item = _this.findItemById(tabId);
-
-	      if (item) {
-	        _this.selectItem(item);
-	      }
-	    });
-	  }
-
-	  babelHelpers.createClass(Manager, [{
-	    key: "findItemById",
-	    value: function findItemById(id) {
-	      return this.items.find(function (item) {
-	        return item.id === id;
-	      }) || null;
-	    }
-	  }, {
-	    key: "selectItem",
-	    value: function selectItem(item) {
-	      main_core_events.EventEmitter.emit('BX.Catalog.EntityCard.TabManager:onSelectItem', {
-	        tabId: item.id
-	      });
-	      this.items.forEach(function (current) {
-	        return current.setActive(current === item);
-	      });
-	    }
-	  }]);
-	  return Manager;
-	}();
 
 	var _templateObject, _templateObject2, _templateObject3, _templateObject4, _templateObject5, _templateObject6;
 
@@ -854,9 +584,9 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  return FieldsFactory;
 	}();
 
-	function ownKeys$2(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+	function ownKeys(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
 
-	function _objectSpread$2(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$2(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$2(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+	function _objectSpread(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
 	var PROPERTY_PREFIX = 'PROPERTY_';
 	var PROPERTY_BLOCK_NAME = 'properties';
 
@@ -991,7 +721,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 	      var mode = options.mode || control._mode;
 	      control._mode = mode;
-	      control.getParent().addChild(control, _objectSpread$2(_objectSpread$2({}, options), {}, {
+	      control.getParent().addChild(control, _objectSpread(_objectSpread({}, options), {}, {
 	        enableSaving: false
 	      }));
 
@@ -1033,7 +763,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 
 	      var propertyBlockControl = this._editor.getControlById(PROPERTY_BLOCK_NAME);
 
-	      propertyBlockControl.addChild(control, _objectSpread$2(_objectSpread$2({}, options), {}, {
+	      propertyBlockControl.addChild(control, _objectSpread(_objectSpread({}, options), {}, {
 	        enableSaving: false
 	      }));
 	      return control;
@@ -1100,9 +830,184 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  return IblockSectionController;
 	}(BX.UI.EntityEditorController);
 
-	function ownKeys$3(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+	function _classPrivateMethodInitSpec$1(obj, privateSet) { _checkPrivateRedeclaration$1(obj, privateSet); privateSet.add(obj); }
 
-	function _objectSpread$3(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$3(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$3(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+	function _checkPrivateRedeclaration$1(obj, privateCollection) { if (privateCollection.has(obj)) { throw new TypeError("Cannot initialize the same private elements twice on an object"); } }
+
+	function _classPrivateMethodGet$1(receiver, privateSet, fn) { if (!privateSet.has(receiver)) { throw new TypeError("attempted to get private field on non-instance"); } return fn; }
+
+	var _onFileIsAddedHandler = /*#__PURE__*/new WeakSet();
+
+	var _onFileIsDeletedHandler = /*#__PURE__*/new WeakSet();
+
+	var _showFileNotification = /*#__PURE__*/new WeakSet();
+
+	var _getSupportedAjaxFields = /*#__PURE__*/new WeakSet();
+
+	var GridStore = /*#__PURE__*/function () {
+	  function GridStore(gridId) {
+	    babelHelpers.classCallCheck(this, GridStore);
+
+	    _classPrivateMethodInitSpec$1(this, _getSupportedAjaxFields);
+
+	    _classPrivateMethodInitSpec$1(this, _showFileNotification);
+
+	    _classPrivateMethodInitSpec$1(this, _onFileIsDeletedHandler);
+
+	    _classPrivateMethodInitSpec$1(this, _onFileIsAddedHandler);
+
+	    babelHelpers.defineProperty(this, "editedRowsIndexes", []);
+	    this.gridId = gridId;
+	    main_core_events.EventEmitter.subscribe('onItemIsAdded', _classPrivateMethodGet$1(this, _onFileIsAddedHandler, _onFileIsAddedHandler2).bind(this));
+	    main_core_events.EventEmitter.subscribe('onFileIsDeleted', _classPrivateMethodGet$1(this, _onFileIsDeletedHandler, _onFileIsDeletedHandler2).bind(this));
+	  }
+
+	  babelHelpers.createClass(GridStore, [{
+	    key: "getGrid",
+	    value: function getGrid() {
+	      return BX.Main.gridManager.getInstanceById(this.gridId);
+	    }
+	  }, {
+	    key: "saveEditedRows",
+	    value: function saveEditedRows() {
+	      var _this = this;
+
+	      this.editedRowsIndexes = [];
+	      this.getGrid().getRows().getBodyChild().forEach(function (row) {
+	        if (row.isEdit()) {
+	          _this.editedRowsIndexes.push(row.getNode().rowIndex);
+	        }
+	      });
+	    }
+	  }, {
+	    key: "loadEditedRows",
+	    value: function loadEditedRows() {
+	      var rows = this.getGrid().getRows();
+	      this.editedRowsIndexes.forEach(function (index) {
+	        var row = rows.getByIndex(index);
+
+	        if (row) {
+	          //row.edit(); not used, because for child listeners need fire event
+	          BX.fireEvent(row.getNode(), 'click');
+	        }
+	      });
+	    }
+	  }, {
+	    key: "getEditedRowsFields",
+	    value: function getEditedRowsFields() {
+	      var result = {};
+
+	      var fillCellValue = function fillCellValue(result, name, editData, value) {
+	        if (main_core.Type.isPlainObject(editData) && editData.TYPE === 'MONEY') {
+	          if (main_core.Type.isArray(value)) {
+	            value.forEach(function (item) {
+	              if (item.RAW_NAME === undefined && item.NAME === name) {
+	                result[name] = item.VALUE;
+	              }
+	            });
+	          } else {
+	            console.error('Error value type for `MONEY` column', value);
+	          }
+	        } else if (main_core.Type.isPlainObject(value)) {
+	          var _value$VALUE;
+
+	          result[name] = (_value$VALUE = value.VALUE) !== null && _value$VALUE !== void 0 ? _value$VALUE : '';
+	        } else if (main_core.Type.isArray(value)) {
+	          result[name] = [];
+	          value.forEach(function (item) {
+	            if (main_core.Type.isPlainObject(item)) {
+	              result[name].push(item.VALUE);
+	            } else {
+	              result[name].push(item);
+	            }
+	          });
+	        } else {
+	          result[name] = value;
+	        }
+	      };
+
+	      var rows = this.getGrid().getRows();
+	      var headRow = rows.getHeadFirstChild();
+
+	      var supportedAjaxFields = _classPrivateMethodGet$1(this, _getSupportedAjaxFields, _getSupportedAjaxFields2).call(this);
+
+	      rows.getBodyChild().filter(function (row) {
+	        return row.isEdit();
+	      }).forEach(function (row) {
+	        var values = {};
+	        Array.prototype.forEach.call(row.getCells(), function (cell, index) {
+	          var cellName = headRow.getCellNameByCellIndex(index);
+
+	          if (!cellName) {
+	            return;
+	          }
+
+	          if (supportedAjaxFields.length > 0 && !supportedAjaxFields.includes(cellName)) {
+	            return;
+	          }
+
+	          var cellValues = row.getCellEditorValue(cell);
+	          var cellEditData = headRow.getCellEditDataByCellIndex(index);
+	          fillCellValue(values, cellName, cellEditData, cellValues);
+	        });
+	        result[row.getId()] = values;
+	      });
+	      return result;
+	    }
+	  }]);
+	  return GridStore;
+	}();
+
+	function _onFileIsAddedHandler2(event) {
+	  var file = event.getCompatData()[0];
+	  var isFileUploaded = file instanceof File;
+	  var uploader = event.getCompatData()[2];
+
+	  if (uploader && main_core.Type.isDomNode(uploader.fileInput) && isFileUploaded) {
+	    var isFileUploaderInGrid = this.getGrid().getContainer().contains(uploader.fileInput);
+
+	    if (isFileUploaderInGrid) {
+	      _classPrivateMethodGet$1(this, _showFileNotification, _showFileNotification2).call(this);
+	    }
+	  }
+	}
+
+	function _onFileIsDeletedHandler2(event) {
+	  var uploader = event.getCompatData()[2];
+
+	  if (uploader && main_core.Type.isDomNode(uploader.fileInput)) {
+	    var isFileUploaderInGrid = this.getGrid().getContainer().contains(uploader.fileInput);
+
+	    if (isFileUploaderInGrid) {
+	      _classPrivateMethodGet$1(this, _showFileNotification, _showFileNotification2).call(this);
+	    }
+	  }
+	}
+
+	function _showFileNotification2() {
+	  BX.UI.Notification.Center.notify({
+	    id: 'fileCloseNotification',
+	    blinkOnUpdate: false,
+	    content: main_core.Loc.getMessage('CATALOG_ENTITY_CARD_FILE_CLOSE_NOTIFICATION_2'),
+	    position: 'top-right',
+	    width: 'auto',
+	    autoHideDelay: 5000
+	  });
+	}
+
+	function _getSupportedAjaxFields2() {
+	  var params = this.getGrid().getParam('SUPPORTED_AJAX_FIELDS');
+
+	  if (main_core.Type.isArray(params)) {
+	    return params;
+	  }
+
+	  return [];
+	}
+
+	function ownKeys$1(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread$1(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$1(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$1(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
 
 	var VariationGridController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
 	  babelHelpers.inherits(VariationGridController, _BX$UI$EntityEditorCo);
@@ -1125,12 +1030,14 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      babelHelpers.get(babelHelpers.getPrototypeOf(VariationGridController.prototype), "doInitialize", this).call(this);
 	      main_core_events.EventEmitter.subscribe('Grid::thereEditedRows', this.markAsChangedHandler.bind(this));
 	      main_core_events.EventEmitter.subscribe('Grid::noEditedRows', this.checkEditorToolbar.bind(this));
-	      main_core_events.EventEmitter.subscribe('Grid::updated', this.checkEditorToolbar.bind(this));
+	      main_core_events.EventEmitter.subscribe('Grid::updated', this.onGridUpdated.bind(this));
 	      main_core_events.EventEmitter.subscribe('Grid::beforeRequest', this.onBeforeGridRequest.bind(this));
 	      main_core_events.EventEmitter.subscribe('onAjaxSuccess', this.ajaxSuccessHandler.bind(this));
 	      main_core_events.EventEmitter.subscribe('BX.UI.EntityEditorIncludedArea:onBeforeLoad', this.onBeforeIncludedAreaLoaded.bind(this));
 	      main_core_events.EventEmitter.subscribe('BX.UI.EntityEditorIncludedArea:onAfterLoad', this.onAfterIncludedAreaLoaded.bind(this));
+	      main_core_events.EventEmitter.subscribe("BX.UI.EntityEditor:onNothingChanged", this.onNothingChanged.bind(this));
 	      this.subscribeToFormSubmit();
+	      this.gridStore = new GridStore(this.getGridId());
 	    }
 	  }, {
 	    key: "onBeforeIncludedAreaLoaded",
@@ -1144,6 +1051,11 @@ this.BX.Catalog = this.BX.Catalog || {};
 	    value: function onAfterIncludedAreaLoaded(event) {
 	      main_core.Dom.style(this.getVariationGridLoader(), 'height', '');
 	      this.areaHeight = null;
+	    }
+	  }, {
+	    key: "onNothingChanged",
+	    value: function onNothingChanged(event) {
+	      this.rollback();
 	    }
 	  }, {
 	    key: "getVariationGridLoader",
@@ -1178,6 +1090,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        });
 	      }
 
+	      BX.Main.gridManager.destroy(this.getGridId());
 	      this.subscribeToFormSubmit();
 	      babelHelpers.get(babelHelpers.getPrototypeOf(VariationGridController.prototype), "onAfterSave", this).call(this);
 	    }
@@ -1207,7 +1120,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "unsubscribeGridEvents",
 	    value: function unsubscribeGridEvents() {
-	      var _this$getGrid, _this$getGrid$getSett, _this$getGrid2;
+	      var _this$getGrid, _this$getGrid$getSett;
 
 	      var gridComponent = this.getVariationGridComponent();
 
@@ -1222,7 +1135,6 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      }
 
 	      main_core_events.EventEmitter.unsubscribeAll('BX.Main.grid:paramsUpdated');
-	      (_this$getGrid2 = this.getGrid()) === null || _this$getGrid2 === void 0 ? void 0 : _this$getGrid2.destroy();
 	    }
 	  }, {
 	    key: "ajaxSuccessHandler",
@@ -1269,21 +1181,60 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      return this._editor.getControlById('variation_grid');
 	    }
 	  }, {
+	    key: "onGridUpdated",
+	    value: function onGridUpdated(event) {
+	      var _this2 = this;
+
+	      var _event$getCompatData3 = event.getCompatData(),
+	          _event$getCompatData4 = babelHelpers.slicedToArray(_event$getCompatData3, 1),
+	          grid = _event$getCompatData4[0];
+
+	      this.checkEditorToolbar();
+
+	      if (grid.getId() === this.getGrid().getId()) {
+	        setTimeout(function () {
+	          _this2.gridStore.loadEditedRows();
+	        }, 0 // delay for re-render grid
+	        );
+	      }
+	    }
+	  }, {
 	    key: "onBeforeGridRequest",
 	    value: function onBeforeGridRequest(event) {
-	      var _event$getCompatData3 = event.getCompatData(),
-	          _event$getCompatData4 = babelHelpers.slicedToArray(_event$getCompatData3, 2),
-	          grid = _event$getCompatData4[0],
-	          eventArgs = _event$getCompatData4[1];
+	      var _event$getCompatData5 = event.getCompatData(),
+	          _event$getCompatData6 = babelHelpers.slicedToArray(_event$getCompatData5, 2),
+	          grid = _event$getCompatData6[0],
+	          eventArgs = _event$getCompatData6[1];
 
 	      if (!grid || !grid.parent || grid.parent.getId() !== this.getGridId()) {
 	        return;
 	      }
 
+	      var url = eventArgs.url;
+
+	      if (url) {
+	        var params = new main_core.Uri(url).getQueryParams();
+	        url = new main_core.Uri(this.getReloadUrl());
+
+	        if (params) {
+	          for (var key in params) {
+	            if (Object.hasOwnProperty.call(params, key)) {
+	              url.setQueryParam(key, params[key]);
+	            }
+	          }
+	        }
+
+	        url = url.toString();
+	      } else {
+	        url = this.getReloadUrl();
+	      }
+
+	      this.gridStore.saveEditedRows();
 	      eventArgs.sessid = BX.bitrix_sessid();
 	      eventArgs.method = 'POST';
-	      eventArgs.url = this.getReloadUrl();
-	      eventArgs.data = _objectSpread$3(_objectSpread$3({}, eventArgs.data), {}, {
+	      eventArgs.url = url;
+	      eventArgs.data = _objectSpread$1(_objectSpread$1({}, eventArgs.data), {}, {
+	        rows: this.gridStore.getEditedRowsFields(),
 	        signedParameters: this.getSignedParameters()
 	      });
 	      this.unsubscribeGridEvents();
@@ -1315,9 +1266,9 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "onBeforeSubmitForm",
 	    value: function onBeforeSubmitForm(event) {
-	      var _event$getCompatData5 = event.getCompatData(),
-	          _event$getCompatData6 = babelHelpers.slicedToArray(_event$getCompatData5, 2),
-	          eventArgs = _event$getCompatData6[1];
+	      var _event$getCompatData7 = event.getCompatData(),
+	          _event$getCompatData8 = babelHelpers.slicedToArray(_event$getCompatData7, 2),
+	          eventArgs = _event$getCompatData8[1];
 
 	      var grid = this.getGrid();
 
@@ -1402,10 +1353,37 @@ this.BX.Catalog = this.BX.Catalog || {};
 
 	      eventArgs.options.data[skuGridName] = skuGridData;
 	      this.areaHeight = this.getGridControl().getWrapper().offsetHeight;
-	      BX.Main.gridManager.destroy(this.getGridId());
 	    }
 	  }]);
 	  return VariationGridController;
+	}(BX.UI.EntityEditorController);
+
+	var VariationLinkController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
+	  babelHelpers.inherits(VariationLinkController, _BX$UI$EntityEditorCo);
+
+	  function VariationLinkController(id, settings) {
+	    var _this;
+
+	    babelHelpers.classCallCheck(this, VariationLinkController);
+	    _this = babelHelpers.possibleConstructorReturn(this, babelHelpers.getPrototypeOf(VariationLinkController).call(this));
+
+	    _this.initialize(id, settings);
+
+	    main_core_events.EventEmitter.subscribe('onChangeVariationLink', _this.markAsChanged.bind(babelHelpers.assertThisInitialized(_this)));
+	    return _this;
+	  }
+
+	  babelHelpers.createClass(VariationLinkController, [{
+	    key: "rollback",
+	    value: function rollback() {
+	      babelHelpers.get(babelHelpers.getPrototypeOf(VariationLinkController.prototype), "rollback", this).call(this);
+
+	      if (this._isChanged) {
+	        this._isChanged = false;
+	      }
+	    }
+	  }]);
+	  return VariationLinkController;
 	}(BX.UI.EntityEditorController);
 
 	var GoogleMapController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
@@ -1464,6 +1442,62 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  return EmployeeController;
 	}(BX.UI.EntityEditorController);
 
+	var UserController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
+	  babelHelpers.inherits(UserController, _BX$UI$EntityEditorCo);
+
+	  function UserController(id, settings) {
+	    var _this;
+
+	    babelHelpers.classCallCheck(this, UserController);
+	    _this = babelHelpers.possibleConstructorReturn(this, babelHelpers.getPrototypeOf(UserController).call(this));
+
+	    _this.initialize(id, settings);
+
+	    main_core_events.EventEmitter.subscribe('onChangeUser', _this.markAsChanged.bind(babelHelpers.assertThisInitialized(_this)));
+	    return _this;
+	  }
+
+	  babelHelpers.createClass(UserController, [{
+	    key: "rollback",
+	    value: function rollback() {
+	      babelHelpers.get(babelHelpers.getPrototypeOf(UserController.prototype), "rollback", this).call(this);
+
+	      if (this._isChanged) {
+	        this._isChanged = false;
+	      }
+	    }
+	  }]);
+	  return UserController;
+	}(BX.UI.EntityEditorController);
+
+	var IblockElementController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
+	  babelHelpers.inherits(IblockElementController, _BX$UI$EntityEditorCo);
+
+	  function IblockElementController(id, settings) {
+	    var _this;
+
+	    babelHelpers.classCallCheck(this, IblockElementController);
+	    _this = babelHelpers.possibleConstructorReturn(this, babelHelpers.getPrototypeOf(IblockElementController).call(this));
+
+	    _this.initialize(id, settings);
+
+	    main_core_events.EventEmitter.subscribe('onChangeIblockElement', _this.markAsChanged.bind(babelHelpers.assertThisInitialized(_this)));
+	    return _this;
+	  }
+
+	  babelHelpers.createClass(IblockElementController, [{
+	    key: "rollback",
+	    value: function rollback() {
+	      babelHelpers.get(babelHelpers.getPrototypeOf(IblockElementController.prototype), "rollback", this).call(this);
+
+	      if (this._isChanged) {
+	        this._isChanged = false;
+	      }
+	    }
+	  }]);
+	  return IblockElementController;
+	}(BX.UI.EntityEditorController);
+
 	var BindingToCrmElementController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
 	  babelHelpers.inherits(BindingToCrmElementController, _BX$UI$EntityEditorCo);
 
@@ -1499,9 +1533,9 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  return BindingToCrmElementController;
 	}(BX.UI.EntityEditorController);
 
-	function ownKeys$4(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+	function ownKeys$2(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
 
-	function _objectSpread$4(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$4(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$4(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+	function _objectSpread$2(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$2(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$2(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
 
 	var FieldConfiguratorController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
 	  babelHelpers.inherits(FieldConfiguratorController, _BX$UI$EntityEditorCo);
@@ -1617,6 +1651,10 @@ this.BX.Catalog = this.BX.Catalog || {};
 	            schemeElementData.dateViewFormat = propertyData.dateViewFormat;
 	            currentField.refreshLayout();
 	          }
+	        }
+
+	        if (currentField instanceof BX.UI.EntityEditorCustom) {
+	          currentField.refreshLayout();
 	        }
 
 	        var newType = null;
@@ -1743,6 +1781,10 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        case 'file':
 	          formatted.USER_TYPE = 'DiskFile';
 	          break;
+
+	        case 'custom':
+	          formatted.USER_TYPE = fields.userType;
+	          break;
 	      }
 
 	      for (var _i2 = 0, _Object$entries2 = Object.entries(formatted); _i2 < _Object$entries2.length; _i2++) {
@@ -1790,13 +1832,347 @@ this.BX.Catalog = this.BX.Catalog || {};
 
 	      var sectionControl = this._editor.getControlById(sectionName);
 
-	      sectionControl.addChild(control, _objectSpread$4(_objectSpread$4({}, options), {}, {
+	      sectionControl.addChild(control, _objectSpread$2(_objectSpread$2({}, options), {}, {
 	        enableSaving: false
 	      }));
 	      return control;
 	    }
 	  }]);
 	  return FieldConfiguratorController;
+	}(BX.UI.EntityEditorController);
+
+	function ownKeys$3(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread$3(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$3(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$3(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+
+	var ProductServiceGridController = /*#__PURE__*/function (_BX$UI$EntityEditorCo) {
+	  babelHelpers.inherits(ProductServiceGridController, _BX$UI$EntityEditorCo);
+
+	  function ProductServiceGridController(id, settings) {
+	    var _this;
+
+	    babelHelpers.classCallCheck(this, ProductServiceGridController);
+	    _this = babelHelpers.possibleConstructorReturn(this, babelHelpers.getPrototypeOf(ProductServiceGridController).call(this));
+	    babelHelpers.defineProperty(babelHelpers.assertThisInitialized(_this), "areaHeight", null);
+
+	    _this.initialize(id, settings);
+
+	    return _this;
+	  }
+
+	  babelHelpers.createClass(ProductServiceGridController, [{
+	    key: "doInitialize",
+	    value: function doInitialize() {
+	      babelHelpers.get(babelHelpers.getPrototypeOf(ProductServiceGridController.prototype), "doInitialize", this).call(this);
+	      main_core_events.EventEmitter.subscribe('Grid::thereEditedRows', this.markAsChangedHandler.bind(this));
+	      main_core_events.EventEmitter.subscribe('Grid::noEditedRows', this.checkEditorToolbar.bind(this));
+	      main_core_events.EventEmitter.subscribe('Grid::updated', this.onGridUpdated.bind(this));
+	      main_core_events.EventEmitter.subscribe('Grid::beforeRequest', this.onBeforeGridRequest.bind(this));
+	      main_core_events.EventEmitter.subscribe('onAjaxSuccess', this.ajaxSuccessHandler.bind(this));
+	      main_core_events.EventEmitter.subscribe('BX.UI.EntityEditorIncludedArea:onBeforeLoad', this.onBeforeIncludedAreaLoaded.bind(this));
+	      main_core_events.EventEmitter.subscribe('BX.UI.EntityEditorIncludedArea:onAfterLoad', this.onAfterIncludedAreaLoaded.bind(this));
+	      main_core_events.EventEmitter.subscribe("BX.UI.EntityEditor:onNothingChanged", this.onNothingChanged.bind(this));
+	      this.subscribeToFormSubmit();
+	      this.gridStore = new GridStore(this.getGridId());
+	    }
+	  }, {
+	    key: "onBeforeIncludedAreaLoaded",
+	    value: function onBeforeIncludedAreaLoaded(event) {
+	      if (main_core.Type.isNumber(this.areaHeight)) {
+	        main_core.Dom.style(this.getProductServiceGridLoader(), 'height', this.areaHeight + 'px');
+	      }
+	    }
+	  }, {
+	    key: "onAfterIncludedAreaLoaded",
+	    value: function onAfterIncludedAreaLoaded(event) {
+	      main_core.Dom.style(this.getProductServiceGridLoader(), 'height', '');
+	      this.areaHeight = null;
+	    }
+	  }, {
+	    key: "onNothingChanged",
+	    value: function onNothingChanged(event) {
+	      this.rollback();
+	    }
+	  }, {
+	    key: "getProductServiceGridLoader",
+	    value: function getProductServiceGridLoader() {
+	      var control = this.getGridControl();
+
+	      if (control) {
+	        var wrapper = control.getWrapper();
+
+	        if (wrapper) {
+	          return wrapper.querySelector('.ui-entity-editor-included-area-container-loader');
+	        }
+	      }
+
+	      return null;
+	    }
+	  }, {
+	    key: "rollback",
+	    value: function rollback() {
+	      babelHelpers.get(babelHelpers.getPrototypeOf(ProductServiceGridController.prototype), "rollback", this).call(this);
+	      this.checkEditorToolbar();
+	      this.unsubscribeGridEvents();
+	      BX.Main.gridManager.destroy(this.getGridId());
+	    }
+	  }, {
+	    key: "onAfterSave",
+	    value: function onAfterSave() {
+	      if (this.isChanged() || this._editor.isChanged()) {
+	        this.setGridControlCache(null);
+	        main_core_events.EventEmitter.emit('onAfterProducServiceGridSave', {
+	          gridId: this.getGridId()
+	        });
+	      }
+
+	      BX.Main.gridManager.destroy(this.getGridId());
+	      this.subscribeToFormSubmit();
+	      babelHelpers.get(babelHelpers.getPrototypeOf(ProductServiceGridController.prototype), "onAfterSave", this).call(this);
+	    }
+	  }, {
+	    key: "setGridControlCache",
+	    value: function setGridControlCache(html) {
+	      var control = this.getGridControl();
+
+	      if (control) {
+	        control._loadedHtml = html;
+	      }
+	    }
+	  }, {
+	    key: "onBeforeSubmit",
+	    value: function onBeforeSubmit() {
+	      this.unsubscribeGridEvents();
+	    }
+	    /**
+	     * @returns {BX.Catalog.ProductServiceGrid|null}
+	     */
+
+	  }, {
+	    key: "getVariationGridComponent",
+	    value: function getVariationGridComponent() {
+	      return main_core.Reflection.getClass('BX.Catalog.ProductServiceGrid.Instance');
+	    }
+	  }, {
+	    key: "unsubscribeGridEvents",
+	    value: function unsubscribeGridEvents() {
+	      var _this$getGrid, _this$getGrid$getSett;
+
+	      var gridComponent = this.getVariationGridComponent();
+
+	      if (gridComponent) {
+	        gridComponent.destroy();
+	      }
+
+	      var popup = (_this$getGrid = this.getGrid()) === null || _this$getGrid === void 0 ? void 0 : (_this$getGrid$getSett = _this$getGrid.getSettingsWindow()) === null || _this$getGrid$getSett === void 0 ? void 0 : _this$getGrid$getSett.getPopup();
+
+	      if (popup) {
+	        main_core_events.EventEmitter.emit(this.getGrid().getSettingsWindow().getPopup(), 'onDestroy');
+	      }
+
+	      main_core_events.EventEmitter.unsubscribeAll('BX.Main.grid:paramsUpdated');
+	    }
+	  }, {
+	    key: "ajaxSuccessHandler",
+	    value: function ajaxSuccessHandler(event) {
+	      var _event$getCompatData = event.getCompatData(),
+	          _event$getCompatData2 = babelHelpers.slicedToArray(_event$getCompatData, 2),
+	          xhrData = _event$getCompatData2[1];
+
+	      if (xhrData.url.indexOf(this.getReloadUrl()) === 0) {
+	        this.setGridControlCache(null);
+	      }
+	    } // ajax form initializes every "save" action
+
+	  }, {
+	    key: "subscribeToFormSubmit",
+	    value: function subscribeToFormSubmit() {
+	      main_core_events.EventEmitter.subscribe(this._editor._ajaxForm, 'onBeforeSubmit', this.onBeforeSubmitForm.bind(this));
+	    }
+	  }, {
+	    key: "markAsChangedHandler",
+	    value: function markAsChangedHandler() {
+	      if (!this._editor.isNew()) {
+	        this.markAsChanged();
+	      }
+	    }
+	  }, {
+	    key: "checkEditorToolbar",
+	    value: function checkEditorToolbar() {
+	      this._isChanged = false;
+
+	      if (this._editor.getActiveControlCount() > 0) {
+	        this._editor.showToolPanel();
+	      } else {
+	        this._editor.hideToolPanel();
+	      }
+
+	      if (this._editor._toolPanel) {
+	        this._editor._toolPanel.clearErrors();
+	      }
+	    }
+	  }, {
+	    key: "getGridControl",
+	    value: function getGridControl() {
+	      return this._editor.getControlById('service_grid');
+	    }
+	  }, {
+	    key: "onGridUpdated",
+	    value: function onGridUpdated(event) {
+	      var _this2 = this;
+
+	      var _event$getCompatData3 = event.getCompatData(),
+	          _event$getCompatData4 = babelHelpers.slicedToArray(_event$getCompatData3, 1),
+	          grid = _event$getCompatData4[0];
+
+	      this.checkEditorToolbar();
+
+	      if (grid.getId() === this.getGrid().getId()) {
+	        setTimeout(function () {
+	          _this2.gridStore.loadEditedRows();
+	        }, 0 // delay for re-render grid
+	        );
+	      }
+	    }
+	  }, {
+	    key: "onBeforeGridRequest",
+	    value: function onBeforeGridRequest(event) {
+	      var _event$getCompatData5 = event.getCompatData(),
+	          _event$getCompatData6 = babelHelpers.slicedToArray(_event$getCompatData5, 2),
+	          grid = _event$getCompatData6[0],
+	          eventArgs = _event$getCompatData6[1];
+
+	      if (!grid || !grid.parent || grid.parent.getId() !== this.getGridId()) {
+	        return;
+	      }
+
+	      this.gridStore.saveEditedRows();
+	      eventArgs.sessid = BX.bitrix_sessid();
+	      eventArgs.method = 'POST';
+	      eventArgs.url = this.getReloadUrl();
+	      eventArgs.data = _objectSpread$3(_objectSpread$3({}, eventArgs.data), {}, {
+	        rows: this.gridStore.getEditedRowsFields(),
+	        signedParameters: this.getSignedParameters()
+	      });
+	      this.unsubscribeGridEvents();
+	    }
+	  }, {
+	    key: "getReloadUrl",
+	    value: function getReloadUrl() {
+	      return this.getConfigStringParam('reloadUrl', '');
+	    }
+	  }, {
+	    key: "getSignedParameters",
+	    value: function getSignedParameters() {
+	      return this.getConfigStringParam('signedParameters', '');
+	    }
+	  }, {
+	    key: "getGridId",
+	    value: function getGridId() {
+	      return this.getConfigStringParam('gridId', '');
+	    }
+	  }, {
+	    key: "getGrid",
+	    value: function getGrid() {
+	      if (!main_core.Reflection.getClass('BX.Main.gridManager.getInstanceById')) {
+	        return null;
+	      }
+
+	      return BX.Main.gridManager.getInstanceById(this.getGridId());
+	    }
+	  }, {
+	    key: "onBeforeSubmitForm",
+	    value: function onBeforeSubmitForm(event) {
+	      var _event$getCompatData7 = event.getCompatData(),
+	          _event$getCompatData8 = babelHelpers.slicedToArray(_event$getCompatData7, 2),
+	          eventArgs = _event$getCompatData8[1];
+
+	      var grid = this.getGrid();
+
+	      if (!grid) {
+	        return;
+	      }
+
+	      var skuGridName = this.getGridId();
+	      var skuGridData = grid.getRows().getEditSelectedValues();
+	      var copyItemsMap = grid.getParam('COPY_ITEMS_MAP', {}); // replace sku custom properties edit data names with original names
+
+	      for (var id in skuGridData) {
+	        if (!skuGridData.hasOwnProperty(id)) {
+	          continue;
+	        }
+
+	        for (var name in skuGridData[id]) {
+	          if (!skuGridData[id].hasOwnProperty(name)) {
+	            continue;
+	          }
+
+	          if (name.includes('SKU_GRID_CATALOG_GROUP') || name.includes('SKU_GRID_PURCHASING')) {
+	            for (var priceField in skuGridData[id][name]) {
+	              if (skuGridData[id][name].hasOwnProperty(priceField)) {
+	                skuGridData[id][priceField] = skuGridData[id][name][priceField];
+	              }
+	            }
+	          } else if (name.includes('[EDIT_HTML]')) {
+	            var newName = name.replace('[EDIT_HTML]', ''); // lookup for a custom file fields
+
+	            if (newName.endsWith('_custom')) {
+	              if ('bxu_files[]' in skuGridData[id][name]) {
+	                skuGridData[id][name].isFile = true;
+	                delete skuGridData[id][name]['bxu_files[]'];
+	              }
+
+	              if (skuGridData[id][name].isFile) {
+	                for (var fieldName in skuGridData[id][name]) {
+	                  if (skuGridData[id][name].hasOwnProperty(fieldName)) {
+	                    // check for new files like "MORE_PHOTO_n1[name]"(multiple) or "DETAIL_PICTURE[name]"(single)
+	                    var newFilesRegExp = new RegExp(/([0-9A-Za-z_]+?(_n\d+)*)\[([A-Za-z_]+)\]/);
+
+	                    if (newFilesRegExp.test(fieldName)) {
+	                      var fileCounter = void 0,
+	                          fileSetting = void 0;
+
+	                      var _fieldName$match = fieldName.match(newFilesRegExp);
+
+	                      var _fieldName$match2 = babelHelpers.slicedToArray(_fieldName$match, 4);
+
+	                      fileCounter = _fieldName$match2[1];
+	                      fileSetting = _fieldName$match2[3];
+
+	                      if (fileCounter && fileSetting) {
+	                        skuGridData[id][name][fileCounter] = skuGridData[id][name][fileCounter] || {};
+	                        skuGridData[id][name][fileCounter][fileSetting] = skuGridData[id][name][fieldName];
+	                        delete skuGridData[id][name][fieldName];
+	                      }
+	                    }
+	                  }
+	                }
+	              }
+	            }
+
+	            skuGridData[id][newName] = skuGridData[id][name];
+	            delete skuGridData[id][name];
+	          }
+	        }
+
+	        if (!main_core.Type.isNil(copyItemsMap[id])) {
+	          skuGridData[id]['COPY_SKU_ID'] = copyItemsMap[id];
+	        }
+	      }
+
+	      if (!main_core.Type.isPlainObject(eventArgs.options)) {
+	        eventArgs.options = {};
+	      }
+
+	      if (!main_core.Type.isPlainObject(eventArgs.options.data)) {
+	        eventArgs.options.data = {};
+	      }
+
+	      eventArgs.options.data[skuGridName] = skuGridData;
+	      this.areaHeight = this.getGridControl().getWrapper().offsetHeight;
+	    }
+	  }]);
+	  return ProductServiceGridController;
 	}(BX.UI.EntityEditorController);
 
 	var ControllersFactory = /*#__PURE__*/function () {
@@ -1824,8 +2200,16 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        return new IblockSectionController(controlId, settings);
 	      }
 
+	      if (type === 'iblock_element') {
+	        return new IblockElementController(controlId, settings);
+	      }
+
 	      if (type === 'variation_grid') {
 	        return new VariationGridController(controlId, settings);
+	      }
+
+	      if (type === 'variation_link') {
+	        return new VariationLinkController(controlId, settings);
 	      }
 
 	      if (type === 'google_map') {
@@ -1836,8 +2220,16 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        return new EmployeeController(controlId, settings);
 	      }
 
+	      if (type === 'user') {
+	        return new UserController(controlId, settings);
+	      }
+
 	      if (type === 'binding_to_crm_element') {
 	        return new BindingToCrmElementController(controlId, settings);
+	      }
+
+	      if (type === 'service_grid') {
+	        return new ProductServiceGridController(controlId, settings);
 	      }
 
 	      return null;
@@ -1984,9 +2376,13 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      this._wrapper.appendChild(this.getInputContainer());
 
 	      if (this._typeId === "list" || this._typeId === "multilist" || this._typeId === "directory") {
+	        var _this$_field;
+
 	        this._wrapper.appendChild(main_core.Tag.render(_templateObject$3 || (_templateObject$3 = babelHelpers.taggedTemplateLiteral(["<hr class=\"ui-entity-editor-line\">"]))));
 
-	        this._wrapper.appendChild(this.getEnumerationContainer());
+	        if (BX.prop.get((_this$_field = this._field) === null || _this$_field === void 0 ? void 0 : _this$_field.getSchemeElement().getData(), 'isConfigurable', null) !== false) {
+	          this._wrapper.appendChild(this.getEnumerationContainer());
+	        }
 	      }
 
 	      this._wrapper.appendChild(this.getOptionContainer());
@@ -2034,10 +2430,18 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "isAllowedMultipleCheckBox",
 	    value: function isAllowedMultipleCheckBox() {
-	      var _this$_field, _this$_field$getSchem, _this$_field$getSchem2, _this$_field2, _this$_field2$getSche, _this$_field2$getSche2;
+	      var _this$_field2, _this$_field2$getSche, _this$_field3, _this$_field3$getSche, _this$_field3$getSche2, _this$_field4, _this$_field4$getSche, _this$_field4$getSche2;
 
-	      var isEnabledOfferTree = this === null || this === void 0 ? void 0 : (_this$_field = this._field) === null || _this$_field === void 0 ? void 0 : (_this$_field$getSchem = _this$_field.getSchemeElement()) === null || _this$_field$getSchem === void 0 ? void 0 : (_this$_field$getSchem2 = _this$_field$getSchem._settings) === null || _this$_field$getSchem2 === void 0 ? void 0 : _this$_field$getSchem2.isEnabledOfferTree;
-	      var isMultiple = this === null || this === void 0 ? void 0 : (_this$_field2 = this._field) === null || _this$_field2 === void 0 ? void 0 : (_this$_field2$getSche = _this$_field2.getSchemeElement()) === null || _this$_field2$getSche === void 0 ? void 0 : (_this$_field2$getSche2 = _this$_field2$getSche._settings) === null || _this$_field2$getSche2 === void 0 ? void 0 : _this$_field2$getSche2.multiple;
+	      if (BX.prop.get(this === null || this === void 0 ? void 0 : (_this$_field2 = this._field) === null || _this$_field2 === void 0 ? void 0 : (_this$_field2$getSche = _this$_field2.getSchemeElement()) === null || _this$_field2$getSche === void 0 ? void 0 : _this$_field2$getSche._settings, 'allowedMultiple', true) === false) {
+	        return false;
+	      }
+
+	      if (this._typeId === 'boolean') {
+	        return false;
+	      }
+
+	      var isEnabledOfferTree = this === null || this === void 0 ? void 0 : (_this$_field3 = this._field) === null || _this$_field3 === void 0 ? void 0 : (_this$_field3$getSche = _this$_field3.getSchemeElement()) === null || _this$_field3$getSche === void 0 ? void 0 : (_this$_field3$getSche2 = _this$_field3$getSche._settings) === null || _this$_field3$getSche2 === void 0 ? void 0 : _this$_field3$getSche2.isEnabledOfferTree;
+	      var isMultiple = this === null || this === void 0 ? void 0 : (_this$_field4 = this._field) === null || _this$_field4 === void 0 ? void 0 : (_this$_field4$getSche = _this$_field4.getSchemeElement()) === null || _this$_field4$getSche === void 0 ? void 0 : (_this$_field4$getSche2 = _this$_field4$getSche._settings) === null || _this$_field4$getSche2 === void 0 ? void 0 : _this$_field4$getSche2.multiple;
 	      return !isEnabledOfferTree || isMultiple;
 	    }
 	  }, {
@@ -2237,6 +2641,12 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        params["isPublic"] = this._isPublic.checked;
 	      }
 
+	      if (this._typeId === 'custom') {
+	        var _this$_field5, _this$_field5$getSche, _this$_field5$getSche2;
+
+	        params['userType'] = (_this$_field5 = this._field) === null || _this$_field5 === void 0 ? void 0 : (_this$_field5$getSche = _this$_field5.getSchemeElement()) === null || _this$_field5$getSche === void 0 ? void 0 : (_this$_field5$getSche2 = _this$_field5$getSche._settings) === null || _this$_field5$getSche2 === void 0 ? void 0 : _this$_field5$getSche2.settings['USER_TYPE'];
+	      }
+
 	      return params;
 	    }
 	  }, {
@@ -2255,6 +2665,8 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "onSaveButtonClick",
 	    value: function onSaveButtonClick() {
+	      var _this$_field6, _this$_field6$getSche;
+
 	      if (this._isLocked) {
 	        return;
 	      }
@@ -2308,6 +2720,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        }
 	      }
 
+	      (_this$_field6 = this._field) === null || _this$_field6 === void 0 ? void 0 : (_this$_field6$getSche = _this$_field6.getSchemeElement()) === null || _this$_field6$getSche === void 0 ? void 0 : _this$_field6$getSche.setDataParam('isPublic', params['isPublic']);
 	      BX.onCustomEvent(this, "onSave", [this, params]);
 	    }
 	  }, {
@@ -2437,7 +2850,9 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "isCreationEnabled",
 	    value: function isCreationEnabled() {
-	      return true;
+	      var _this$_editor, _this$_editor2;
+
+	      return ((_this$_editor = this._editor) === null || _this$_editor === void 0 ? void 0 : _this$_editor.isSectionEditEnabled()) && !((_this$_editor2 = this._editor) !== null && _this$_editor2 !== void 0 && _this$_editor2.isReadOnly());
 	    }
 	  }, {
 	    key: "getCreationPageUrl",
@@ -2824,21 +3239,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "openCreationPageUrl",
 	    value: function openCreationPageUrl(typeId) {
-	      var _this = this;
-
-	      var okCallback = function okCallback() {
-	        return _this.openCreationPageSlider(_this.getCreationPageUrl(typeId));
-	      };
-
-	      var variationGridInstance = main_core.Reflection.getClass('BX.Catalog.VariationGrid.Instance');
-
-	      if (variationGridInstance) {
-	        variationGridInstance.askToLossGridData(okCallback, null, {
-	          message: main_core.Loc.getMessage('CATALOG_ENTITY_CARD_UNSAVED_DATA_MESSAGE')
-	        });
-	      } else {
-	        okCallback();
-	      }
+	      this.openCreationPageSlider(this.getCreationPageUrl(typeId));
 	    }
 	  }, {
 	    key: "openCreationPageSlider",
@@ -2879,6 +3280,276 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }]);
 	  return GridFieldConfigurationManager;
 	}(BX.UI.EntityConfigurationManager);
+
+	function ownKeys$4(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread$4(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$4(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$4(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+
+	var LazyLoader = /*#__PURE__*/function () {
+	  function LazyLoader(id, settings) {
+	    babelHelpers.classCallCheck(this, LazyLoader);
+	    this.id = main_core.Type.isStringFilled(id) ? id : main_core.Text.getRandom();
+	    this.settings = main_core.Type.isObjectLike(settings) ? settings : {};
+	    this.container = this.settings.container;
+
+	    if (!this.container) {
+	      throw 'Error: Could not find container.';
+	    }
+
+	    this.serviceUrl = this.settings.serviceUrl || '';
+
+	    if (!main_core.Type.isStringFilled(this.serviceUrl)) {
+	      throw 'Error. Could not find service url.';
+	    }
+
+	    this.tabId = this.settings.tabId || '';
+
+	    if (!main_core.Type.isStringFilled(this.tabId)) {
+	      throw 'Error: Could not find tab id.';
+	    }
+
+	    this.params = main_core.Type.isObjectLike(this.settings.componentData) ? this.settings.componentData : {};
+	    this.isRequestRunning = false;
+	    this.loaded = false;
+	  }
+
+	  babelHelpers.createClass(LazyLoader, [{
+	    key: "isLoaded",
+	    value: function isLoaded() {
+	      return this.loaded;
+	    }
+	  }, {
+	    key: "load",
+	    value: function load() {
+	      if (!this.isLoaded()) {
+	        this.startRequest(_objectSpread$4(_objectSpread$4({}, this.params), {
+	          'TABID': this.tabId
+	        }));
+	      }
+	    }
+	  }, {
+	    key: "startRequest",
+	    value: function startRequest(params) {
+	      if (this.isRequestRunning) {
+	        return false;
+	      }
+
+	      this.isRequestRunning = true;
+	      BX.ajax({
+	        url: this.serviceUrl,
+	        method: 'POST',
+	        dataType: 'html',
+	        data: {
+	          'LOADERID': this.id,
+	          'PARAMS': params
+	        },
+	        onsuccess: this.onRequestSuccess.bind(this),
+	        onfailure: this.onRequestFailure.bind(this)
+	      });
+	      return true;
+	    }
+	  }, {
+	    key: "onRequestSuccess",
+	    value: function onRequestSuccess(data) {
+	      this.isRequestRunning = false;
+	      this.container.innerHTML = data;
+	      this.loaded = true;
+	    }
+	  }, {
+	    key: "onRequestFailure",
+	    value: function onRequestFailure() {
+	      this.isRequestRunning = false;
+	      this.loaded = true;
+	    }
+	  }]);
+	  return LazyLoader;
+	}();
+
+	function ownKeys$5(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread$5(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$5(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$5(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+
+	var Tab = /*#__PURE__*/function () {
+	  function Tab(id, settings) {
+	    babelHelpers.classCallCheck(this, Tab);
+	    this.id = main_core.Type.isStringFilled(id) ? id : main_core.Text.getRandom();
+	    this.settings = main_core.Type.isObjectLike(settings) ? settings : {};
+	    this.data = main_core.Type.isObjectLike(this.settings.data) ? this.settings.data : {};
+	    this.manager = settings.manager || null;
+	    this.container = this.settings.container;
+	    this.menuContainer = this.settings.menuContainer;
+	    this.active = main_core.Type.isBoolean(this.data.active) ? this.data.active : false;
+	    this.enabled = main_core.Type.isBoolean(this.data.enabled) ? this.data.enabled : true;
+	    main_core.Event.bind(this.menuContainer.querySelector('a.catalog-entity-section-tab-link'), 'click', this.onMenuClick.bind(this));
+	    this.loader = null;
+
+	    if (main_core.Type.isObjectLike(this.data.loader)) {
+	      this.loader = new LazyLoader(this.id, _objectSpread$5(_objectSpread$5({}, this.data.loader), {
+	        tabId: this.id,
+	        container: this.container
+	      }));
+	    }
+	  }
+
+	  babelHelpers.createClass(Tab, [{
+	    key: "isEnabled",
+	    value: function isEnabled() {
+	      return this.enabled;
+	    }
+	  }, {
+	    key: "isActive",
+	    value: function isActive() {
+	      return this.active;
+	    }
+	  }, {
+	    key: "setActive",
+	    value: function setActive(active) {
+	      active = !!active;
+
+	      if (this.isActive() === active) {
+	        return;
+	      }
+
+	      this.active = active;
+
+	      if (this.isActive()) {
+	        this.showTab();
+	      } else {
+	        this.hideTab();
+	      }
+	    }
+	  }, {
+	    key: "showTab",
+	    value: function showTab() {
+	      var _this = this;
+
+	      main_core.Dom.addClass(this.container, 'catalog-entity-section-tab-content-show');
+	      main_core.Dom.removeClass(this.container, 'catalog-entity-section-tab-content-hide');
+	      main_core.Dom.addClass(this.menuContainer, 'catalog-entity-section-tab-current');
+	      this.container.style.display = '';
+	      this.container.style.position = 'absolute';
+	      this.container.style.top = 0;
+	      this.container.style.left = 0;
+	      this.container.style.width = '100%';
+	      new BX.easing({
+	        duration: 350,
+	        start: {
+	          opacity: 0,
+	          translateX: 100
+	        },
+	        finish: {
+	          opacity: 100,
+	          translateX: 0
+	        },
+	        transition: BX.easing.makeEaseOut(BX.easing.transitions.quart),
+	        step: function step(state) {
+	          _this.container.style.opacity = state.opacity / 100;
+	          _this.container.style.transform = 'translateX(' + state.translateX + '%)';
+	        },
+	        complete: function complete() {
+	          main_core.Dom.removeClass(_this.container, 'catalog-entity-section-tab-content-show');
+	          _this.container.style.cssText = '';
+	          main_core.Event.EventEmitter.emit(window, 'onEntityDetailsTabShow', [_this]);
+	        }
+	      }).animate();
+	    }
+	  }, {
+	    key: "hideTab",
+	    value: function hideTab() {
+	      var _this2 = this;
+
+	      main_core.Dom.addClass(this.container, 'catalog-entity-section-tab-content-hide');
+	      main_core.Dom.removeClass(this.container, 'catalog-entity-section-tab-content-show');
+	      main_core.Dom.removeClass(this.menuContainer, 'catalog-entity-section-tab-current');
+	      new BX.easing({
+	        duration: 350,
+	        start: {
+	          opacity: 100
+	        },
+	        finish: {
+	          opacity: 0
+	        },
+	        transition: BX.easing.makeEaseOut(BX.easing.transitions.quart),
+	        step: function step(state) {
+	          _this2.container.style.opacity = state.opacity / 100;
+	        },
+	        complete: function complete() {
+	          _this2.container.style.display = 'none';
+	          _this2.container.style.transform = 'translateX(100%)';
+	          _this2.container.style.opacity = 0;
+	        }
+	      }).animate();
+	    }
+	  }, {
+	    key: "onMenuClick",
+	    value: function onMenuClick(event) {
+	      if (this.isEnabled()) {
+	        if (this.loader && !this.loader.isLoaded()) {
+	          this.loader.load();
+	        }
+
+	        this.manager.selectItem(this);
+	      }
+
+	      event.preventDefault();
+	    }
+	  }]);
+	  return Tab;
+	}();
+
+	var Manager = /*#__PURE__*/function () {
+	  function Manager(id, settings) {
+	    var _this = this;
+
+	    babelHelpers.classCallCheck(this, Manager);
+	    this.id = main_core.Type.isStringFilled(id) ? id : main_core.Text.getRandom();
+	    this.settings = main_core.Type.isObjectLike(settings) ? settings : {};
+	    this.container = this.settings.container;
+	    this.menuContainer = this.settings.menuContainer;
+	    this.items = [];
+
+	    if (main_core.Type.isArray(this.settings.data)) {
+	      this.settings.data.forEach(function (item) {
+	        _this.items.push(new Tab(item.id, {
+	          manager: _this,
+	          data: item,
+	          container: _this.container.querySelector('[data-tab-id="' + item.id + '"]'),
+	          menuContainer: _this.menuContainer.querySelector('[data-tab-id="' + item.id + '"]')
+	        }));
+	      });
+	    }
+
+	    main_core_events.EventEmitter.subscribe('BX.Catalog.EntityCard.TabManager:onOpenTab', function (event) {
+	      var tabId = event.data.tabId;
+
+	      var item = _this.findItemById(tabId);
+
+	      if (item) {
+	        _this.selectItem(item);
+	      }
+	    });
+	  }
+
+	  babelHelpers.createClass(Manager, [{
+	    key: "findItemById",
+	    value: function findItemById(id) {
+	      return this.items.find(function (item) {
+	        return item.id === id;
+	      }) || null;
+	    }
+	  }, {
+	    key: "selectItem",
+	    value: function selectItem(item) {
+	      main_core_events.EventEmitter.emit('BX.Catalog.EntityCard.TabManager:onSelectItem', {
+	        tabId: item.id
+	      });
+	      this.items.forEach(function (current) {
+	        return current.setActive(current === item);
+	      });
+	    }
+	  }]);
+	  return Manager;
+	}();
 
 	var _templateObject$5;
 	var BaseCard = /*#__PURE__*/function () {
@@ -2921,6 +3592,10 @@ this.BX.Catalog = this.BX.Catalog || {};
 
 	var _templateObject$6, _templateObject2$5, _templateObject3$5, _templateObject4$5, _templateObject5$5, _templateObject6$3, _templateObject7$2;
 
+	function ownKeys$6(object, enumerableOnly) { var keys = Object.keys(object); if (Object.getOwnPropertySymbols) { var symbols = Object.getOwnPropertySymbols(object); enumerableOnly && (symbols = symbols.filter(function (sym) { return Object.getOwnPropertyDescriptor(object, sym).enumerable; })), keys.push.apply(keys, symbols); } return keys; }
+
+	function _objectSpread$6(target) { for (var i = 1; i < arguments.length; i++) { var source = null != arguments[i] ? arguments[i] : {}; i % 2 ? ownKeys$6(Object(source), !0).forEach(function (key) { babelHelpers.defineProperty(target, key, source[key]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$6(Object(source)).forEach(function (key) { Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key)); }); } return target; }
+
 	var EntityCard = /*#__PURE__*/function (_BaseCard) {
 	  babelHelpers.inherits(EntityCard, _BaseCard);
 
@@ -2932,6 +3607,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	    _this = babelHelpers.possibleConstructorReturn(this, babelHelpers.getPrototypeOf(EntityCard).call(this, id, settings));
 	    babelHelpers.defineProperty(babelHelpers.assertThisInitialized(_this), "stackWithOffset", null);
 	    _this.cardSettings = settings.cardSettings || [];
+	    _this.hiddenFields = settings.hiddenFields || [];
 	    _this.feedbackUrl = settings.feedbackUrl || '';
 	    _this.variationGridId = settings.variationGridId;
 	    _this.productStoreGridId = settings.productStoreGridId || null;
@@ -2940,7 +3616,10 @@ this.BX.Catalog = this.BX.Catalog || {};
 	    _this.createDocumentButtonMenuPopupItems = settings.createDocumentButtonMenuPopupItems;
 	    _this.componentName = settings.componentName || null;
 	    _this.componentSignedParams = settings.componentSignedParams || null;
+	    _this.variationGridComponentName = (settings.variationGridComponentName || 'BX.Catalog.VariationGrid') + '.Instance';
 	    _this.isSimpleProduct = settings.isSimpleProduct || false;
+	    _this.isWithOrdersMode = settings.isWithOrdersMode || false;
+	    _this.isInventoryManagementUsed = settings.isInventoryManagementUsed || false;
 
 	    _this.registerFieldsFactory();
 
@@ -3031,13 +3710,14 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      }
 	    }
 	    /**
-	     * @returns {BX.Catalog.VariationGrid|null}
+	     * @returns {BX.Catalog.VariationGrid|BX.Catalog.ProductServiceGrid|null}
 	     */
 
 	  }, {
 	    key: "getVariationGridComponent",
 	    value: function getVariationGridComponent() {
-	      return main_core.Reflection.getClass('BX.Catalog.VariationGrid.Instance');
+	      //return Reflection.getClass('BX.Catalog.VariationGrid.Instance');
+	      return main_core.Reflection.getClass(this.variationGridComponentName);
 	    }
 	  }, {
 	    key: "reloadVariationGrid",
@@ -3123,7 +3803,9 @@ this.BX.Catalog = this.BX.Catalog || {};
 	          popup = _event$getCompatData6[0];
 
 	      if (popup && popup.getId() === 'popupFM' && popup.onApplyFlag) {
-	        this.showNotification(main_core.Loc.getMessage('CATALOG_ENTITY_CARD_FILE_CLOSE_NOTIFICATION'), {
+	        this.showNotification(main_core.Loc.getMessage('CATALOG_ENTITY_CARD_FILE_CLOSE_NOTIFICATION_2'), {
+	          id: 'fileCloseNotification',
+	          blinkOnUpdate: false,
 	          autoHideDelay: 5000
 	        });
 	      }
@@ -3245,6 +3927,10 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      if (eventArgs.id === 'variation_grid') {
 	        eventArgs.configurationFieldManager = this.initializeVariationPropertyConfigurationManager(eventArgs);
 	      }
+
+	      if (eventArgs.id === 'service_grid') {
+	        eventArgs.configurationFieldManager = this.initializeServicePropertyConfigurationManager(eventArgs);
+	      }
 	    }
 	  }, {
 	    key: "initializeIblockFieldConfigurationManager",
@@ -3261,6 +3947,11 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      return configurationManager;
 	    }
 	  }, {
+	    key: "initializeServicePropertyConfigurationManager",
+	    value: function initializeServicePropertyConfigurationManager(eventArgs) {
+	      return GridFieldConfigurationManager.create(this.id, eventArgs);
+	    }
+	  }, {
 	    key: "showNotification",
 	    value: function showNotification(content, options) {
 	      options = options || {};
@@ -3269,14 +3960,12 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        options.stack = this.getStackWithOffset();
 	      }
 
-	      BX.UI.Notification.Center.notify({
+	      BX.UI.Notification.Center.notify(_objectSpread$6({
 	        content: content,
-	        stack: options.stack || null,
 	        position: 'top-right',
 	        width: 'auto',
-	        category: options.category || null,
-	        autoHideDelay: options.autoHideDelay || 3000
-	      });
+	        autoHideDelay: 3000
+	      }, options));
 	    }
 	  }, {
 	    key: "getStackWithOffset",
@@ -3294,15 +3983,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "openFeedbackPanel",
 	    value: function openFeedbackPanel() {
-	      if (!main_core.Reflection.getClass('BX.SidePanel.Instance') || !main_core.Type.isStringFilled(this.feedbackUrl)) {
-	        return;
-	      }
-
-	      BX.SidePanel.Instance.open(this.feedbackUrl, {
-	        cacheable: false,
-	        allowChangeHistory: false,
-	        width: 580
-	      });
+	      EntityCard.openFeedbackPanelStatic();
 	    }
 	  }, {
 	    key: "bindCreateDocumentButtonMenu",
@@ -3391,41 +4072,35 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "showCardSettingsPopup",
 	    value: function showCardSettingsPopup() {
-	      var _this2 = this;
-
-	      var okCallback = function okCallback() {
-	        return _this2.getCardSettingsPopup().show();
-	      };
-
-	      var variationGridInstance = main_core.Reflection.getClass('BX.Catalog.VariationGrid.Instance');
-
-	      if (variationGridInstance) {
-	        variationGridInstance.askToLossGridData(okCallback);
-	      } else {
-	        okCallback();
-	      }
+	      this.getCardSettingsPopup().show();
 	    }
 	  }, {
 	    key: "prepareCardSettingsContent",
 	    value: function prepareCardSettingsContent() {
-	      var _this3 = this;
+	      var _this2 = this;
 
 	      var content = main_core.Tag.render(_templateObject4$5 || (_templateObject4$5 = babelHelpers.taggedTemplateLiteral(["\n\t\t\t<div class='ui-entity-editor-popup-create-field-list'></div>\n\t\t"])));
 	      this.cardSettings.map(function (item) {
-	        content.append(_this3.getSettingItem(item));
+	        content.append(_this2.getSettingItem(item));
 	      });
 	      return content;
 	    }
 	  }, {
 	    key: "getSettingItem",
 	    value: function getSettingItem(item) {
-	      var _item$disabled,
-	          _this4 = this;
+	      var _this3 = this;
 
-	      var input = main_core.Tag.render(_templateObject5$5 || (_templateObject5$5 = babelHelpers.taggedTemplateLiteral(["\n\t\t\t<input type=\"checkbox\">\n\t\t"])));
-	      input.checked = item.checked;
-	      input.disabled = (_item$disabled = item.disabled) !== null && _item$disabled !== void 0 ? _item$disabled : false;
-	      input.dataset.settingId = item.id;
+	      var input = '';
+
+	      if (!item.disabledCheckbox) {
+	        var _item$disabled;
+
+	        input = main_core.Tag.render(_templateObject5$5 || (_templateObject5$5 = babelHelpers.taggedTemplateLiteral(["\n\t\t\t\t<input type=\"checkbox\">\n\t\t\t"])));
+	        input.checked = item.checked;
+	        input.disabled = (_item$disabled = item.disabled) !== null && _item$disabled !== void 0 ? _item$disabled : false;
+	        input.dataset.settingId = item.id;
+	      }
+
 	      var hintNode = main_core.Type.isStringFilled(item.hint) ? main_core.Tag.render(_templateObject6$3 || (_templateObject6$3 = babelHelpers.taggedTemplateLiteral(["<span class=\"catalog-entity-setting-hint\" data-hint=\"", "\"></span>"])), item.hint) : '';
 	      var setting = main_core.Tag.render(_templateObject7$2 || (_templateObject7$2 = babelHelpers.taggedTemplateLiteral(["\n\t\t\t\t<label class=\"ui-ctl-block ui-entity-editor-popup-create-field-item ui-ctl-w100\">\n\t\t\t\t\t<div class=\"ui-ctl-w10\" style=\"text-align: center\">", "</div>\n\t\t\t\t\t<div class=\"ui-ctl-w75\">\n\t\t\t\t\t\t<span class=\"ui-entity-editor-popup-create-field-item-title ", "\">", "", "</span>\n\t\t\t\t\t\t<span class=\"ui-entity-editor-popup-create-field-item-desc\">", "</span>\n\t\t\t\t\t</div>\n\t\t\t\t</label>\n\t\t\t"])), input, item.disabled ? 'catalog-entity-disabled-setting' : '', item.title, hintNode, item.desc);
 	      BX.UI.Hint.init(setting);
@@ -3433,9 +4108,20 @@ this.BX.Catalog = this.BX.Catalog || {};
 	      if (item.id === 'SLIDER') {
 	        main_core.Event.bind(setting, 'change', function (event) {
 	          new catalog_storeUse.Slider().open(item.url, {}).then(function () {
-	            _this4.reloadGrid();
+	            _this3.reloadGrid();
 
-	            _this4.getCardSettingsPopup().close();
+	            _this3.getCardSettingsPopup().close();
+	          });
+	        });
+	      } else if (item.id === 'SEO') {
+	        main_core.Event.bind(setting, 'click', function (event) {
+	          BX.SidePanel.Instance.open(item.url, {
+	            cacheable: false,
+	            allowChangeHistory: false,
+	            data: {
+	              'ELEMENT_ID': _this3.entityId
+	            },
+	            width: 1000
 	          });
 	        });
 	      } else {
@@ -3480,7 +4166,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "requestGridSettings",
 	    value: function requestGridSettings(setting, enabled) {
-	      var _this5 = this;
+	      var _this4 = this;
 
 	      if (!this.getVariationGrid()) ;
 
@@ -3503,14 +4189,14 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        var message = null;
 	        setting.checked = enabled;
 
-	        _this5.reloadVariationGrid();
+	        _this4.reloadVariationGrid();
 
-	        _this5.postSliderMessage('onUpdate', {});
+	        _this4.postSliderMessage('onUpdate', {});
 
-	        _this5.getCardSettingsPopup().close();
+	        _this4.getCardSettingsPopup().close();
 
 	        if (setting.id === 'WAREHOUSE') {
-	          _this5.reloadGrid();
+	          _this4.reloadGrid();
 
 	          message = enabled ? main_core.Loc.getMessage('CATALOG_ENTITY_CARD_WAREHOUSE_ENABLED') : main_core.Loc.getMessage('CATALOG_ENTITY_CARD_WAREHOUSE_DISABLED');
 	        } else {
@@ -3518,7 +4204,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	          message = message.replace('#NAME#', setting.title);
 	        }
 
-	        _this5.showNotification(message, {
+	        _this4.showNotification(message, {
 	          category: 'popup-settings'
 	        });
 	      });
@@ -3526,7 +4212,7 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "requestCardSettings",
 	    value: function requestCardSettings(setting, enabled) {
-	      var _this6 = this;
+	      var _this5 = this;
 
 	      BX.ajax.runComponentAction(this.componentName, 'setCardSetting', {
 	        mode: 'class',
@@ -3539,18 +4225,18 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        setting.checked = enabled;
 
 	        if (setting.id === 'CATALOG_PARAMETERS') {
-	          var section = _this6.getEditorInstance().getControlByIdRecursive('catalog_parameters');
+	          var section = _this5.getEditorInstance().getControlByIdRecursive('catalog_parameters');
 
 	          if (section) {
 	            section.refreshLayout();
 	          }
 	        }
 
-	        _this6.getCardSettingsPopup().close();
+	        _this5.getCardSettingsPopup().close();
 
 	        var message = enabled ? main_core.Loc.getMessage('CATALOG_ENTITY_CARD_SETTING_ENABLED') : main_core.Loc.getMessage('CATALOG_ENTITY_CARD_SETTING_DISABLED');
 
-	        _this6.showNotification(message.replace('#NAME#', setting.title), {
+	        _this5.showNotification(message.replace('#NAME#', setting.title), {
 	          category: 'popup-settings'
 	        });
 	      });
@@ -3558,15 +4244,17 @@ this.BX.Catalog = this.BX.Catalog || {};
 	  }, {
 	    key: "updateSettingsCheckboxState",
 	    value: function updateSettingsCheckboxState() {
-	      var _this7 = this;
+	      var _this6 = this;
 
 	      var popupContainer = this.getCardSettingsPopup().getContentContainer();
 	      this.cardSettings.filter(function (item) {
-	        return item.action === 'grid' && main_core.Type.isArray(item.columns);
+	        var _item$columns;
+
+	        return item.action === 'grid' && main_core.Type.isArray((_item$columns = item.columns) === null || _item$columns === void 0 ? void 0 : _item$columns.ITEMS);
 	      }).forEach(function (item) {
 	        var allColumnsExist = true;
-	        item.columns.forEach(function (columnName) {
-	          if (!_this7.getVariationGrid().getColumnHeaderCellByName(columnName)) {
+	        item.columns.ITEMS.forEach(function (columnName) {
+	          if (!_this6.getVariationGrid().getColumnHeaderCellByName(columnName)) {
 	            allColumnsExist = false;
 	          }
 	        });
@@ -3577,6 +4265,44 @@ this.BX.Catalog = this.BX.Catalog || {};
 	        }
 	      });
 	    }
+	  }], [{
+	    key: "openFeedbackPanelStatic",
+	    value: function openFeedbackPanelStatic() {
+	      BX.UI.Feedback.Form.open({
+	        id: 'catalog-product-card-feedback',
+	        forms: [{
+	          'id': 269,
+	          'lang': 'ru',
+	          'sec': 'mqerov',
+	          'zones': ['ru', 'by', 'kz']
+	        }, {
+	          'id': 347,
+	          'lang': 'en',
+	          'sec': 'lxfji8',
+	          'zones': ['en']
+	        }, {
+	          'id': 349,
+	          'lang': 'es',
+	          'sec': 'gdf9i1',
+	          'zones': ['es']
+	        }, {
+	          'id': 355,
+	          'lang': 'de',
+	          'sec': 'x8k56n',
+	          'zones': ['de']
+	        }, {
+	          'id': 357,
+	          'lang': 'ua',
+	          'sec': '2z19xl',
+	          'zones': ['ua']
+	        }, {
+	          'id': 353,
+	          'lang': 'com.br',
+	          'sec': '5cleqn',
+	          'zones': ['com.br']
+	        }]
+	      });
+	    }
 	  }]);
 	  return EntityCard;
 	}(BaseCard);
@@ -3584,5 +4310,5 @@ this.BX.Catalog = this.BX.Catalog || {};
 	exports.EntityCard = EntityCard;
 	exports.BaseCard = BaseCard;
 
-}((this.BX.Catalog.EntityCard = this.BX.Catalog.EntityCard || {}),BX,BX,BX,BX,BX.Event,BX.Main,BX,BX.Catalog.StoreUse));
+}((this.BX.Catalog.EntityCard = this.BX.Catalog.EntityCard || {}),BX,BX,BX,BX,BX,BX,BX,BX.Main,BX,BX.Event,BX.Catalog.StoreUse));
 //# sourceMappingURL=entity-card.bundle.js.map

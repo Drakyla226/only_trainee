@@ -251,7 +251,7 @@ export class SectionSelector
 			let imageNode;
 			if (imageSrc)
 			{
-				imageNode = Tag.render`<img class="calendar-field-choice-calendar-img-value" src="${imageSrc}">`;
+				imageNode = Tag.render`<img class="calendar-field-choice-calendar-img-value" src="${encodeURI(imageSrc)}">`;
 			}
 			else if(section.type === 'group')
 			{
@@ -370,6 +370,11 @@ export class SectionSelector
 		if (this.viewMode)
 		{
 			Dom.addClass(this.DOM.outerWrap, 'calendar-section-selector-readonly');
+			if (this.DOM.outerWrap !== this.DOM.select)
+			{
+				Dom.removeClass(this.DOM.select, 'calendar-field-select');
+				Dom.addClass(this.DOM.select, 'calendar-section-selector-readonly');
+			}
 		}
 		else
 		{

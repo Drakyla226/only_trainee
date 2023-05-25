@@ -2,13 +2,19 @@
 
 namespace Bitrix\Calendar\Ui;
 
+use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Main\Application;
+use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Text\Emoji;
 
 class CalendarFilter
 {
 	protected static $filterId = '';
+
+	protected static array $filters;
 
 	/**
 	 * Get available fields in filter.
@@ -26,11 +32,16 @@ class CalendarFilter
 			'DATE_FROM',
 			'DATE_TO',
 			'SECTION_ID',
+			'FROM_LIMIT',
+			'TO_LIMIT',
 		];
 	}
 
-
 	/**
+	 * @param $type
+	 * @param $ownerId
+	 * @param $userId
+	 *
 	 * @return string
 	 */
 	public static function getFilterId($type, $ownerId, $userId): string
@@ -65,6 +76,8 @@ class CalendarFilter
 	}
 
 	/**
+	 * @param $type
+	 *
 	 * @return array
 	 */
 	public static function getPresets($type): array
@@ -72,7 +85,7 @@ class CalendarFilter
 		$presets = [];
 		if ($type === 'user')
 		{
-			$presets ['filter_calendar_meeting_status_q'] = [
+			$presets['filter_calendar_meeting_status_q'] = [
 				'name' => Loc::getMessage('CALENDAR_PRESET_MEETING_STATUS_Q'),
 				'default' => false,
 				'fields' => [
@@ -81,7 +94,7 @@ class CalendarFilter
 				]
 			];
 		}
-		
+
 		$presets['filter_calendar_host'] = [
 				'name' => Loc::getMessage('CALENDAR_PRESET_I_AM_HOST'),
 				'default' => false,
@@ -90,7 +103,7 @@ class CalendarFilter
 					'MEETING_STATUS' => 'H',
 				]
 			];
-		
+
 		$presets['filter_calendar_attendee'] = [
 			'name' => Loc::getMessage('CALENDAR_PRESET_I_AM_ATTENDEE'),
 			'default' => false,
@@ -99,7 +112,6 @@ class CalendarFilter
 				'MEETING_STATUS' => 'Y'
 			]
 		];
-		
 
 		return $presets;
 	}
@@ -118,6 +130,8 @@ class CalendarFilter
 			'presetId' => $fields['PRESET_ID'],
 			'fields' => []
 		];
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
 
 		$fieldNames = self::getAvailableFields();
 		foreach ($fields as $key => $value)
@@ -139,7 +153,11 @@ class CalendarFilter
 				}
 				$result['fields'][$key] = $valueList;
 			}
-			else if (in_array($key, $fieldNames))
+			else if ($key === 'MEETING_STATUS')
+			{
+				$result['fields']['MEETING_STATUS'] = $sqlHelper->forSql($value);
+			}
+			else if (in_array($key, $fieldNames, true))
 			{
 				$result['fields'][$key] = $value;
 			}
@@ -147,8 +165,6 @@ class CalendarFilter
 
 		return $result;
 	}
-
-
 
 	/**
 	 * @return array|bool
@@ -171,11 +187,9 @@ class CalendarFilter
 	 */
 	public static function getFilters(): array
 	{
-		static $filters = [];
-
-		if (empty($filters))
+		if (empty(static::$filters))
 		{
-			$filters['CREATED_BY'] = [
+			static::$filters['CREATED_BY'] = [
 				'id' => 'CREATED_BY',
 				'name' => Loc::getMessage('CALENDAR_FILTER_CREATED_BY'),
 				'type' => 'entity_selector',
@@ -197,7 +211,7 @@ class CalendarFilter
 				],
 			];
 
-			$filters['ATTENDEES'] = [
+			static::$filters['ATTENDEES'] = [
 				'id' => 'ATTENDEES',
 				'name' => Loc::getMessage('CALENDAR_FILTER_ATTENDEES'),
 				'type' => 'entity_selector',
@@ -226,7 +240,7 @@ class CalendarFilter
 			// 	'default' => true,
 			// ];
 
-			$filters['MEETING_STATUS'] = [
+			static::$filters['MEETING_STATUS'] = [
 				'id' => 'MEETING_STATUS',
 				'name' => Loc::getMessage('CALENDAR_FILTER_MEETING_STATUS_ME'),
 				'type' => 'list',
@@ -241,21 +255,21 @@ class CalendarFilter
 					//'I' => Loc::getMessage('CALENDAR_FILTER_MEETING_STATUS_I'),
 				]
 			];
-			
-			$filters['DATE'] = [
+
+			static::$filters['DATE'] = [
 				'id' => 'DATE',
 				'name' => Loc::getMessage('CALENDAR_FILTER_DATE'),
 				'type' => 'date'
 			];
 		}
 
-		return $filters;
+		return static::$filters;
 	}
-	
+
 	private static function getSectionsForFilter(string $type, ?int $ownerId, ?int $userId): array
 	{
 		$result = [];
-		
+
 		$sectionList = \CCalendar::getSectionList([
 			'CAL_TYPE' => $type,
 			'OWNER_ID' => $ownerId,
@@ -263,7 +277,7 @@ class CalendarFilter
 			'getPermissions' => true,
 		]);
 		$isPersonalCalendarContext = ($type === 'user' && $userId === $ownerId);
-		
+
 		$hiddenSections = UserSettings::getHiddenSections(
 			$userId,
 			[
@@ -272,19 +286,28 @@ class CalendarFilter
 				'isPersonalCalendarContext' => $isPersonalCalendarContext,
 			]
 		);
-		
+
 		foreach ($sectionList as $section)
 		{
 			if (in_array($section['ID'], $hiddenSections))
 			{
 				continue;
 			}
-			$result[] = $section['ID'];
+
+			$result[] = (int)$section['ID'];
 		}
-		
+
 		return $result;
 	}
-	
+
+	/**
+	 * @param array $params
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	public static function getFilterData(array $params): array
 	{
 		$connection = Application::getConnection();
@@ -292,7 +315,7 @@ class CalendarFilter
 		$userId = (int)$params['userId'];
 		$ownerId = (int)$params['ownerId'];
 		$type = $sqlHelper->forSql($params['type']);
-		
+
 		$fields = self::resolveFilterFields(
 			self::getFilterId($type, $ownerId, $userId)
 		);
@@ -301,7 +324,7 @@ class CalendarFilter
 			$params['ownerId'],
 			$params['userId']
 		);
-		
+
 		if (
 			$type === 'company_calendar'
 			|| $type === 'calendar_company'
@@ -311,27 +334,36 @@ class CalendarFilter
 		{
 			return self::getFilterCompanyData($type, $userId, $ownerId, $fields);
 		}
-		else
-		{
-			return self::getFilterUserData($type, $userId, $ownerId, $fields);
-		}
+
+		return self::getFilterUserData($type, $userId, $ownerId, $fields);
 	}
-	
+
+	/**
+	 * @param string $type
+	 * @param int $userId
+	 * @param int $ownerId
+	 * @param $fields
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	private static function getFilterUserData(string $type, int $userId, int $ownerId, $fields): array
 	{
-		global $DB;
 		$counters = false;
 		$entries = [];
 		$filter = [
 			'OWNER_ID' => $ownerId,
-			'CAL_TYPE' => $type
+			'CAL_TYPE' => $type,
+			'ACTIVE_SECTION' => 'Y',
 		];
-		
+
 		if (isset($fields['fields']['IS_MEETING']))
 		{
 			$filter['IS_MEETING'] = $fields['fields']['IS_MEETING'] === 'Y';
 		}
-		
+
 		if (isset($fields['fields']['MEETING_STATUS']))
 		{
 			$filter['MEETING_STATUS'] = $fields['fields']['MEETING_STATUS'];
@@ -344,8 +376,8 @@ class CalendarFilter
 			{
 				$filter['IS_MEETING'] = true;
 			}
-			
-			if ($fields['presetId'] == 'filter_calendar_meeting_status_q')
+
+			if ($fields['presetId'] === 'filter_calendar_meeting_status_q')
 			{
 				$filter['FROM_LIMIT'] = \CCalendar::Date(time(), false);
 				$filter['TO_LIMIT'] = \CCalendar::Date(time() + \CCalendar::DAY_LENGTH * 90, false);
@@ -353,16 +385,15 @@ class CalendarFilter
 				$counters = CountersManager::getValues((int)$filter['OWNER_ID']);
 			}
 		}
-		
+
 		if (isset($fields['fields']['CREATED_BY']))
 		{
 			unset($filter['OWNER_ID'], $filter['CAL_TYPE']);
 			$filter['MEETING_HOST'] = $fields['fields']['CREATED_BY'];
 			// mantis: 93743
 			$filter['CREATED_BY'] = $userId;
-			// $filter['IS_MEETING'] = true;
 		}
-		
+
 		if (isset($fields['fields']['SECTION_ID']) && !empty($fields['fields']['SECTION_ID']))
 		{
 			$filter['SECTION'] = $fields['fields']['SECTION_ID'];
@@ -375,36 +406,52 @@ class CalendarFilter
 				'counters' => $counters
 			];
 		}
-		
+
 		if (isset($fields['fields']['ATTENDEES']))
 		{
-			// unset($filter['CREATED_BY']);
-			$queryStr = "SELECT EV.ID FROM b_calendar_event AS EV
-				LEFT JOIN b_calendar_event AS SEC ON EV.PARENT_ID = SEC.PARENT_ID
-				WHERE EV.DELETED = 'N'
-				AND SEC.DELETED = 'N'
-				AND EV.CAL_TYPE = '" . $type . "'
-				AND EV.CREATED_BY = " . $userId . " ";
-			
-			$queryStr .= 'AND SEC.CREATED_BY IN (\''.implode('\',\'', $fields['fields']['ATTENDEES']).'\');';
-			$events = $DB->Query($queryStr);
-			while ($event = $events->Fetch())
+			$query = EventTable::query()
+				->setSelect(['ID'])
+				->registerRuntimeField(
+					'EVENT_SECOND',
+					new ReferenceField(
+						'EVENT_SECOND',
+						EventTable::getEntity(),
+						Join::on('ref.PARENT_ID', 'this.PARENT_ID'),
+						['join_type' => Join::TYPE_LEFT]
+					)
+				)
+				->where('DELETED', 'N')
+				->where('EVENT_SECOND.DELETED', 'N')
+				->where('CAL_TYPE', $type)
+				->where('CREATED_BY', $userId)
+				->whereIn('EVENT_SECOND.CREATED_BY', $fields['fields']['ATTENDEES'])
+				->exec()
+			;
+
+			while ($event = $query->fetch())
 			{
 				$filter['ID'][] = (int)$event['ID'];
 			}
-			$filter['ID'] = array_unique($filter['ID']);
-			
-			// $filter['OWNER_ID'] = $fields['fields']['ATTENDEES'];
+
+			if ($filter['ID'])
+			{
+				$filter['ID'] = array_unique($filter['ID']);
+			}
+			else
+			{
+				$filter['ID'] = [0];
+			}
+
 			$filter['IS_MEETING'] = true;
 		}
-		
+
 		[$filter, $parseRecursion] = self::filterByDate($fields, $filter);
-		
+
 		if (isset($fields['search']) && $fields['search'])
 		{
-			$filter[(\CCalendarEvent::isFullTextIndexEnabled() ? '*' : '*%').'SEARCHABLE_CONTENT'] = \CCalendarEvent::prepareToken($fields['search']);
+			$filter[(\CCalendarEvent::isFullTextIndexEnabled() ? '*' : '*%').'SEARCHABLE_CONTENT'] = \CCalendarEvent::prepareToken(Emoji::encode($fields['search']));
 		}
-		
+
 		$entries = \CCalendarEvent::GetList(
 			[
 				'arFilter' => $filter,
@@ -418,103 +465,124 @@ class CalendarFilter
 				'setDefaultLimit' => false
 			]
 		);
-		
+
 		return [
 			'result' => true,
 			'entries' => $entries,
 			'counters' => $counters
 		];
 	}
-	
+
+	/**
+	 * @param string $type
+	 * @param int $userId
+	 * @param int $ownerId
+	 * @param $fields
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	private static function getFilterCompanyData(string $type, int $userId, int $ownerId, $fields): array
 	{
-		global $DB;
 		$filter = [
-			// 'OWNER_ID' => $ownerId,
-			'CAL_TYPE' => $type
+			'CAL_TYPE' => $type,
+			'ACTIVE_SECTION' => 'Y',
 		];
 		$entries = [];
-		$createdBy = '';
-		
-		$selectString = "SELECT EV.PARENT_ID FROM b_calendar_event AS EV
-			LEFT JOIN b_calendar_event AS SEC ON EV.ID = SEC.PARENT_ID ";
-		
-		$whereString = "WHERE EV.CAL_TYPE = '" . $type . "'
-			AND SEC.DELETED = 'N'
-			AND EV.DELETED = 'N' ";
-		
+
+		$query = EventTable::query()
+			->setSelect(['PARENT_ID'])
+			->registerRuntimeField(
+				'EVENT_SECOND',
+				new ReferenceField(
+					'EVENT_SECOND',
+					EventTable::getEntity(),
+					Join::on('ref.PARENT_ID', 'this.ID'),
+					['join_type' => Join::TYPE_LEFT]
+				)
+			)
+			->where('CAL_TYPE', $type)
+			->where('DELETED', 'N')
+			->where('EVENT_SECOND.DELETED', 'N')
+		;
+
 		if (isset($fields['fields']['IS_MEETING']) && $fields['fields']['IS_MEETING'])
 		{
 			$filter['IS_MEETING'] = $fields['fields']['IS_MEETING'] === 'Y';
 		}
-		
+
 		if (isset($fields['fields']['MEETING_STATUS']) && $fields['fields']['MEETING_STATUS'])
 		{
-			$createdBy = 'AND SEC.CREATED_BY = ' . $userId . ' ' ;
+			$query->where('EVENT_SECOND.CREATED_BY', $userId);
 			if (
 				$fields['fields']['MEETING_STATUS'] === 'H'
 				&& !isset($fields['fields']['CREATED_BY'])
 			)
 			{
 				unset($filter['IS_MEETING']);
-				$whereString .= "AND SEC.MEETING_HOST = '" . $userId . "' ";
+				$query->where('EVENT_SECOND.MEETING_HOST', $userId);
 			}
 			else
 			{
-				$whereString .= "AND SEC.MEETING_STATUS = '" . $fields['fields']['MEETING_STATUS'] . "' ";
+				$query->where('EVENT_SECOND.MEETING_STATUS', $fields['fields']['MEETING_STATUS']);
 				$filter['IS_MEETING'] = true;
 			}
 		}
-		
+
 		if (isset($fields['fields']['CREATED_BY']) && is_array($fields['fields']['CREATED_BY']))
 		{
-			$whereString .= 'AND SEC.MEETING_HOST IN (\''.implode('\',\'', $fields['fields']['CREATED_BY']).'\') ';
+			$query->whereIn('EVENT_SECOND.MEETING_HOST', $fields['fields']['CREATED_BY']);
 		}
-		
+
 		if (isset($fields['fields']['SECTION_ID']) && is_array($fields['fields']['SECTION_ID']))
 		{
-			$whereString .= 'AND EV.SECTION_ID IN (\''.implode('\',\'', $fields['fields']['SECTION_ID']).'\') ';
+			$query->whereIn('SECTION_ID',  $fields['fields']['SECTION_ID']);
 		}
-		
+
 		if (isset($fields['fields']['ATTENDEES']) && is_array($fields['fields']['ATTENDEES']))
 		{
 			if (isset($fields['fields']['MEETING_STATUS']))
 			{
-				$selectString .= 'LEFT JOIN b_calendar_event AS TRI ON EV.ID = TRI.PARENT_ID ';
-				$whereString .= 'AND TRI.CREATED_BY IN (\''.implode('\',\'', $fields['fields']['ATTENDEES']).'\') ';
+				$query
+					->registerRuntimeField(
+					'EVENT_THIRD',
+					new ReferenceField(
+						'EVENT_THIRD',
+						EventTable::getEntity(),
+						Join::on('ref.PARENT_ID', 'this.ID'),
+						['join_type' => Join::TYPE_LEFT]
+					)
+				)
+					->whereIn('EVENT_THIRD.CREATED_BY', $fields['fields']['ATTENDEES'])
+				;
 			}
 			else
 			{
-				$createdBy = 'AND SEC.CREATED_BY IN (\''.implode('\',\'', $fields['fields']['ATTENDEES']).'\') ';
+				$query->whereIn('EVENT_SECOND.CREATED_BY', $fields['fields']['ATTENDEES']);
 			}
 			$filter['IS_MEETING'] = true;
 		}
-		
-		if ($createdBy)
-		{
-			$whereString .= $createdBy;
-		}
-		
+
 		if (isset($fields['search']) && $fields['search'])
 		{
 			$filter[(\CCalendarEvent::isFullTextIndexEnabled() ? '*' : '*%').'SEARCHABLE_CONTENT'] = \CCalendarEvent::prepareToken($fields['search']);
 		}
-		
+
 		[$filter, $parseRecursion] = self::filterByDate($fields, $filter);
-		
-		$whereString .= ';';
-		$queryStr = $selectString . $whereString;
-		
-		$events = $DB->Query($queryStr);
-		while ($event = $events->Fetch())
+
+		$eventsFromQuery = $query->exec();
+
+		while ($event = $eventsFromQuery->Fetch())
 		{
 			$filter['ID'][] = (int)$event['PARENT_ID'];
 		}
-		
+
 		if (isset($filter['ID']))
 		{
 			$filter['ID'] = array_unique($filter['ID']);
-			
+
 			$entries = \CCalendarEvent::GetList(
 				[
 					'arFilter' => $filter,
@@ -530,14 +598,14 @@ class CalendarFilter
 			);
 		}
 		$entries = self::applyAccessRestrictions($entries);
-		
+
 		return [
 			'result' => true,
 			'entries' => $entries,
 			'counters' => false
 		];
 	}
-	
+
 	/**
 	 * @param $fields
 	 * @param array $filter
@@ -553,10 +621,11 @@ class CalendarFilter
 			$fromTs = \CCalendar::Timestamp($fields['fields']['DATE_FROM'], true, false);
 			$filter['FROM_LIMIT'] = \CCalendar::Date($fromTs, false);
 		}
-		else
+		else if (!($filter['FROM_LIMIT'] ?? null))
 		{
 			$filter['FROM_LIMIT'] = \CCalendar::Date(time() - 31 * 12 * 24 * 3600, false);
 		}
+
 		if (isset($fields['fields']['DATE_TO']))
 		{
 			$toTs = \CCalendar::Timestamp($fields['fields']['DATE_TO'], true, false);
@@ -566,12 +635,12 @@ class CalendarFilter
 				$filter['TO_LIMIT'] = $filter['FROM_LIMIT'];
 			}
 		}
-		
+
 		if ($fromTs && $toTs && $fromTs <= $toTs)
 		{
 			$parseRecursion = true;
 		}
-		
+
 		return [
 			$filter,
 			$parseRecursion
@@ -584,12 +653,11 @@ class CalendarFilter
 	 */
 	private static function applyAccessRestrictions(array $events): array
 	{
-		$eventsLength = count($events);
-		for ($i = 0; $i < $eventsLength; $i++)
+		foreach ($events as $i => $event)
 		{
 			if (
-				isset($events[$i]['IS_ACCESSIBLE_TO_USER'])
-				&& $events[$i]['IS_ACCESSIBLE_TO_USER'] === false
+				isset($event['IS_ACCESSIBLE_TO_USER'])
+				&& $event['IS_ACCESSIBLE_TO_USER'] === false
 			)
 			{
 				unset($events[$i]);
@@ -598,286 +666,4 @@ class CalendarFilter
 
 		return array_values($events);
 	}
-
-
-	/**
-	 * @return array
-	 */
-	/*
-	protected static function getFilterRaw()
-	{
-		$fields = static::getAvailableFields();
-		$filter = array();
-
-		if (in_array('CREATED_BY', $fields))
-		{
-			$filter['CREATED_BY'] = array(
-				'id' => 'CREATED_BY',
-				'name' => Loc::getMessage('TASKS_HELPER_FLT_CREATED_BY'),
-				'params' => array('multiple' => 'Y'),
-				'type' => 'custom_entity',
-				'selector' => array(
-					'TYPE' => 'user',
-					'DATA' => array(
-						'ID' => 'user',
-						'FIELD_ID' => 'CREATED_BY'
-					)
-				)
-			);
-		}
-
-		if (in_array('RESPONSIBLE_ID', $fields))
-		{
-			$filter['RESPONSIBLE_ID'] = array(
-				'id' => 'RESPONSIBLE_ID',
-				'name' => Loc::getMessage('TASKS_HELPER_FLT_RESPONSIBLE_ID'),
-				'params' => array('multiple' => 'Y'),
-				'type' => 'custom_entity',
-				'selector' => array(
-					'TYPE' => 'user',
-					'DATA' => array(
-						'ID' => 'user',
-						'FIELD_ID' => 'RESPONSIBLE_ID'
-					)
-				)
-			);
-		}
-
-		if (in_array('STATUS', $fields))
-		{
-			$filter['STATUS'] = array(
-				'id' => 'STATUS',
-				'name' => Loc::getMessage('TASKS_FILTER_STATUS'),
-				'type' => 'list',
-				'params' => array(
-					'multiple' => 'Y'
-				),
-				'items' => array(
-					//					\CTasks::METASTATE_VIRGIN_NEW => Loc::getMessage('TASKS_STATUS_1'),
-					\CTasks::STATE_PENDING => Loc::getMessage('TASKS_STATUS_2'),
-					\CTasks::STATE_IN_PROGRESS => Loc::getMessage('TASKS_STATUS_3'),
-					\CTasks::STATE_SUPPOSEDLY_COMPLETED => Loc::getMessage('TASKS_STATUS_4'),
-					\CTasks::STATE_COMPLETED => Loc::getMessage('TASKS_STATUS_5')
-				)
-			);
-		}
-
-		if (in_array('DEADLINE', $fields))
-		{
-			$filter['DEADLINE'] = array(
-				'id' => 'DEADLINE',
-				'name' => Loc::getMessage('TASKS_FILTER_DEADLINE'),
-				'type' => 'date'
-			);
-		}
-
-		if (in_array('GROUP_ID', $fields))
-		{
-			$filter['GROUP_ID'] = array(
-				'id' => 'GROUP_ID',
-				'name' => Loc::getMessage('TASKS_HELPER_FLT_GROUP'),
-				'params' => array('multiple' => 'Y'),
-				'type' => 'custom_entity',
-				'selector' => array(
-					'TYPE' => 'group',
-					'DATA' => array(
-						'ID' => 'group',
-						'FIELD_ID' => 'GROUP_ID'
-					)
-				)
-			);
-		}
-
-		if (in_array('PROBLEM', $fields))
-		{
-			$filter['PROBLEM'] = array(
-				'id' => 'PROBLEM',
-				'name' => Loc::getMessage('TASKS_FILTER_PROBLEM'),
-				'type' => 'list',
-				'items' => self::getAllowedTaskCategories()
-			);
-		}
-
-		if (in_array('PARAMS', $fields))
-		{
-			$filter['PARAMS'] = array(
-				'id' => 'PARAMS',
-				'name' => Loc::getMessage('TASKS_FILTER_PARAMS'),
-				'type' => 'list',
-				'params' => array(
-					'multiple' => 'Y'
-				),
-				'items' => array(
-					'MARKED'=>Loc::getMessage('TASKS_FILTER_PARAMS_MARKED'),
-					'IN_REPORT'=>Loc::getMessage('TASKS_FILTER_PARAMS_IN_REPORT'),
-					'OVERDUED'=>Loc::getMessage('TASKS_FILTER_PARAMS_OVERDUED'),
-//					'SUBORDINATE'=>Loc::getMessage('TASKS_FILTER_PARAMS_SUBORDINATE'),
-					'ANY_TASK'=>Loc::getMessage('TASKS_FILTER_PARAMS_ANY_TASK')
-				)
-			);
-		}
-
-		if (in_array('ID', $fields))
-		{
-			$filter['ID'] = array(
-				'id' => 'ID',
-				'name' => Loc::getMessage('TASKS_FILTER_ID'),
-				'type' => 'number'
-			);
-		}
-		if (in_array('TITLE', $fields))
-		{
-			$filter['TITLE'] = array(
-				'id' => 'TITLE',
-				'name' => Loc::getMessage('TASKS_FILTER_TITLE'),
-				'type' => 'string'
-			);
-		}
-		if (in_array('PRIORITY', $fields))
-		{
-			$filter['PRIORITY'] = array(
-				'id' => 'PRIORITY',
-				'name' => Loc::getMessage('TASKS_PRIORITY'),
-				'type' => 'list',
-				'items' => array(
-					1 => Loc::getMessage('TASKS_PRIORITY_1'),
-					2 => Loc::getMessage('TASKS_PRIORITY_2'),
-				)
-			);
-		}
-		if (in_array('MARK', $fields))
-		{
-			$filter['MARK'] = array(
-				'id' => 'MARK',
-				'name' => Loc::getMessage('TASKS_FILTER_MARK'),
-				'type' => 'list',
-				'items' => array(
-					'P' => Loc::getMessage('TASKS_MARK_P'),
-					'N' => Loc::getMessage('TASKS_MARK_N')
-				)
-			);
-		}
-		if (in_array('ALLOW_TIME_TRACKING', $fields))
-		{
-			$filter['ALLOW_TIME_TRACKING'] = array(
-				'id' => 'ALLOW_TIME_TRACKING',
-				'name' => Loc::getMessage('TASKS_FILTER_ALLOW_TIME_TRACKING'),
-				'type' => 'list',
-				'items' => array(
-					'Y' => Loc::getMessage('TASKS_ALLOW_TIME_TRACKING_Y'),
-					'N' => Loc::getMessage('TASKS_ALLOW_TIME_TRACKING_N'),
-				)
-			);
-		}
-		if (in_array('CREATED_DATE', $fields))
-		{
-			$filter['CREATED_DATE'] = array(
-				'id' => 'CREATED_DATE',
-				'name' => Loc::getMessage('TASKS_FILTER_CREATED_DATE'),
-				'type' => 'date'
-			);
-		}
-		if (in_array('CLOSED_DATE', $fields))
-		{
-			$filter['CLOSED_DATE'] = array(
-				'id' => 'CLOSED_DATE',
-				'name' => Loc::getMessage('TASKS_FILTER_CLOSED_DATE'),
-				'type' => 'date'
-			);
-		}
-		if (in_array('DATE_START', $fields))
-		{
-			$filter['DATE_START'] = array(
-				'id' => 'DATE_START',
-				'name' => Loc::getMessage('TASKS_FILTER_DATE_START'),
-				'type' => 'date'
-			);
-		}
-		if (in_array('START_DATE_PLAN', $fields))
-		{
-			$filter['START_DATE_PLAN'] = array(
-				'id' => 'START_DATE_PLAN',
-				'name' => Loc::getMessage('TASKS_FILTER_START_DATE_PLAN'),
-				'type' => 'date'
-			);
-		}
-		if (in_array('END_DATE_PLAN', $fields))
-		{
-			$filter['END_DATE_PLAN'] = array(
-				'id' => 'END_DATE_PLAN',
-				'name' => Loc::getMessage('TASKS_FILTER_END_DATE_PLAN'),
-				'type' => 'date'
-			);
-		}
-
-		if (in_array('ACTIVE', $fields))
-		{
-			$filter['ACTIVE'] = array(
-				'id' => 'ACTIVE',
-				'name' => Loc::getMessage('TASKS_FILTER_ACTIVE'),
-				'type' => 'date'
-			);
-		}
-
-		if (in_array('ACCOMPLICE', $fields))
-		{
-			$filter['ACCOMPLICE'] = array(
-				'id' => 'ACCOMPLICE',
-				'name' => Loc::getMessage('TASKS_HELPER_FLT_ACCOMPLICES'),
-				'params' => array('multiple' => 'Y'),
-				'type' => 'custom_entity',
-				'selector' => array(
-					'TYPE' => 'user',
-					'DATA' => array(
-						'ID' => 'user',
-						'FIELD_ID' => 'ACCOMPLICE'
-					)
-				)
-			);
-		}
-		if (in_array('AUDITOR', $fields))
-		{
-			$filter['AUDITOR'] = array(
-				'id' => 'AUDITOR',
-				'name' => Loc::getMessage('TASKS_HELPER_FLT_AUDITOR'),
-				'params' => array('multiple' => 'Y'),
-				'type' => 'custom_entity',
-				'selector' => array(
-					'TYPE' => 'user',
-					'DATA' => array(
-						'ID' => 'user',
-						'FIELD_ID' => 'AUDITOR'
-					)
-				)
-			);
-		}
-
-		if (in_array('TAG', $fields))
-		{
-			$filter['TAG'] = array(
-				'id' => 'TAG',
-				'name' => Loc::getMessage('TASKS_FILTER_TAG'),
-				'type' => 'string'
-			);
-		}
-
-		if (in_array('ROLEID', $fields))
-		{
-			$roles = \CTaskListState::getKnownRoles();
-			foreach($roles as $roleId)
-			{
-				$roleCodeName = strtolower(\CTaskListState::resolveConstantCodename($roleId));
-				$items[ $roleCodeName ] = \CTaskListState::getRoleNameById($roleId);
-			}
-			$filter['ROLEID'] = array(
-				'id' => 'ROLEID',
-				'name' => Loc::getMessage('TASKS_FILTER_ROLEID'),
-				'type' => 'list',
-				'default'=>true,
-				'items'=> $items
-			);
-		}
-
-		return $filter;
-	}*/
 }

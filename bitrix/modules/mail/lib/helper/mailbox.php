@@ -11,13 +11,13 @@ use Bitrix\Mail\Helper;
 
 abstract class Mailbox
 {
-
 	const SYNC_TIMEOUT = 300;
 	const SYNC_TIME_QUOTA = 280;
 	const MESSAGE_RESYNCHRONIZATION_TIME = 360;
 	const MESSAGE_DELETION_LIMIT_AT_A_TIME = 1000;
 	const NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE = 2;
 
+	protected $dirsMd5WithCounter;
 	protected $mailbox;
 	protected $dirsHelper;
 	protected $filters;
@@ -44,6 +44,120 @@ abstract class Mailbox
 	public static function createInstance($id, $throw = true)
 	{
 		return static::rawInstance(array('=ID' => (int) $id, '=ACTIVE' => 'Y'), $throw);
+	}
+
+	public function getDirsMd5WithCounter($mailboxId)
+	{
+		if($this->dirsMd5WithCounter)
+		{
+			return $this->dirsMd5WithCounter;
+		}
+
+		$foldersWithCounter = Mail\Internals\MailCounterTable::getList([
+			'runtime' => array(
+				new ORM\Fields\Relations\Reference(
+					'DIRECTORY',
+					'Bitrix\Mail\Internals\MailboxDirectoryTable',
+					[
+						'=this.ENTITY_ID' => 'ref.ID',
+					],
+					[
+						'join_type' => 'INNER',
+					]
+				),
+			),
+			'select' => [
+				'UNSEEN' => 'VALUE',
+				'DIR_MD5' => 'DIRECTORY.DIR_MD5'
+			],
+			'filter' => [
+				'=DIRECTORY.MAILBOX_ID' => $mailboxId,
+				'=ENTITY_TYPE' => 'DIR',
+				'=MAILBOX_ID' => $mailboxId,
+			],
+		]);
+
+		$directoriesWithCounter = [];
+
+		while ($folderTable = $foldersWithCounter->fetch())
+		{
+			$directoriesWithCounter[$folderTable['DIR_MD5']] = $folderTable;
+		}
+
+		$this->dirsMd5WithCounter = $directoriesWithCounter;
+
+		return $directoriesWithCounter;
+	}
+
+	public function sendCountersEvent()
+	{
+		\CPullWatch::addToStack(
+			'mail_mailbox_' . $this->mailbox['ID'],
+			[
+				'params' => [
+					'dirs' => $this->getDirsWithUnseenMailCounters(),
+				],
+				'module_id' => 'mail',
+				'command' => 'counters_is_synchronized',
+			]
+		);
+		\Bitrix\Pull\Event::send();
+	}
+
+	public function getDirsWithUnseenMailCounters()
+	{
+		global $USER;
+		$mailboxId = $this->mailbox['ID'];
+
+		if (!Helper\Message::isMailboxOwner($mailboxId, $USER->GetID()))
+		{
+			return false;
+		}
+
+		$syncDirs = $this->getDirsHelper()->getSyncDirs();
+		$defaultDirPath = $this->getDirsHelper()->getDefaultDirPath();
+		$dirs = [];
+
+		$dirsMd5WithCountOfUnseenMails = $this->getDirsMd5WithCounter($mailboxId);
+
+		$defaultDirPathId = null;
+
+		foreach ($syncDirs as $dir)
+		{
+			$newDir = [];
+			$newDir['path'] = $dir->getPath(true);
+			$newDir['name'] = $dir->getName();
+			$newDir['count'] = 0;
+			$currentDirMd5WithCountsOfUnseenMails = $dirsMd5WithCountOfUnseenMails[$dir->getDirMd5()];
+
+			if ($currentDirMd5WithCountsOfUnseenMails !== null)
+			{
+				$newDir['count'] = $currentDirMd5WithCountsOfUnseenMails['UNSEEN'];
+			}
+
+			if($newDir['path'] === $defaultDirPath)
+			{
+				$defaultDirPathId = count($dirs);
+			}
+
+			$dirs[] = $newDir;
+		}
+
+		if (empty($dirs))
+		{
+			$dirs = [
+				[
+					'count' => 0,
+					'path' => $defaultDirPath,
+					'name' => $defaultDirPath,
+				],
+			];
+		}
+
+		//inbox always on top
+		array_unshift( $dirs, array_splice($dirs, $defaultDirPathId, 1)[0] );
+
+		return $dirs;
 	}
 
 	/**
@@ -199,7 +313,7 @@ abstract class Mailbox
 		\CUserCounter::set(
 			$userId,
 			'mail_unseen',
-			Message::getTotalUnseenCount($userId),
+			Message::getCountersForUserMailboxes($userId, true),
 			$this->mailbox['LID']
 		);
 	}
@@ -211,8 +325,7 @@ abstract class Mailbox
 
 	private function findMessagesWithAnEmptyBody(int $count, $mailboxId)
 	{
-		$resyncTime = new Main\Type\DateTime();
-		$resyncTime->add('- '.static::MESSAGE_RESYNCHRONIZATION_TIME.' seconds');
+		$reSyncTime = (new Main\Type\DateTime())->add('- '.static::MESSAGE_RESYNCHRONIZATION_TIME.' seconds');
 
 		$ids = Mail\Internals\MailEntityOptionsTable::getList(
 			[
@@ -223,35 +336,20 @@ abstract class Mailbox
 					'=ENTITY_TYPE' => 'MESSAGE',
 					'=PROPERTY_NAME' => 'UNSYNC_BODY',
 					'=VALUE' => 'Y',
-					'<=DATE_INSERT' => $resyncTime,
+					'<=DATE_INSERT' => $reSyncTime,
 				]
 				,
 				'limit' => $count,
 			]
 		)->fetchAll();
 
-		$messIds = array_map(
+		return array_map(
 			function ($item)
 			{
 				return $item['ENTITY_ID'];
 			},
 			$ids
 		);
-
-		foreach($messIds as $id)
-		{
-			Mail\Internals\MailEntityOptionsTable::update([
-				'MAILBOX_ID' => $mailboxId,
-				'ENTITY_ID' => $id,
-				'ENTITY_TYPE' => 'MESSAGE',
-				'PROPERTY_NAME' => 'UNSYNC_BODY',
-			],
-			[
-				'VALUE' => 'N',
-			]);
-		}
-
-		return $messIds;
 	}
 
 	//Finds completely missing messages
@@ -286,26 +384,19 @@ abstract class Mailbox
 		}
 	}
 
-	/*
-	Without waiting for the complete synchronization of the mailbox to be completed,
-	regardless of its interruptions, and taking into account only the quota for creating an instance of the mailbox (php),
-	we synchronize the most important signs.
-	*/
-	private function preSync(): bool
+	public function reSyncStartPage()
 	{
-		if ($this->isTimeQuotaExceeded())
-		{
-			return false;
-		}
+		$this->resyncDir($this->getDirsHelper()->getDefaultDirPath(),25);
+	}
 
-		$this->syncOutgoing();
-
+	public function restoringConsistency()
+	{
 		$this->syncIncompleteMessages($this->findIncompleteMessages(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE));
 		\Bitrix\Mail\Helper\Message::reSyncBody($this->mailbox['ID'],$this->findMessagesWithAnEmptyBody(static::NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE, $this->mailbox['ID']));
+	}
 
-		//Resynchronize messages for the start page and delete missing letters
-		$this->resyncDir($this->getDirsHelper()->getDefaultDirPath(),25);
-
+	public function syncCounters()
+	{
 		Helper::setMailboxUnseenCounter($this->mailbox['ID'],Helper::updateMailCounters($this->mailbox));
 
 		$usersWithAccessToMailbox = Mailbox\SharedMailboxesManager::getUserIdsWithAccessToMailbox($this->mailbox['ID']);
@@ -314,17 +405,15 @@ abstract class Mailbox
 		{
 			$this->updateGlobalCounter($userId);
 		}
-
-		return true;
 	}
 
-	public function sync()
+	public function sync($syncCounters = true)
 	{
 		global $DB;
 
 		/*
-		Setting a new time for an attempt to synchronize the mailbox
-		through the agent for users with a free tariff
+			Setting a new time for an attempt to synchronize the mailbox
+			through the agent for users with a free tariff
 		*/
 		if (!LicenseManager::isSyncAvailable())
 		{
@@ -354,7 +443,9 @@ abstract class Mailbox
 
 		$this->session = md5(uniqid(''));
 
-		$this->preSync();
+		$this->syncOutgoing();
+		$this->restoringConsistency();
+		$this->reSyncStartPage();
 
 		$lockSql = sprintf(
 			'UPDATE b_mail_mailbox SET SYNC_LOCK = %u WHERE ID = %u AND (SYNC_LOCK IS NULL OR SYNC_LOCK < %u)',
@@ -457,6 +548,11 @@ abstract class Mailbox
 			$mailboxSyncManager->setSyncStatus($this->mailbox['ID'], $success, time());
 		}
 
+		if($syncCounters)
+		{
+			$this->syncCounters();
+		}
+
 		return $count;
 	}
 
@@ -480,7 +576,7 @@ abstract class Mailbox
 						array(
 							'id' => $this->mailbox['ID'],
 							'status' => sprintf('%.3f', $status),
-							'sessid' => $this->syncParams['sessid'] ?: $this->session,
+							'sessid' => $this->syncParams['sessid'] ?? $this->session,
 							'timestamp' => microtime(true),
 						),
 						$params
@@ -743,30 +839,44 @@ abstract class Mailbox
 		return $fetch ? $result->fetchAll() : $result;
 	}
 
-	protected function registerMessage(&$fields, $replaces = null)
+	protected function registerMessage(&$fields, $replaces = null, $isOutgoing = false)
 	{
 		$now = new Main\Type\DateTime();
 
 		if (!empty($replaces))
 		{
-			if (!is_array($replaces))
+			/*
+				To replace the temporary id of outgoing emails with a permanent one
+				after receiving the uid from the original mail service.
+			*/
+			if($isOutgoing)
 			{
-				$replaces = array(
-					'=ID' => $replaces,
-				);
-			}
+				if (!is_array($replaces))
+				{
+					$replaces = [
+						'=ID' => $replaces,
+					];
+				}
 
-			$exists = Mail\MailMessageUidTable::getList(array(
-				'select' => array(
-					'ID',
-					'MESSAGE_ID',
-				),
-				'filter' => array(
-					$replaces,
-					'=MAILBOX_ID' => $this->mailbox['ID'],
-					'==DELETE_TIME' => 0,
-				),
-			))->fetch();
+				$exists = Mail\MailMessageUidTable::getList([
+					'select' => [
+						'ID',
+						'MESSAGE_ID',
+					],
+					'filter' => [
+						$replaces,
+						'=MAILBOX_ID' => $this->mailbox['ID'],
+						'==DELETE_TIME' => 0,
+					],
+				])->fetch();
+			}
+			else
+			{
+				$exists = [
+					'ID' => $replaces,
+					'MESSAGE_ID' => $fields['MESSAGE_ID'],
+				];
+			}
 		}
 
 		if (!empty($exists))
@@ -797,18 +907,19 @@ abstract class Mailbox
 		{
 			$checkResult = new ORM\Data\AddResult();
 			$addFields = array_merge(
-				array(
+				[
 					'MESSAGE_ID'  => 0,
-				),
+				],
 				$fields,
-				array(
+				[
 					'IS_OLD' => 'D',
 					'MAILBOX_ID'  => $this->mailbox['ID'],
 					'SESSION_ID'  => $this->session,
 					'TIMESTAMP_X' => $now,
 					'DATE_INSERT' => $now,
-				)
+				]
 			);
+
 			Mail\MailMessageUidTable::checkFields($checkResult, null, $addFields);
 			if (!$checkResult->isSuccess())
 			{
@@ -821,7 +932,8 @@ abstract class Mailbox
 				'SESSION_ID' => $addFields['SESSION_ID'],
 				'TIMESTAMP_X' => $addFields['TIMESTAMP_X'],
 			]);
-			$result = true;
+
+			return true;
 		}
 
 		return $result;
@@ -1617,6 +1729,7 @@ abstract class Mailbox
 	abstract public function uploadMessage(Main\Mail\Mail $message, array &$excerpt);
 	abstract public function downloadMessage(array &$excerpt);
 	abstract public function syncMessages($mailboxID, $dirPath, $UIDs);
+	abstract public function isAuthenticated();
 
 	public function getErrors()
 	{

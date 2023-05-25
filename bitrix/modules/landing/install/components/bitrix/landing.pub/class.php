@@ -100,30 +100,24 @@ class LandingPubComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Can reinit current domain zone
+	 * @param string $zone
+	 * @return void
+	 */
+	public function setZone(string $zone)
+	{
+		$this->zone = $zone;
+	}
+
+	/**
 	 * Get base domain of service by lang.
 	 * @return string
 	 */
 	protected function getParentDomain()
 	{
-		static $domain = null;
-
-		if ($domain !== null)
-		{
-			return $domain;
-		}
-
 		$domains = \Bitrix\Landing\Help::getDomains();
 
-		if (isset($domains[$this->zone]))
-		{
-			$domain = $domains[$this->zone];
-		}
-		else
-		{
-			$domain = $domains['en'];
-		}
-
-		return $domain;
+		return $domains[$this->zone] ?? $domains['en'];
 	}
 
 	/**
@@ -170,7 +164,7 @@ class LandingPubComponent extends LandingBaseComponent
 	 * @param string $type Type of the link.
 	 * @return string
 	 */
-	protected function getAdvCode($type = 'bitrix24_logo')
+	public function getAdvCode($type = 'bitrix24_logo')
 	{
 		static $domain = null;
 		static $domainPart = null;
@@ -463,6 +457,8 @@ class LandingPubComponent extends LandingBaseComponent
 			}
 		}
 
+		$this->arParams['LOCAL_SITE_ID'] = $siteId ?? 0;
+
 		$landingUrl = array_shift($requestedPageParts);
 		$landingSubUrl = $requestedPageParts ? implode('/', $requestedPageParts) : '';
 		$landingCodeOriginal = null;
@@ -501,7 +497,7 @@ class LandingPubComponent extends LandingBaseComponent
 			$landingUrl = '';
 			$this->isSitemapXml = true;
 		}
-		elseif ($landingUrl == 'favicon' || $landingUrl == 'favicon.php')
+		elseif ($landingUrl == 'favicon' || $landingUrl == 'favicon.php' || $landingUrl == 'favicon.ico')
 		{
 			$path = '/bitrix/components/bitrix/landing.pub/favicon.ico';
 			$hooksSite = Hook::getForSite($siteId);
@@ -799,10 +795,11 @@ class LandingPubComponent extends LandingBaseComponent
 			{
 				$landingIdIndex = $landing['ID'];
 			}
-			if ($site['LANDING_ID_404'] == $landing['ID'])
-			{
-				$landingId404 = $landing['ID'];
-			}
+		}
+
+		if ($site['LANDING_ID_404'] && $this->arParams['SKIP_404'] !== 'Y')
+		{
+			$landingId404 = $site['LANDING_ID_404'];
 		}
 
 		// disable direct access to include areas
@@ -859,7 +856,8 @@ class LandingPubComponent extends LandingBaseComponent
 							),
 							'order' => array(
 								'ID' => 'asc'
-							)
+							),
+							'limit' => 1
 						));
 						if ($row = $res->fetch())
 						{
@@ -995,30 +993,27 @@ class LandingPubComponent extends LandingBaseComponent
 	 */
 	protected function onSearchGetURL()
 	{
-		static $pageCatalog = null;
-
-		if ($pageCatalog === null)
-		{
-			$syspages = Syspage::get($this->arResult['LANDING']->getSiteId());
-			if (isset($syspages['catalog']))
-			{
-				$landing = Landing::createInstance(
-					$syspages['catalog']['LANDING_ID'],
-					['skip_blocks' => true]
-				);
-				if ($landing->exist())
-				{
-					$pageCatalog = $landing->getPublicUrl();
-				}
-			}
-		}
-
 		$eventManager = EventManager::getInstance();
 		$eventManager->addEventHandler('search', 'onSearchGetURL',
-			function($row) use($pageCatalog)
+			function($row)
 			{
 				if (isset($row['URL']))
 				{
+					$pageCatalog = '';
+					$syspages = Syspage::get($this->arResult['LANDING']->getSiteId());
+					if (isset($syspages['catalog']))
+					{
+						$landing = Landing::createInstance(
+							$syspages['catalog']['LANDING_ID'],
+							['skip_blocks' => true]
+						);
+						if ($landing->exist())
+						{
+							$pageCatalog = $landing->getPublicUrl();
+						}
+					}
+
+
 					$urlType = 'detail';
 					if (mb_substr($row['ITEM_ID'], 0, 1) == 'S')
 					{
@@ -1060,13 +1055,14 @@ class LandingPubComponent extends LandingBaseComponent
 
 					if ($types[$siteId]['order'] ?? null)
 					{
+						Rights::setOff();
 						$res = Landing::getList([
 							'select' => [
 								'ID'
 							],
 							'filter' => [
 								'=TPL_CODE' => 'store-chats-dark/catalog_order',
-								'SITE_ID' => $landing->getSiteId()
+								'SITE_ID' => $landing->getSiteId(),
 							],
 							'limit' => 1
 						]);
@@ -1074,6 +1070,7 @@ class LandingPubComponent extends LandingBaseComponent
 						{
 							$types[$siteId]['order']['LANDING_ID'] = $row['ID'];
 						}
+						Rights::setOn();
 					}
 
 					return $types;
@@ -1247,11 +1244,12 @@ class LandingPubComponent extends LandingBaseComponent
 	 */
 	protected function onBlockPublicView(): void
 	{
-		$query = $this->request('q');
+		$query = \htmlspecialcharsbx($this->request('q'));
 		if ($query)
 		{
 			Cache::disableCache();
 		}
+
 		$eventManager = EventManager::getInstance();
 		$eventManager->addEventHandler('landing', 'onBlockPublicView',
 			function(Event $event) use($query)
@@ -1269,8 +1267,10 @@ class LandingPubComponent extends LandingBaseComponent
 				// SEARCH replaces
 				$isSearch =
 					$query
-					&& $this->arParams['TYPE'] !== 'KNOWLEDGE'
-					&& $this->arParams['TYPE'] !== 'GROUP';
+					&& (
+						$this->arParams['TYPE'] === 'KNOWLEDGE'
+						|| $this->arParams['TYPE'] === 'GROUP'
+					);
 				if ($isSearch)
 				{
 					$isUtf = defined('BX_UTF') && BX_UTF === true;
@@ -1286,7 +1286,7 @@ class LandingPubComponent extends LandingBaseComponent
 					}
 					$phrases = explode(' ', $query);
 					\trimArr($phrases, true);
-					// try find search phrases in real content (between tags)
+					// try to find search phrases in real content (between tags)
 					$found = preg_match_all(
 						'#>[^<]*(' . implode('|', $phrases) . ')[^<]*<#isu',
 						$outputContent,
@@ -1313,8 +1313,10 @@ class LandingPubComponent extends LandingBaseComponent
 					}
 				}
 
+				$event->setParameter('outputContent', $outputContent);
+
 				return $outputContent;
-			}
+			},
 		);
 	}
 
@@ -1505,6 +1507,7 @@ class LandingPubComponent extends LandingBaseComponent
 			$this->checkParam('CHECK_PERMISSIONS', 'N');
 			$this->checkParam('NOT_CHECK_DOMAIN', 'N');
 			$this->checkParam('SHOW_EDIT_PANEL', 'N');
+			$this->checkParam('SKIP_404', 'N');
 			$this->checkParam('DRAFT_MODE', 'N');
 			$this->checkParam('PAGE_URL_LANDING_VIEW', '');
 			$this->checkParam('PAGE_URL_SITES', '');
@@ -1556,6 +1559,7 @@ class LandingPubComponent extends LandingBaseComponent
 				self::$landingMain['LANDING_ID'] = $lid;
 				self::$landingMain['LANDING_INSTANCE'] = $landing;
 				$this->arResult['LANDING'] = $landing;
+				$this->arResult['SITE_RELATIVE_URL'] = Site::getPublicUrl($landing->getSiteId(), true, false);
 				$this->arResult['SPECIAL_TYPE'] = $this->getSpecialTypeSiteByLanding($landing);
 				$this->arResult['DOMAIN'] = $this->getParentDomain();
 				$this->arResult['COPY_LINK'] = $this->getCopyLinkPath();
@@ -1744,13 +1748,18 @@ class LandingPubComponent extends LandingBaseComponent
 						}
 						$this->addError(
 							'SITE_NOT_ALLOWED',
-							$this->getMessageType('LANDING_CMP_SITE_NOT_ALLOWED')
+							$this->getMessageType('LANDING_CMP_SITE_NOT_ALLOWED', null, 2)
 						);
 						$this->arParams['CHECK_PERMISSIONS'] = 'Y';
 						parent::executeComponent();
 						return;
 					}
 					$this->arParams['CHECK_PERMISSIONS'] = 'Y';
+				}
+				// for 404 we need site url
+				if ($this->arParams['LOCAL_SITE_ID'] ?? null)
+				{
+					$this->arResult['SITE_URL'] = Site::getPublicUrl($this->arParams['LOCAL_SITE_ID']);
 				}
 				// try force reload
 				if ($this->request('forceLandingId'))

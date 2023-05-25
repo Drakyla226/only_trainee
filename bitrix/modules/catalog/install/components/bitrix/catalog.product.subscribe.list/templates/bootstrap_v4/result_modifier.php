@@ -4,12 +4,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 /** @var array $arParams */
 /** @var array $arResult */
 /** @global CDatabase $DB */
-if (!isset($arParams['LINE_ELEMENT_COUNT']))
-	$arParams['LINE_ELEMENT_COUNT'] = 3;
-$arParams['LINE_ELEMENT_COUNT'] = intval($arParams['LINE_ELEMENT_COUNT']);
-if (2 > $arParams['LINE_ELEMENT_COUNT'] || 5 < $arParams['LINE_ELEMENT_COUNT'])
-	$arParams['LINE_ELEMENT_COUNT'] = 3;
-
 $arParams['TEMPLATE_THEME'] = (string)($arParams['TEMPLATE_THEME']);
 if ('' != $arParams['TEMPLATE_THEME'])
 {
@@ -31,6 +25,29 @@ if ('' == $arParams['TEMPLATE_THEME'])
 
 if (!empty($arResult['ITEMS']))
 {
+	if (
+		\Bitrix\Main\Loader::includeModule('bitrix24')
+		&& \Bitrix\Main\Loader::includeModule('crm')
+	)
+	{
+		$catalogId = \Bitrix\Crm\Product\Catalog::getDefaultId();
+		if ($catalogId !== null)
+		{
+			if (!isset($arParams['ADDITIONAL_PICT_PROP'][$catalogId]))
+			{
+				$arParams['ADDITIONAL_PICT_PROP'][$catalogId] = CIBlockPropertyTools::CODE_MORE_PHOTO;
+			}
+			$offerId = \Bitrix\Crm\Product\Catalog::getDefaultOfferId();
+			if (
+				$offerId !== null
+				&& !isset($arParams['ADDITIONAL_PICT_PROP'][$offerId])
+			)
+			{
+				$arParams['ADDITIONAL_PICT_PROP'][$offerId] = CIBlockPropertyTools::CODE_MORE_PHOTO;
+			}
+		}
+	}
+
 	$arEmptyPreview = false;
 	$strEmptyPreview = $this->GetFolder() . '/images/no_photo.png';
 	if (file_exists($_SERVER['DOCUMENT_ROOT'] . $strEmptyPreview))
@@ -261,7 +278,11 @@ if (!empty($arResult['ITEMS']))
 				$arOffer['CATALOG_TYPE'] = CCatalogProduct::TYPE_OFFER;
 				CIBlockPriceTools::setRatioMinPrice($arOffer);
 
-				$offerPictures = CIBlockPriceTools::getDoublePicturesForItem($arOffer, $arParams['ADDITIONAL_PICT_PROP'][$arOffer['IBLOCK_ID']]);
+				$additionalPictureCode = (string)($arParams['ADDITIONAL_PICT_PROP'][$arOffer['IBLOCK_ID']] ?? '');
+				$offerPictures = CIBlockPriceTools::getDoublePicturesForItem(
+					$arOffer,
+					$additionalPictureCode
+				);
 				$arOffer['OWNER_PICT'] = empty($offerPictures['PICT']);
 				$arOffer['PREVIEW_PICTURE'] = false;
 				$arOffer['PREVIEW_PICTURE_SECOND'] = false;
@@ -273,8 +294,10 @@ if (!empty($arResult['ITEMS']))
 					$arOffer['PREVIEW_PICTURE'] = $offerPictures['PICT'];
 					$arOffer['PREVIEW_PICTURE_SECOND'] = $offerPictures['SECOND_PICT'];
 				}
-				if ('' != $arParams['OFFER_ADD_PICT_PROP'] && isset($arOffer['DISPLAY_PROPERTIES'][$arParams['OFFER_ADD_PICT_PROP']]))
-					unset($arOffer['DISPLAY_PROPERTIES'][$arParams['OFFER_ADD_PICT_PROP']]);
+				if ($additionalPictureCode && isset($arOffer['DISPLAY_PROPERTIES'][$additionalPictureCode]))
+				{
+					unset($arOffer['DISPLAY_PROPERTIES'][$additionalPictureCode]);
+				}
 				$arNewOffers[$keyOffer] = $arOffer;
 			}
 			$arItem['OFFERS'] = $arNewOffers;

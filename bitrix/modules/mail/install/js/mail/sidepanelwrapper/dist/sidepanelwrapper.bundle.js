@@ -18,7 +18,7 @@ this.BX = this.BX || {};
 	        footerIsActive: false,
 	        cancelButton: {},
 	        consentButton: {
-	          function: function _function() {}
+	          "function": function _function() {}
 	        }
 	      };
 	      var wrapper = main_core.Tag.render(_templateObject || (_templateObject = babelHelpers.taggedTemplateLiteral(["<div class=\"mail-slider-wrapper\"></div>"])));
@@ -66,7 +66,7 @@ this.BX = this.BX || {};
 	      wrapper.append(header);
 	      wrapper.append(content);
 	      wrapper.append(footer);
-	      BX.SidePanel.Instance.open("mail:side-panel", {
+	      BX.SidePanel.Instance.open(config['id'], {
 	        id: config['id'],
 	        contentCallback: function contentCallback() {
 	          return new Promise(function (resolve) {

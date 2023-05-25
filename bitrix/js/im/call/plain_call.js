@@ -864,7 +864,7 @@
 		{
 			var error = new Error("Hangup in wrong state");
 			this.log(error);
-			return;
+			return Promise.reject(error);
 		}
 
 		var tempError = new Error();
@@ -2365,7 +2365,7 @@
 					credential: this.call.turnServerPassword
 				}
 			],
-			//iceTransportPolicy: 'relay'
+			// iceTransportPolicy: 'relay'
 		};
 
 		this.localIceCandidates = [];
@@ -2535,7 +2535,7 @@
 
 	BX.Call.PlainCall.Peer.prototype._onPeerConnectionSignalingStateChange = function(e)
 	{
-		this.log("User " + this.id + " PC signalingState: " + this.peerConnection.signalingState);
+		this.log("User " + this.userId + " PC signalingState: " + this.peerConnection.signalingState);
 		if (this.peerConnection.signalingState === "stable")
 		{
 			this._updateTracksDebounced();

@@ -138,8 +138,13 @@ class calendar extends CModule
 			return false;
 		}
 
+		COption::SetOptionString("intranet", "calendar_2", "Y");
+
 		if (!$DB->Query("SELECT 'x' FROM b_calendar_access ", true))
+		{
 			$errors = $DB->RunSQLBatch($_SERVER["DOCUMENT_ROOT"].'/bitrix/modules/'.$this->MODULE_ID.'/install/db/mysql/install.sql');
+		}
+
 		$this->InstallTasks();
 
 		if (!empty($errors))
@@ -172,30 +177,63 @@ class calendar extends CModule
 		$eventManager->registerEventHandler("dav", "OnExchandeCalendarDataSync", "calendar", "CCalendar", "OnExchangeCalendarSync");
 		$eventManager->registerEventHandler('socialnetwork', 'onLogIndexGetContent', 'calendar', '\Bitrix\Calendar\Integration\Socialnetwork\Log', 'onIndexGetContent');
 
+		$eventManager->registerEventHandler('socialnetwork', 'OnGetProfileView', 'calendar', '\Bitrix\Calendar\Sharing\SharingUser', 'OnGetProfileView');
+
 		$eventManager->registerEventHandler('main', 'OnBeforeUserTypeAdd', 'calendar', '\Bitrix\Calendar\UserField\ResourceBooking', 'onBeforeUserTypeAdd');
 
 		$eventManager->registerEventHandlerCompatible("main", "OnUserTypeBuildList", "calendar", "\\Bitrix\\Calendar\\UserField\\ResourceBooking", "getUserTypeDescription", 154);
 
 		$eventManager->registerEventHandler('mail', 'onReplyReceivedICAL_INVENT', 'calendar', '\Bitrix\Calendar\ICal\MailInvitation\IncomingInvitationReplyHandler', 'handleFromRequest');
 
+		$eventManager->registerEventHandler('socialnetwork', 'onSocNetUserToGroupAdd', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetUserToGroupAdd');
+		$eventManager->registerEventHandler('socialnetwork', 'onSocNetUserToGroupUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetUserToGroupUpdate');
+		$eventManager->registerEventHandler('socialnetwork', 'onSocNetUserToGroupDelete', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetUserToGroupDelete');
+		$eventManager->registerEventHandler('socialnetwork', 'onSocNetGroupUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetGroupUpdate');
+
+		$eventManager->registerEventHandler('main', 'OnBeforeUserUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnBeforeUserUpdate');
+		$eventManager->registerEventHandler('main', 'OnAfterUserUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterUserUpdate');
+		$eventManager->registerEventHandler('main', 'OnAfterUserAdd', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterUserAdd');
+		$eventManager->registerEventHandler('main', 'OnBeforeUserDelete', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnBeforeUserDelete');
+		$eventManager->registerEventHandler('main', 'OnAfterUserDelete', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterUserDelete');
+
+		$eventManager->registerEventHandler('iblock', 'OnBeforeIBlockSectionUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'onBeforeIBlockSectionUpdate');
+		$eventManager->registerEventHandler('iblock', 'onAfterIBlockSectionUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'onAfterIBlockSectionUpdate');
+		$eventManager->registerEventHandler('iblock', 'OnAfterIBlockSectionAdd', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterIBlockSectionAdd');
+
 		if($DB->Query("CREATE fulltext index IXF_B_CALENDAR_EVENT_SEARCHABLE_CONTENT on b_calendar_event (SEARCHABLE_CONTENT)", true))
 		{
 			COption::SetOptionString("calendar", "~ft_b_calendar_event", true);
 		}
 
-		$pushOptionEnabled = COption::GetOptionString('calendar', 'sync_by_push', false);
-		if ($pushOptionEnabled || \Bitrix\Main\ModuleManager::isModuleInstalled('bitrix24'))
+		CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Managers\\DataSyncManager::dataSyncAgent();", "calendar", "N", 60);
+		CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Util\\CleanConnectionAgent::cleanAgent();", "calendar");
+		CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Office365\\SectionManager::updateSectionsAgent();", "calendar", "N", 3600);
+		if (COption::GetOptionString('calendar', 'sync_by_push', false))
 		{
-			\CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::createWatchChannels(0);", "calendar", "N", 60);
-			\CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::processPush();", "calendar", "N", 180);
-			//\Bitrix\Calendar\Sync\GoogleApiPush::RENEW_INTERVAL_CHANNEL
-			\CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::renewWatchChannels();", "calendar", "N", 14400);
-			//\Bitrix\Calendar\Sync\GoogleApiPush::CHECK_INTERVAL_CHANNEL
-			\CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::checkPushChannel();", "calendar", "N", 14400);
+			CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Managers\\PushWatchingManager::renewWatchChannels();", "calendar", "N", 3600);
 		}
-		CAgent::AddAgent("CCalendarSync::doSync();", "calendar", "N", 120);
-		CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkNotSendEvents();", "calendar", "N", 3600);
-		CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkIncompleteSync();", 'calendar', 'N', 3600);
+		else
+		{
+			CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Managers\\DataExchangeManager::importAgent();", 'calendar', 'N', 180);
+		}
+		CAgent::AddAgent("Bitrix\\Calendar\\Core\\Queue\\Agent\\EventDelayedSyncAgent::runAgent();", "calendar", "N", 3600);
+		CAgent::AddAgent("\\Bitrix\\Calendar\\Sync\\Managers\\EventQueueManager::checkEvents();", "calendar", "N", 300);
+		CAgent::AddAgent("\\Bitrix\\Calendar\\Rooms\\Util\\CleanLocationEventsAgent::cleanAgent();", 'calendar', 'N', 86400);
+		CAgent::AddAgent("Bitrix\\Calendar\\Core\\Queue\\Agent\\EventsWithEntityAttendeesFindAgent::runAgent();", "calendar", "N", 3600);
+		CAgent::AddAgent("Bitrix\\Calendar\\Core\\Queue\\Agent\\EventAttendeesUpdateAgent::runAgent();", "calendar", "N", 3600);
+
+		$siteId = \CSite::GetDefSite();
+		if ($siteId)
+		{
+			$fields = [
+				'SORT' => 0,
+				'SITE_ID' => $siteId,
+				'CONDITION' => "CSite::InDir('/pub/calendar-sharing/')",
+				'TEMPLATE' => 'calendar_sharing'
+			];
+
+			\Bitrix\Main\SiteTemplateTable::add($fields);
+		}
 
 		return true;
 	}
@@ -241,8 +279,21 @@ class calendar extends CModule
 		$eventManager->unRegisterEventHandler("dav", "OnDavCalendarProperties", "calendar", "CCalendar", "OnDavCalendarSync");
 		$eventManager->unRegisterEventHandler("dav", "OnExchandeCalendarDataSync", "calendar", "CCalendar", "OnExchangeCalendarSync");
 		$eventManager->unRegisterEventHandler('socialnetwork', 'onLogIndexGetContent', 'calendar', '\Bitrix\Calendar\Integration\Socialnetwork\Log', 'onIndexGetContent');
+		$eventManager->unregisterEventHandler('socialnetwork', 'OnGetProfileView', 'calendar', '\Bitrix\Calendar\Sharing\SharingUser', 'OnGetProfileView');
 		$eventManager->unRegisterEventHandler('main', 'OnBeforeUserTypeAdd', 'calendar', '\Bitrix\Calendar\UserField\ResourceBooking', 'onBeforeUserTypeAdd');
 		$eventManager->unRegisterEventHandler('mail', 'onReplyReceivedICAL_INVENT', 'calendar', '\Bitrix\Calendar\ICal\MailInvitation\IncomingInvitationReplyHandler', 'handleFromRequest');
+		$eventManager->unregisterEventHandler('socialnetwork', 'onSocNetUserToGroupAdd', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetUserToGroupAdd');
+		$eventManager->unregisterEventHandler('socialnetwork', 'onSocNetUserToGroupUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetUserToGroupUpdate');
+		$eventManager->unregisterEventHandler('socialnetwork', 'onSocNetUserToGroupDelete', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetUserToGroupDelete');
+		$eventManager->unregisterEventHandler('socialnetwork', 'onSocNetGroupUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\SocNetGroup', 'onSocNetGroupUpdate');
+		$eventManager->unregisterEventHandler('main', 'OnBeforeUserUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnBeforeUserUpdate');
+		$eventManager->unregisterEventHandler('main', 'OnAfterUserUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterUserUpdate');
+		$eventManager->unregisterEventHandler('main', 'OnAfterUserAdd', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterUserAdd');
+		$eventManager->unregisterEventHandler('main', 'OnBeforeUserDelete', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnBeforeUserDelete');
+		$eventManager->unregisterEventHandler('main', 'OnAfterUserDelete', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterUserDelete');
+		$eventManager->unregisterEventHandler('iblock', 'OnBeforeIBlockSectionUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'onBeforeIBlockSectionUpdate');
+		$eventManager->unregisterEventHandler('iblock', 'onAfterIBlockSectionUpdate', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'onAfterIBlockSectionUpdate');
+		$eventManager->unregisterEventHandler('iblock', 'OnAfterIBlockSectionAdd', 'calendar', '\Bitrix\Calendar\Watcher\Membership\Handler\Department', 'OnAfterIBlockSectionAdd');
 
 		UnRegisterModule("calendar");
 
@@ -256,8 +307,12 @@ class calendar extends CModule
 		);
 		$cache = new CPHPCache;
 		foreach($arPath as $path)
+		{
 			if ($path != '')
-				$cache->CleanDir("calendar/".$path);
+			{
+				$cache->CleanDir("calendar/" . $path);
+			}
+		}
 
 		// Remove tasks from LiveFeed
 		if (
@@ -276,15 +331,44 @@ class calendar extends CModule
 			if ($dbRes)
 			{
 				while ($arRes = $dbRes->Fetch())
+				{
 					CSocNetLog::Delete($arRes["ID"]);
+				}
 			}
 		}
 
 		// Remove tasks from IM
-		if (IsModuleInstalled('im') && CModule::IncludeModule('im'))
+		if (IsModuleInstalled('im') && CModule::IncludeModule('im') && method_exists('CIMNotify', 'DeleteByModule'))
 		{
-			if (method_exists('CIMNotify', 'DeleteByModule'))
-				CIMNotify::DeleteByModule('calendar');
+			CIMNotify::DeleteByModule('calendar');
+		}
+
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Managers\\DataSyncManager::dataSyncAgent();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Util\\CleanConnectionAgent::cleanAgent();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Office365\\SectionManager::updateSectionsAgent();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Managers\\PushWatchingManager::renewWatchChannels();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Managers\\DataExchangeManager::importAgent();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::createWatchChannels(0);", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::processPush();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::renewWatchChannels();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\GoogleApiPush::checkPushChannel();", "calendar");
+		CAgent::RemoveAgent("CCalendarSync::doSync();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkNotSendEvents();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Google\\QueueManager::checkIncompleteSync();", 'calendar');
+		CAgent::RemoveAgent("Bitrix\\Calendar\\Core\\Queue\\Agent\\EventsWithEntityAttendeesFindAgent::runAgent();", "calendar");
+		CAgent::RemoveAgent("Bitrix\\Calendar\\Core\\Queue\\Agent\\EventAttendeesUpdateAgent::runAgent();", "calendar");
+		CAgent::RemoveAgent("Bitrix\\Calendar\\Core\\Queue\\Agent\\EventDelayedSyncAgent::runAgent();", "calendar");
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Sync\\Managers\\EventQueueManager::checkEvents();", 'calendar');
+		CAgent::RemoveAgent("\\Bitrix\\Calendar\\Rooms\\Util\\CleanLocationEventsAgent::cleanAgent();", 'calendar');
+
+		$templateCheck = \Bitrix\Main\SiteTemplateTable::getList([
+			'filter' => [
+				'TEMPLATE' => 'calendar_sharing',
+			]
+		])->fetch();
+		if ($templateCheck)
+		{
+			\Bitrix\Main\SiteTemplateTable::delete($templateCheck['ID']);
 		}
 
 		return true;
@@ -299,29 +383,8 @@ class calendar extends CModule
 		$ar = $rs->Fetch();
 
 		if($ar["C"] <= 0)
-			include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/calendar/install/events.php");
-
-		if (!IsModuleInstalled('intranet'))
 		{
-			COption::SetOptionString("intranet", "calendar_2", "Y");
-			CModule::IncludeModule('calendar');
-			CCalendar::ClearCache();
-			CCalendar::CacheTime(0);
-
-			$arTypes = CCalendarType::GetList();
-			if (!$arTypes || !count($arTypes))
-			{
-				CCalendarType::Edit(array(
-					'NEW' => true,
-					'arFields' => array(
-						'XML_ID' => 'events',
-						'NAME' => GetMessage('CAL_DEFAULT_TYPE'),
-						'ACCESS' => array(
-							'G2' => CCalendar::GetAccessTasksByName('calendar_type', 'calendar_type_view')
-						)
-					)
-				));
-			}
+			include($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/calendar/install/events.php");
 		}
 
 		return true;
@@ -330,7 +393,7 @@ class calendar extends CModule
 	function UnInstallEvents()
 	{
 		global $DB;
-		$sIn = "'CALENDAR_INVITATION', 'SEND_ICAL_INVENT'";
+		$sIn = "'CALENDAR_INVITATION', 'SEND_ICAL_INVENT', 'CALENDAR_SHARING'";
 		$DB->Query("DELETE FROM b_event_message WHERE EVENT_NAME IN (".$sIn.") ", false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		$DB->Query("DELETE FROM b_event_type WHERE EVENT_NAME IN (".$sIn.") ", false, "File: ".__FILE__."<br>Line: ".__LINE__);
 		return true;
@@ -449,6 +512,12 @@ class calendar extends CModule
 			CopyDirFiles(
 				$_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/calendar/install/services",
 				$_SERVER["DOCUMENT_ROOT"]."/bitrix/services",
+				true, true
+			);
+
+			CopyDirFiles(
+				$_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/calendar/install/templates",
+				$_SERVER["DOCUMENT_ROOT"]."/bitrix/templates",
 				true, true
 			);
 

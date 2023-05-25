@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Mail\Helper;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -20,6 +21,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 \Bitrix\UI\Toolbar\Facade\Toolbar::deleteFavoriteStar();
 
+\Bitrix\Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
+]);
+
 if ($arResult['TO_PLUG_EXTENSION_SALES_LETTER_TEMPLATE'])
 {
 	\Bitrix\Main\UI\Extension::load('mail.saleslettertemplate');
@@ -38,6 +44,9 @@ $this->setViewTarget('above_pagetitle'); ?>
 </div>
 
 <?php
+
+$emailsLimitToSendMessage = Helper\LicenseManager::getEmailsLimitToSendMessage();
+
 $this->endViewTarget();
 
 $message = $arResult['MESSAGE'];
@@ -288,19 +297,17 @@ $isCrmEnabled = ($arResult['CRM_ENABLE'] === 'Y');
 
 <script type="text/javascript">
 
-	<? $emailMaxSize = (int)\Bitrix\Main\Config\Option::get('main', 'max_file_size', 0);
-		$maxSizeAfterEncoding = floor($emailMaxSize/4)*3;
-	?>
-
 	BX.message({
+		EMAILS_LIMIT_TO_SEND_MESSAGE: '<?=$emailsLimitToSendMessage?>',
 		MAIL_MESSAGE_AJAX_ERROR: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_AJAX_ERROR')) ?>',
 		MAIL_MESSAGE_NEW_EMPTY_RCPT: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_NEW_EMPTY_RCPT')) ?>',
+		MAIL_MESSAGE_NEW_TARIFF_RESTRICTION: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_NEW_TARIFF_RESTRICTION', ['#COUNT#'=> $emailsLimitToSendMessage])) ?>',
 		MAIL_MESSAGE_NEW_UPLOADING: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_NEW_UPLOADING')) ?>',
-		MAIL_MESSAGE_MAX_SIZE: <?=$emailMaxSize ?>,
+		MAIL_MESSAGE_MAX_SIZE: <?=Helper\Message::getMaxAttachedFilesSize()?>,
 		MAIL_MESSAGE_MAX_SIZE_EXCEED: '<?=\CUtil::jsEscape(
 			Loc::getMessage(
 				'MAIL_MESSAGE_MAX_SIZE_EXCEED',
-				['#SIZE#' => \CFile::formatSize($maxSizeAfterEncoding,1)]
+				['#SIZE#' => \CFile::formatSize(Helper\Message::getMaxAttachedFilesSizeAfterEncoding(),1)]
 			)
 		) ?>',
 		MAIL_MESSAGE_SEND_SUCCESS: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_SEND_SUCCESS')) ?>',

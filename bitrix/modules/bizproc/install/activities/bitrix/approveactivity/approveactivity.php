@@ -264,18 +264,6 @@ class CBPApproveActivity
 		$this->subscriptionId = 0;
 	}
 
-	public function HandleFault(Exception $exception)
-	{
-		if ($exception == null)
-			throw new Exception("exception");
-
-		$status = $this->Cancel();
-		if ($status == CBPActivityExecutionStatus::Canceling)
-			return CBPActivityExecutionStatus::Faulting;
-
-		return $status;
-	}
-
 	public function Cancel()
 	{
 		if (!$this->isInEventActivityMode && $this->taskId > 0)
@@ -455,7 +443,8 @@ class CBPApproveActivity
 		$rejecters = "";
 		if (!$this->IsPropertyExists("SetStatusMessage") || $this->SetStatusMessage == "Y")
 		{
-			$messageTemplate = ($this->IsPropertyExists("StatusMessage") && $this->StatusMessage <> '') ? $this->StatusMessage : GetMessage("BPAA_ACT_INFO");
+			$statusMessage = $this->StatusMessage;
+			$messageTemplate = ($statusMessage && is_string($statusMessage)) ? $statusMessage : GetMessage("BPAA_ACT_INFO");
 			$votedPercent = $this->VotedPercent;
 			$votedCount = $this->VotedCount;
 			$totalCount = $this->TotalCount;

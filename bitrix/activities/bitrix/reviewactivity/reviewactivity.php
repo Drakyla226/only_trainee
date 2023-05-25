@@ -110,7 +110,9 @@ class CBPReviewActivity
 		if (!is_array($arUsersTmp))
 			$arUsersTmp = array($arUsersTmp);
 
-		$this->WriteToTrackingService(str_replace("#VAL#", "{=user:".implode("}, {=user:", $arUsersTmp)."}", GetMessage("BPAR_ACT_TRACK2")));
+		$this->WriteToTrackingService(
+			GetMessage("BPAR_ACT_TRACK3", ['#VAL#' => "{=user:".implode("}, {=user:", $arUsersTmp)."}"])
+		);
 
 		$arUsers = CBPHelper::ExtractUsers($arUsersTmp, $documentId, false);
 
@@ -228,18 +230,6 @@ class CBPReviewActivity
 		$this->subscriptionId = 0;
 	}
 
-	public function HandleFault(Exception $exception)
-	{
-		if ($exception == null)
-			throw new Exception("exception");
-
-		$status = $this->Cancel();
-		if ($status == CBPActivityExecutionStatus::Canceling)
-			return CBPActivityExecutionStatus::Faulting;
-
-		return $status;
-	}
-
 	public function Cancel()
 	{
 		if (!$this->isInEventActivityMode && $this->taskId > 0)
@@ -329,8 +319,12 @@ class CBPReviewActivity
 
 		if (!$this->IsPropertyExists("SetStatusMessage") || $this->SetStatusMessage == "Y")
 		{
-			$messageTemplate = ($this->IsPropertyExists("StatusMessage") && $this->StatusMessage <> '') ? $this->StatusMessage : GetMessage("BPAR_ACT_INFO");
-			$votedPercent = intval($this->ReviewedCount / $this->TotalCount * 100);
+			$messageTemplate = \CBPHelper::stringify($this->StatusMessage);
+			if (!$messageTemplate)
+			{
+				$messageTemplate = GetMessage("BPAR_ACT_INFO");
+			}
+			$votedPercent = (int)($this->ReviewedCount / $this->TotalCount * 100);
 			$votedCount = $this->ReviewedCount;
 			$totalCount = $this->TotalCount;
 

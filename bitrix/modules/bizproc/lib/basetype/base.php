@@ -159,7 +159,7 @@ class Base
 	 */
 	protected static function formatValuePrintable(FieldType $fieldType, $value)
 	{
-		return static::convertValueSingle($fieldType, $value, StringType::class);
+		return static::convertValueSingle(clone $fieldType, $value, StringType::class);
 	}
 
 	/**
@@ -862,5 +862,25 @@ HTML;
 		}
 
 		return 0;
+	}
+
+	public static function validateValueSingle($value, FieldType $fieldType)
+	{
+		return static::toSingleValue($fieldType, $value);
+	}
+
+	public static function validateValueMultiple($value, FieldType $fieldType): array
+	{
+		if (!is_array($value))
+		{
+			$value = [$value];
+		}
+
+		foreach ($value as $k => $v)
+		{
+			$value[$k] = static::validateValueSingle($v, $fieldType);
+		}
+
+		return $value;
 	}
 }

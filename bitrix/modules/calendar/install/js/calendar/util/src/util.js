@@ -1,6 +1,6 @@
-import {Runtime, Type, Loc, Dom, Tag} from "main.core";
+import { Type, Loc, Dom, Tag} from "main.core";
+import { DateTimeFormat } from "main.date";
 import "ui.notification";
-import "../../../../../../main/install/js/main/date/main.date";
 import {PopupManager} from 'main.popup';
 import {PULL as Pull} from 'pull.client';
 
@@ -172,20 +172,20 @@ export class Util
 		return null;
 	}
 
-	static formatTime(h, m, skipMinutes)
+	static formatTime(hours, minutes)
 	{
-		let d = null;
-		if (Type.isDate(h))
+		let day;
+		if (Type.isDate(hours))
 		{
-			d = h;
+			day = hours;
 		}
 		else
 		{
-			d = new Date();
-			d.setHours(h, m, 0);
+			day = new Date();
+			day.setHours(hours, minutes, 0);
 		}
 
-		return BX.date.format(Util.getTimeFormatShort(), d.getTime() / 1000);
+		return BX.date.format(Util.getTimeFormatShort(), day.getTime() / 1000);
 	}
 
 	static formatDate(timestamp)
@@ -206,11 +206,17 @@ export class Util
 		return BX.date.format(Util.getDateTimeFormat(), timestamp / 1000);
 	}
 
+	static formatTimeInterval(from, to)
+	{
+		const formattedFrom = DateTimeFormat.format(Util.getTimeFormatShort(), from.getTime() / 1000);
+		const formattedTo = DateTimeFormat.format(Util.getTimeFormatShort(), to.getTime() / 1000);
+		return `${formattedFrom} - ${formattedTo}`;
+	}
+
 	static formatDateUsable(date, showYear = true, showDayOfWeek = false)
 	{
-		let
-			lang = Loc.getMessage('LANGUAGE_ID'),
-			format = Util.getDateFormat();
+		const lang = Loc.getMessage('LANGUAGE_ID');
+		let format = Util.getDateFormat();
 		if (lang === 'ru' || lang === 'ua')
 		{
 			format = showDayOfWeek ? 'l, j F' : 'j F';
@@ -243,7 +249,7 @@ export class Util
 
 	static getDefaultColorList()
 	{
-		return ['#86b100', '#0092cc', '#00afc7', '#da9100', '#00b38c', '#de2b24', '#bd7ac9', '#838fa0', '#ab7917', '#e97090'];
+		return ['#86b100', '#0092cc', '#00afc7', '#e89b06', '#00b38c', '#de2b24', '#bd7ac9', '#838fa0', '#c3612c', '#e97090'];
 	}
 
 	static findTargetNode(node, parentCont)
@@ -252,11 +258,6 @@ export class Util
 		if (node)
 		{
 			let prefix = 'data-bx-calendar', i;
-
-			// if (!parentCont)
-			// {
-			// 	parentCont = this.calendar.viewsCont;
-			// }
 
 			if (node.attributes && node.attributes.length)
 			{
@@ -299,6 +300,26 @@ export class Util
 	static getWeekDayByInd(index)
 	{
 		return ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][index];
+	}
+
+	static getIndByWeekDay(weekDay)
+	{
+		return new Object({SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6})[weekDay];
+	}
+
+	static getWeekdaysLoc()
+	{
+		const today = new Date();
+		const weekdays = [];
+
+		const dayLength = 24 * 60 * 60 * 1000;
+		for (let weekOffset = 0; weekOffset < 7; weekOffset++)
+		{
+			const weekDayName = DateTimeFormat.format('D', new Date(today.getTime() + dayLength * weekOffset));
+			weekdays[(today.getDay() + weekOffset) % 7] = weekDayName;
+		}
+
+		return weekdays;
 	}
 
 	static getLoader(size, className)
@@ -375,10 +396,22 @@ export class Util
 		return KEY_CODES[key.toLowerCase()];
 	}
 
+	static isAnyModifierKeyPressed(event = window.event)
+	{
+		if (event)
+		{
+			return event.altKey || event.shiftKey || event.ctrlKey || event.metaKey;
+		}
+
+		return null;
+	}
+
 	static getUsableDateTime(timestamp, roundMin)
 	{
 		if (Type.isDate(timestamp))
+		{
 			timestamp = timestamp.getTime();
+		}
 
 		let r = (roundMin || 10) * 60 * 1000;
 		timestamp = Math.ceil(timestamp / r) * r;
@@ -412,6 +445,8 @@ export class Util
 			let alertWrap = alert.getContainer();
 
 			wrap.appendChild(alertWrap);
+
+			return alertWrap;
 		}
 	}
 
@@ -422,6 +457,36 @@ export class Util
 			Util.DATE_FORMAT = BX.Main.Date.convertBitrixFormat(Loc.getMessage("FORMAT_DATE"));
 		}
 		return Util.DATE_FORMAT;
+	}
+
+	static setDayOfWeekMonthFormat(value)
+	{
+		Util.dayOfWeekMonthFormat = value;
+	}
+
+	static getDayOfWeekMonthFormat()
+	{
+		return Util.dayOfWeekMonthFormat || 'l, j F';
+	}
+
+	static setDayMonthFormat(value)
+	{
+		Util.dayMonthFormat = value;
+	}
+
+	static getDayMonthFormat()
+	{
+		return Util.dayMonthFormat || 'j F';
+	}
+
+	static setLongDateFormat(value)
+	{
+		Util.longDateFormat = value;
+	}
+
+	static getLongDateFormat()
+	{
+		return Util.longDateFormat || 'j F Y';
 	}
 
 	static getDateTimeFormat()
@@ -598,6 +663,33 @@ export class Util
 		return new Date(date.getTime() - parseInt(timezoneOffset) * 1000);
 	}
 
+	static getFormattedTimezone(timeZone)
+	{
+		const timezoneOffset = this.getTimeZoneOffset(timeZone);
+		if (timezoneOffset === 0)
+		{
+			return '(UTC) ' + timeZone;
+		}
+
+		const prefix = (timezoneOffset > 0 ? '-' : '+');
+		const hours = ('0' + Math.floor(Math.abs(timezoneOffset) / 60)).slice(-2);
+		const minutes = ('0' + Math.abs(timezoneOffset) % 60).slice(-2);
+
+		return '(UTC ' + prefix + hours + ':' + minutes + ') ' + timeZone;
+	}
+
+	static getTimezoneDateFromTimestampUTC(timestampUTC, timeZone)
+	{
+		return new Date(timestampUTC + this.getTimeZoneOffset() * 60 * 1000 - this.getTimeZoneOffset(timeZone) * 60 * 1000);
+	}
+
+	static getTimeZoneOffset(timeZone = undefined)
+	{
+		const timeInTimezone = new Date(new Date().toLocaleString("en-US", { timeZone })).getTime();
+		const timeInUTC = new Date(new Date().toLocaleString("en-US", { timeZone: 'UTC' })).getTime();
+		return parseInt((timeInUTC - timeInTimezone) / 60000);
+	}
+
 	static randomInt(min, max)
 	{
 		return Math.round(min - 0.5 + Math.random() * (max - min + 1));
@@ -745,5 +837,100 @@ export class Util
 	static documentIsDisplayingNow()
 	{
 		return !document.hidden;
+	}
+
+	static removeHash()
+	{
+		if ("pushState" in history)
+		{
+			history.pushState("", document.title, window.location.pathname + window.location.search);
+		}
+		else
+			{
+			// Prevent scrolling by storing the page's current scroll offset
+			let scrollV = document.body.scrollTop;
+			let scrollH = document.body.scrollLeft;
+			window.location.hash = "";
+			// Restore the scroll offset, should be flicker free
+			document.body.scrollTop = scrollV;
+			document.body.scrollLeft = scrollH;
+		}
+	}
+
+	// TODO: move to syncManager
+	static setIphoneConnectionStatus(value)
+	{
+		Util.iphoneConnectionStatus = value;
+	}
+
+	static isIphoneConnected()
+	{
+		return Util.iphoneConnectionStatus;
+	}
+
+	static setMacConnectionStatus(value)
+	{
+		Util.macConnectionStatus = value;
+	}
+
+	static isMacConnected()
+	{
+		return Util.macConnectionStatus;
+	}
+
+	static setIcloudConnectionStatus(value)
+	{
+		Util.icloudConnectionStatus = value;
+	}
+
+	static isIcloudConnected()
+	{
+		return Util.icloudConnectionStatus;
+	}
+
+	static setGoogleConnectionStatus(value)
+	{
+		Util.googleConnectionStatus = value;
+	}
+
+	static isGoogleConnected()
+	{
+		return Util.googleConnectionStatus;
+	}
+
+	static setIsSharingFeatureEnabled(value)
+	{
+		Util.isSharingFeatureEnabled = value;
+	}
+
+	static checkSharingFeatureEnabled()
+	{
+		return Util.isSharingFeatureEnabled;
+	}
+
+	static setSharingConfig(value)
+	{
+		Util.sharingConfig = value;
+	}
+
+	static getSharingConfig()
+	{
+		return Util.sharingConfig;
+	}
+
+	static downloadIcsFile(fileContent, fileName)
+	{
+		const link = document.createElement('a');
+		link.href = "data:text/calendar," + encodeURI(fileContent);
+		link.download = fileName;
+		link.click();
+	}
+
+	static isMobileBrowser()
+	{
+		return navigator.userAgent.toLowerCase().includes('iphone')
+			|| navigator.userAgent.toLowerCase().includes('ipad')
+			|| navigator.userAgent.toLowerCase().includes('android')
+		;
 	}
 }

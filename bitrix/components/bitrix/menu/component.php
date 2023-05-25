@@ -89,7 +89,7 @@ if($this->startResultCache(false, false, (($arParams["MENU_CACHE_USE_USERS"] ?? 
 			false
 		);
 
-		if($arParams["SHOW_LAST_LEVEL_BUTTONS"]!="Y")
+		if(!isset($arParams["SHOW_LAST_LEVEL_BUTTONS"]) || $arParams["SHOW_LAST_LEVEL_BUTTONS"] != "Y")
 		{
 			$arResult["menuDir"] = $menu->MenuDir;
 			$arResult["menuType"] = $menu->type;
@@ -245,8 +245,14 @@ if($USER->IsAuthorized())
 	if ($bMenuAdd)
 	{
 		$newMenuType = $menuType;
-		if($arParams["SHOW_LAST_LEVEL_BUTTONS"]=="Y" && $arParams["CHILD_MENU_TYPE"]!=$newMenuType)
+		if (
+			isset($arParams["SHOW_LAST_LEVEL_BUTTONS"])
+			&& $arParams["SHOW_LAST_LEVEL_BUTTONS"] == "Y"
+			&& $arParams["CHILD_MENU_TYPE"] != $newMenuType
+		)
+		{
 			$newMenuType = $arParams["CHILD_MENU_TYPE"];
+		}
 
 		/** @noinspection PhpUndefinedVariableInspection */
 		$menu_edit_url = $APPLICATION->GetPopupLink(array(

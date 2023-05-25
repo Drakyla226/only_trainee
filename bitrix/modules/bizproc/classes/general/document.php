@@ -14,8 +14,9 @@ class CBPDocument
 	const PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT = 'IgnoreSimultaneousProcessesLimit';
 	const PARAM_DOCUMENT_EVENT_TYPE = 'DocumentEventType';
 	const PARAM_DOCUMENT_TYPE = '__DocumentType';
+	const PARAM_PRE_GENERATED_WORKFLOW_ID = 'PreGeneratedWorkflowId';
 
-	public static function MigrateDocumentType($oldType, $newType)
+	public static function migrateDocumentType($oldType, $newType)
 	{
 		$templateIds = array();
 		$db = CBPWorkflowTemplateLoader::GetList(array(), array("DOCUMENT_TYPE" => $oldType), false, false, array("ID"));
@@ -99,7 +100,7 @@ class CBPDocument
 	 * @param null|array $documentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
 	 * @return array - Workflow states and templates.
 	 */
-	public static function GetDocumentStates($documentType, $documentId = null)
+	public static function getDocumentStates($documentType, $documentId = null)
 	{
 		$arDocumentStates = array();
 
@@ -139,13 +140,13 @@ class CBPDocument
 	 * @param string $workflowId - Workflow id.
 	 * @return array - Workflow state array.
 	 */
-	public static function GetDocumentState($documentId, $workflowId)
+	public static function getDocumentState($documentId, $workflowId)
 	{
 		$arDocumentState = CBPStateService::GetDocumentStates($documentId, $workflowId);
 		return $arDocumentState;
 	}
 
-	public static function MergeDocuments($firstDocumentId, $secondDocumentId)
+	public static function mergeDocuments($firstDocumentId, $secondDocumentId)
 	{
 		CBPStateService::MergeStates($firstDocumentId, $secondDocumentId);
 		Bizproc\Workflow\Entity\WorkflowInstanceTable::mergeByDocument($firstDocumentId, $secondDocumentId);
@@ -162,7 +163,7 @@ class CBPDocument
 	 * @return array - Events array array(array("NAME" => event_name, "TITLE" => event_title), ...).
 	 * @throws Exception
 	 */
-	public static function GetAllowableEvents($userId, $arGroups, $arState, $appendExtendedGroups = false)
+	public static function getAllowableEvents($userId, $arGroups, $arState, $appendExtendedGroups = false)
 	{
 		if (!is_array($arState))
 			throw new Exception("arState");
@@ -199,7 +200,7 @@ class CBPDocument
 		return $arResult;
 	}
 
-	public static function AddDocumentToHistory($parameterDocumentId, $name, $userId)
+	public static function addDocumentToHistory($parameterDocumentId, $name, $userId)
 	{
 		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
@@ -254,7 +255,7 @@ class CBPDocument
 	 * @return array|null - Allowable operations.
 	 * @throws Exception
 	 */
-	public static function GetAllowableOperations($userId, $arGroups, $arStates, $appendExtendedGroups = false)
+	public static function getAllowableOperations($userId, $arGroups, $arStates, $appendExtendedGroups = false)
 	{
 		if (!is_array($arStates))
 			throw new Exception("arStates");
@@ -304,7 +305,7 @@ class CBPDocument
 	 * @return bool
 	 * @throws Exception
 	 */
-	public static function CanOperate($operation, $userId, $arGroups, $arStates)
+	public static function canOperate($operation, $userId, $arGroups, $arStates)
 	{
 		$operation = trim($operation);
 		if ($operation == '')
@@ -327,30 +328,12 @@ class CBPDocument
 	 * @param array|null $parentWorkflow - Parent workflow information.
 	 * @return string - Workflow id.
 	 */
-	public static function StartWorkflow($workflowTemplateId, $documentId, $parameters, &$errors, $parentWorkflow = null)
+	public static function startWorkflow($workflowTemplateId, $documentId, $parameters, &$errors, $parentWorkflow = null)
 	{
 		$errors = [];
 		$runtime = CBPRuntime::GetRuntime();
 
-		if (!is_array($parameters))
-		{
-			$parameters = [$parameters];
-		}
-
-		if (!array_key_exists(static::PARAM_TAGRET_USER, $parameters))
-		{
-			$parameters[static::PARAM_TAGRET_USER] = is_object($GLOBALS["USER"]) ? "user_".intval($GLOBALS["USER"]->GetID()) : null;
-		}
-
-		if (!isset($parameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS]))
-		{
-			$parameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS] = false;
-		}
-
-		if (!isset($parameters[static::PARAM_DOCUMENT_EVENT_TYPE]))
-		{
-			$parameters[static::PARAM_DOCUMENT_EVENT_TYPE] = CBPDocumentEventType::None;
-		}
+		$parameters = static::prepareWorkflowParameters($parameters);
 
 		try
 		{
@@ -370,6 +353,63 @@ class CBPDocument
 		return null;
 	}
 
+	public static function startDebugWorkflow($workflowTemplateId, $documentId, $parameters, &$errors): ?string
+	{
+		$errors = [];
+		$runtime = CBPRuntime::GetRuntime(true);
+
+		$parameters = static::prepareWorkflowParameters($parameters);
+
+		try
+		{
+			$workflow = $runtime->createDebugWorkflow($workflowTemplateId, $documentId, $parameters);
+			$workflow->Start();
+
+			return $workflow->getInstanceId();
+		}
+		catch (Exception $e)
+		{
+			$errors[] = array(
+				"code" => $e->getCode(),
+				"message" => $e->getMessage(),
+				"file" => $e->getFile()." [".$e->getLine()."]"
+			);
+		}
+
+		return null;
+	}
+
+	private static function prepareWorkflowParameters($parameters): array
+	{
+		if (!is_array($parameters))
+		{
+			$parameters = [$parameters];
+		}
+
+		if (!array_key_exists(static::PARAM_TAGRET_USER, $parameters))
+		{
+			$currentUserId = Main\Engine\CurrentUser::get()->getId();
+			$parameters[static::PARAM_TAGRET_USER] = isset($currentUserId) ? "user_{$currentUserId}" : null;
+		}
+
+		if (!isset($parameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS]))
+		{
+			$parameters[static::PARAM_MODIFIED_DOCUMENT_FIELDS] = false;
+		}
+
+		if (!isset($parameters[static::PARAM_DOCUMENT_EVENT_TYPE]))
+		{
+			$parameters[static::PARAM_DOCUMENT_EVENT_TYPE] = CBPDocumentEventType::None;
+		}
+
+		if (!isset($parameters[static::PARAM_PRE_GENERATED_WORKFLOW_ID]))
+		{
+			$parameters[static::PARAM_PRE_GENERATED_WORKFLOW_ID] = CBPRuntime::generateWorkflowId();
+		}
+
+		return $parameters;
+	}
+
 	/**
 	* Method auto starts workflow.
 	*
@@ -379,7 +419,7 @@ class CBPDocument
 	* @param array $arParameters - Workflow parameters.
 	* @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	*/
-	public static function AutoStartWorkflows($documentType, $autoExecute, $documentId, $arParameters, &$arErrors)
+	public static function autoStartWorkflows($documentType, $autoExecute, $documentId, $arParameters, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -423,7 +463,7 @@ class CBPDocument
 	* @param array $arParameters - Event parameters.
 	* @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	*/
-	public static function SendExternalEvent($workflowId, $workflowEvent, $arParameters, &$arErrors)
+	public static function sendExternalEvent($workflowId, $workflowEvent, $arParameters, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -449,7 +489,7 @@ class CBPDocument
 	* @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	* @param string $stateTitle - State title (workflow status).
 	*/
-	public static function TerminateWorkflow($workflowId, $documentId, &$arErrors, $stateTitle = '')
+	public static function terminateWorkflow($workflowId, $documentId, &$arErrors, $stateTitle = '')
 	{
 		$arErrors = array();
 
@@ -488,8 +528,12 @@ class CBPDocument
 		{
 			Bizproc\Workflow\Entity\WorkflowInstanceTable::delete($workflowId);
 			CBPTaskService::DeleteByWorkflow($workflowId);
-			CBPTrackingService::DeleteByWorkflow($workflowId);
 			CBPStateService::DeleteWorkflow($workflowId);
+
+			if (!Bizproc\Debugger\Session\Manager::isDebugWorkflow($workflowId))
+			{
+				CBPTrackingService::DeleteByWorkflow($workflowId);
+			}
 		}
 
 		return $errors;
@@ -500,7 +544,7 @@ class CBPDocument
 	 * @param array $documentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
 	 * @param array $errors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 */
-	public static function OnDocumentDelete($documentId, &$errors)
+	public static function onDocumentDelete($documentId, &$errors)
 	{
 		$errors = [];
 
@@ -510,11 +554,17 @@ class CBPDocument
 			static::TerminateWorkflow($instanceId, $documentId, $errors);
 		}
 
+		$debugSession = Bizproc\Debugger\Session\Manager::getActiveSession();
+		if ($debugSession && $debugSession->isFixedDocument($documentId))
+		{
+			Bizproc\Debugger\Listener::getInstance()->onDocumentDeleted();
+		}
+
 		//Deferred deletion
 		Bizproc\Worker\Document\DeleteStepper::bindDocument($documentId);
 	}
 
-	public static function PostTaskForm($arTask, $userId, $arRequest, &$arErrors, $userName = "")
+	public static function postTaskForm($arTask, $userId, $arRequest, &$arErrors, $userName = "")
 	{
 		$originalUserId = CBPTaskService::getOriginalTaskUserId($arTask['ID'], $userId);
 
@@ -532,7 +582,7 @@ class CBPDocument
 		);
 	}
 
-	public static function ShowTaskForm($arTask, $userId, $userName = "", $arRequest = null)
+	public static function showTaskForm($arTask, $userId, $userName = "", $arRequest = null)
 	{
 		return CBPActivity::CallStaticMethod(
 			$arTask["ACTIVITY"],
@@ -699,7 +749,7 @@ class CBPDocument
 	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 * @return array - Valid Parameters values.
 	 */
-	public static function StartWorkflowParametersValidate($templateId, $arWorkflowParameters, $documentType, &$arErrors)
+	public static function startWorkflowParametersValidate($templateId, $arWorkflowParameters, $documentType, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -748,7 +798,10 @@ class CBPDocument
 			$ar = array();
 
 			foreach ($arWorkflowParameters as $parameterKey => $arParameter)
-				$ar[$parameterKey] = $arRequest["bizproc".$templateId."_".$parameterKey];
+			{
+				$key = "bizproc" . $templateId . "_" . $parameterKey;
+				$ar[$parameterKey] = $arRequest[$key] ?? null;
+			}
 
 			$arWorkflowParametersValues = CBPWorkflowTemplateLoader::CheckWorkflowParameters(
 				$arWorkflowParameters,
@@ -770,7 +823,7 @@ class CBPDocument
 	 * @param bool $bVarsFromForm - false on first form open, else - true.
 	 * @param null|array $documentType Document type array(MODULE_ID, ENTITY, DOCUMENT_TYPE).
 	 */
-	public static function StartWorkflowParametersShow($templateId, $arWorkflowParameters, $formName, $bVarsFromForm, $documentType = null)
+	public static function startWorkflowParametersShow($templateId, $arWorkflowParameters, $formName, $bVarsFromForm, $documentType = null)
 	{
 		$templateId = intval($templateId);
 		if ($templateId <= 0)
@@ -828,7 +881,7 @@ class CBPDocument
 		}
 	}
 
-	public static function AddShowParameterInit($module, $type, $document_type, $entity = "", $document_id = '')
+	public static function addShowParameterInit($module, $type, $document_type, $entity = "", $document_id = '')
 	{
 		$GLOBALS["BP_AddShowParameterInit_".$module."_".$entity."_".$document_type] = 1;
 		CUtil::InitJSCore(array("window", "ajax"));
@@ -935,16 +988,13 @@ class CBPDocument
 <?
 	}
 
-	public static function ShowParameterField($type, $name, $values, $arParams = Array())
+	public static function showParameterField($type, $name, $values, $arParams = Array())
 	{
-		if($arParams['id'] <> '')
-			$id = $arParams['id'];
-		else
-			$id = md5(uniqid());
+		$id = !empty($arParams['id']) ? $arParams['id'] : md5(uniqid());
 
-		$cols = $arParams['size']>0?intval($arParams['size']):70;
+		$cols = !empty($arParams['size']) ? intval($arParams['size']) : 70;
 		$defaultRows = $type == "user" ? 3 : 1;
-		$rows = max(($arParams['rows']>0?intval($arParams['rows']):$defaultRows), min(5, ceil(mb_strlen($values) / $cols)));
+		$rows = max((isset($arParams['rows']) && $arParams['rows']>0?intval($arParams['rows']):$defaultRows), min(5, ceil(mb_strlen((string)$values) / $cols)));
 
 		if($type == "user")
 		{
@@ -1024,7 +1074,7 @@ class CBPDocument
 			);
 	}
 
-	public static function AddDefaultWorkflowTemplates($documentType, $additionalModuleId = null)
+	public static function addDefaultWorkflowTemplates($documentType, $additionalModuleId = null)
 	{
 		if (!empty($additionalModuleId))
 		{
@@ -1103,7 +1153,7 @@ class CBPDocument
 	 * @param bool $showSystemTemplates Shows system templates.
 	 * @return array - Templates array.
 	 */
-	public static function GetWorkflowTemplatesForDocumentType($documentType, $showSystemTemplates = true)
+	public static function getWorkflowTemplatesForDocumentType($documentType, $showSystemTemplates = true)
 	{
 		$arResult = [];
 		$filter = [
@@ -1162,7 +1212,7 @@ class CBPDocument
 		return $arResult;
 	}
 
-	public static function GetNumberOfWorkflowTemplatesForDocumentType($documentType)
+	public static function getNumberOfWorkflowTemplatesForDocumentType($documentType)
 	{
 		$n = CBPWorkflowTemplateLoader::GetList(
 			array(),
@@ -1179,7 +1229,7 @@ class CBPDocument
 	 * @param array $documentType - Document type array(MODULE_ID, ENTITY, DOCUMENT_TYPE).
 	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 */
-	public static function DeleteWorkflowTemplate($id, $documentType, &$arErrors)
+	public static function deleteWorkflowTemplate($id, $documentType, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -1223,7 +1273,7 @@ class CBPDocument
 	 * @param array $arFields - Data for update.
 	 * @param array $arErrors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 */
-	public static function UpdateWorkflowTemplate($id, $documentType, $arFields, &$arErrors)
+	public static function updateWorkflowTemplate($id, $documentType, $arFields, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -1309,7 +1359,7 @@ class CBPDocument
 	 * @param array $parameterDocumentId - Document id array(MODULE_ID, ENTITY, DOCUMENT_ID).
 	 * @return string - URL.
 	 */
-	public static function GetDocumentAdminPage($parameterDocumentId)
+	public static function getDocumentAdminPage($parameterDocumentId)
 	{
 		[$moduleId, $entity, $documentId] = CBPHelper::ParseDocumentId($parameterDocumentId);
 
@@ -1356,7 +1406,7 @@ class CBPDocument
 	 * @param string $workflowId - Workflow id.
 	 * @return array - Tasks.
 	 */
-	public static function GetUserTasksForWorkflow($userId, $workflowId)
+	public static function getUserTasksForWorkflow($userId, $workflowId)
 	{
 		$userId = intval($userId);
 		if ($userId <= 0)
@@ -1381,18 +1431,18 @@ class CBPDocument
 		return $arResult;
 	}
 
-	public static function PrepareFileForHistory($documentId, $fileId, $historyIndex)
+	public static function prepareFileForHistory($documentId, $fileId, $historyIndex)
 	{
 		return CBPHistoryService::PrepareFileForHistory($documentId, $fileId, $historyIndex);
 	}
 
-	public static function IsAdmin()
+	public static function isAdmin()
 	{
 		global $APPLICATION;
 		return ($APPLICATION->GetGroupRight("bizproc") >= "W");
 	}
 
-	public static function GetDocumentFromHistory($historyId, &$arErrors)
+	public static function getDocumentFromHistory($historyId, &$arErrors)
 	{
 		$arErrors = array();
 
@@ -1415,7 +1465,7 @@ class CBPDocument
 		return null;
 	}
 
-	public static function GetAllowableUserGroups($parameterDocumentType)
+	public static function getAllowableUserGroups($parameterDocumentType)
 	{
 		[$moduleId, $entity, $documentType] = CBPHelper::ParseDocumentId($parameterDocumentType);
 
@@ -1536,9 +1586,11 @@ class CBPDocument
 	public static function getDocumentFieldsAliasesMap($fields)
 	{
 		if (empty($fields) || !is_array($fields))
-			return array();
+		{
+			return [];
+		}
 
-		$aliases = array();
+		$aliases = [];
 		foreach ($fields as $key => $property)
 		{
 			if (isset($property['Alias']))
@@ -1555,7 +1607,7 @@ class CBPDocument
 	 * @param $value
 	 * @return bool
 	 */
-	public static function IsExpression($value)
+	public static function isExpression($value)
 	{
 		//go to internal alias
 		return CBPActivity::isExpression($value);

@@ -7,6 +7,9 @@
  * @copyright 2001-2021 Bitrix
  */
 
+import 'ui.design-tokens';
+import 'ui.fonts.opensans';
+
 import {BitrixVue} from "ui.vue";
 import {Vuex} from "ui.vue.vuex";
 import {Utils} from "im.lib.utils";
@@ -16,9 +19,10 @@ import {
 	ConferenceErrorCode,
 	ConferenceRightPanelMode as RightPanelMode
 } from "im.const";
-import {DialogCore, DialogReadMessages, DialogSetMessageReaction, TextareaCore, TextareaUploadFile, DialogClickOnKeyboardButton, DialogClickOnCommand} from 'im.mixin';
+import { SendMessageHandler, ReadingHandler, ReactionHandler } from "im.event-handler";
+import {ConferenceTextareaHandler} from "./event-handler/conference-textarea-handler";
+import {ConferenceTextareaUploadHandler} from "./event-handler/conference-textarea-upload-handler";
 import {EventEmitter} from "main.core.events";
-import {Tag} from "main.core";
 
 //global components
 import "im.component.dialog";
@@ -51,12 +55,13 @@ const popupModes = Object.freeze({
 
 BitrixVue.component('bx-im-component-conference-public',
 {
-	props: ['dialogId', 'test'],
-	mixins: [DialogCore, TextareaCore, TextareaUploadFile, DialogReadMessages, DialogSetMessageReaction, DialogClickOnKeyboardButton, DialogClickOnCommand],
 	components: {
 		Error, CheckDevices, OrientationDisabled, PasswordCheck, LoadingStatus,
 		RequestPermissions, MobileChatButton, ConferenceInfo, UserForm, ChatHeader, WaitingForStart, UserList, UserListHeader,
 		ConferenceSmiles
+	},
+	props: {
+		dialogId: { type: String, default: "0" }
 	},
 	data: function()
 	{
@@ -76,9 +81,7 @@ BitrixVue.component('bx-im-component-conference-public',
 	},
 	created()
 	{
-		//for uploadFile mixin
-		this.actionUploadChunk = 'im.call.disk.upload';
-		this.actionCommitFile = 'im.call.disk.commit';
+		this.initEventHandlers();
 
 		EventEmitter.subscribe(EventType.conference.waitForStart, this.onWaitForStart);
 		EventEmitter.subscribe(EventType.conference.hideSmiles, this.onHideSmiles);
@@ -111,6 +114,8 @@ BitrixVue.component('bx-im-component-conference-public',
 	},
 	beforeDestroy()
 	{
+		this.destroyHandlers();
+
 		EventEmitter.unsubscribe(EventType.conference.waitForStart, this.onWaitForStart);
 		EventEmitter.unsubscribe(EventType.conference.hideSmiles, this.onHideSmiles);
 
@@ -249,6 +254,15 @@ BitrixVue.component('bx-im-component-conference-public',
 
 			return classes;
 		},
+		chatId()
+		{
+			if (this.application)
+			{
+				return this.application.dialog.chatId;
+			}
+
+			return 0;
+		},
 		localize()
 		{
 			return BitrixVue.getFilteredPhrases(['BX_IM_COMPONENT_CALL_', 'IM_DIALOG_CLIPBOARD_']);
@@ -314,40 +328,21 @@ BitrixVue.component('bx-im-component-conference-public',
 	},
 	methods:
 	{
-		/**
-		 * @notice redefined method from uploadFile mixin
-		 */
-		addMessageWithFile(message)
+		initEventHandlers()
 		{
-			this.stopWriting();
-
-			message.chatId = this.chatId;
-
-			if (!this.uploader.senderOptions.customHeaders)
-			{
-				this.uploader.senderOptions.customHeaders = {};
-			}
-			this.uploader.senderOptions.customHeaders['Call-Auth-Id'] = this.getUserHash();
-			this.uploader.senderOptions.customHeaders['Call-Chat-Id'] = this.chatId;
-
-			this.uploader.addTask({
-				taskId: message.file.id,
-				fileData: message.file.source.file,
-				fileName: message.file.source.file.name,
-				generateUniqueName: true,
-				diskFolderId: this.diskFolderId,
-				previewBlob: message.file.previewBlob,
-			});
+			this.sendMessageHandler = new SendMessageHandler(this.$Bitrix);
+			this.textareaHandler = new ConferenceTextareaHandler(this.$Bitrix);
+			this.readingHandler = new ReadingHandler(this.$Bitrix);
+			this.reactionHandler = new ReactionHandler(this.$Bitrix);
+			this.textareaUploadHandler = new ConferenceTextareaUploadHandler(this.$Bitrix);
 		},
-		/**
-		 * @notice redefined from textareaCore
-		 */
-		onTextareaAppButtonClick({data: event})
+		destroyHandlers()
 		{
-			if (event.appId === 'smile')
-			{
-				this.getApplication().toggleSmiles();
-			}
+			this.sendMessageHandler.destroy();
+			this.textareaHandler.destroy();
+			this.readingHandler.destroy();
+			this.reactionHandler.destroy();
+			this.textareaUploadHandler.destroy();
 		},
 		onHideSmiles()
 		{
@@ -474,7 +469,11 @@ BitrixVue.component('bx-im-component-conference-public',
 		getUserHash()
 		{
 			return this.conference.user.hash;
-		}
+		},
+		getApplication()
+		{
+			return this.$Bitrix.Application.get();
+		},
 		/* endregion 03. Helpers */
 	},
 	template: `

@@ -5,7 +5,7 @@ namespace Bitrix\Mail;
 use Bitrix\Main;
 use Bitrix\Main\ORM;
 use Bitrix\Mail\Internals;
-use \Bitrix\Mail\Helper\LicenseManager;
+use Bitrix\Main\Text\Emoji;
 
 class Helper
 {
@@ -344,7 +344,7 @@ class Helper
 		return empty($mailboxHelper) ? false : $mailboxHelper->sync();
 	}
 
-	public static function listImapDirs($mailbox, &$error, &$errors = null)
+	public static function listImapDirs($mailbox, &$error = [], &$errors = null)
 	{
 		$error  = null;
 		$errors = null;
@@ -431,7 +431,9 @@ class Helper
 		$order = 'ASC',
 		$filter =
 		[
-			'!=MESSAGE_UID.IS_OLD' => 'Y'
+			'!=MESSAGE_UID.IS_OLD' => 'Y',
+			'==MESSAGE_UID.DELETE_TIME' => 0,
+			'!@MESSAGE_UID.IS_OLD' => ['M', 'R'],
 		]
 	)
 	{
@@ -453,7 +455,7 @@ class Helper
 				'filter' => array_merge(
 					[
 						'=MAILBOX_ID' => $mailboxId,
-						'=MESSAGE_UID.DIR_MD5' => md5($dirPath),
+						'=MESSAGE_UID.DIR_MD5' => md5(Emoji::encode($dirPath)),
 					],
 					$filter
 				),
@@ -525,6 +527,18 @@ class Helper
 		{
 			Internals\MailCounterTable::add(array_merge($rowValue,$keyRow));
 		};
+
+		\CPullWatch::addToStack(
+			'mail_mailbox_' .$mailboxId,
+			[
+				'module_id' => 'mail',
+				'params' => [
+					'mailboxId' => $mailboxId,
+				],
+				'command' => 'counters_updated',
+			]
+		);
+		\Bitrix\Pull\Event::send();
 	}
 
 	public static function updateMailboxUnseenCounter($mailboxId)

@@ -1,7 +1,6 @@
 import {DefaultFooter, Dialog} from 'ui.entity-selector';
-import {ajax, Browser, Dom, Loc, Runtime, Tag, Type, Validation} from 'main.core';
-import {BaseEvent, EventEmitter} from "main.core.events";
-import type {TabOptions, Tab} from "ui.entity-selector";
+import {Dom, Loc, Tag, Type} from 'main.core';
+import {BaseEvent} from "main.core.events";
 import {Loader} from "main.loader";
 import {ProductSelector} from "catalog.product-selector";
 
@@ -13,6 +12,7 @@ export default class ProductSearchSelectorFooter extends DefaultFooter
 	{
 		super(dialog, options);
 
+		this.errorAdminHint = options.errorAdminHint || '';
 		this.getDialog().subscribe('onSearch', this.handleOnSearch.bind(this));
 	}
 
@@ -20,14 +20,12 @@ export default class ProductSearchSelectorFooter extends DefaultFooter
 	{
 		let phrase = '';
 
-		if (this.options.allowCreateItem === false)
-		{
-			phrase = this.getSaveContainer();
-		}
-		else
+		const isViewCreateButton = this.options.allowCreateItem === true || this.options.allowEditItem === false;
+
+		if (this.isViewEditButton() && isViewCreateButton)
 		{
 			phrase = Tag.render`
-				<div>${Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER')}</div>
+				<div>${Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_FOOTER_1')}</div>
 			`;
 
 			const createButton = phrase.querySelector('create-button');
@@ -36,14 +34,29 @@ export default class ProductSearchSelectorFooter extends DefaultFooter
 			const changeButton = phrase.querySelector('change-button');
 			Dom.replace(changeButton, this.getSaveContainer());
 		}
+		else if (this.isViewEditButton())
+		{
+			phrase = this.getSaveContainer();
+		}
+		else
+		{
+			phrase = this.getLabelContainer();
+		}
 
 		return Tag.render`
 			<div class="ui-selector-search-footer-box">
 				${phrase}
+				${this.getHintContainer()}
 				${this.getLoaderContainer()}
 			</div>
 		`;
 	}
+
+	isViewEditButton(): boolean
+	{
+		return this.options.allowEditItem === true;
+	}
+
 	getLoader(): Loader
 	{
 		if (Type.isNil(this.loader))
@@ -129,8 +142,51 @@ export default class ProductSearchSelectorFooter extends DefaultFooter
 		});
 	}
 
+	getHintContainer(): ?HTMLElement
+	{
+		return this.cache.remember('hint', () => {
+			let message = null;
+			if (!this.options.allowEditItem && !this.options.allowCreateItem)
+			{
+				message = Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_DISABLED_FOOTER_ALL_HINT', {
+					'#ADMIN_HINT#': this.errorAdminHint
+				});
+			}
+			else if (!this.options.allowEditItem)
+			{
+				message = Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_DISABLED_FOOTER_EDIT_HINT', {
+					'#ADMIN_HINT#': this.errorAdminHint
+				});
+			}
+			else if (!this.options.allowCreateItem)
+			{
+				message = Loc.getMessage('CATALOG_SELECTOR_SEARCH_POPUP_DISABLED_FOOTER_ADD_HINT', {
+					'#ADMIN_HINT#': this.errorAdminHint
+				});
+			}
+
+			if (!message)
+			{
+				return null;
+			}
+
+			const hintNode = Tag.render`<span class="ui-btn ui-btn-icon-lock ui-btn-link"></span>`;
+			hintNode.dataset.hint = message;
+			hintNode.dataset.hintNoIcon = true;
+
+			BX.UI.Hint.initNode(hintNode);
+
+			return Tag.render`<div class="product-search-selector-disabled-footer-hint">${hintNode}</div>`;
+		});
+	}
+
 	onClickSaveChanges()
 	{
+		if (!this.options.allowEditItem)
+		{
+			return;
+		}
+
 		const lastQuery = this.getDialog().getActiveTab().getLastSearchQuery();
 		this.getDialog().emit('ChangeItem:onClick', { query: lastQuery.query });
 		this.getDialog().clearSearch();
@@ -139,6 +195,11 @@ export default class ProductSearchSelectorFooter extends DefaultFooter
 
 	createItem(): void
 	{
+		if (!this.options.allowCreateItem)
+		{
+			return;
+		}
+
 		const tagSelector = this.getDialog().getTagSelector();
 		if (tagSelector && tagSelector.isLocked())
 		{
@@ -200,9 +261,6 @@ export default class ProductSearchSelectorFooter extends DefaultFooter
 			this.show();
 		}
 
-		if (this.options.allowCreateItem !== false)
-		{
-			this.getQueryContainer().textContent = query;
-		}
+		this.getQueryContainer().textContent = " " + query;
 	}
 }

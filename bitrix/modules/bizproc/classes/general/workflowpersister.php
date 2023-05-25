@@ -5,7 +5,7 @@ use Bitrix\Main;
 /**
 * Workflow persistence service.
 */
-class CBPAllWorkflowPersister
+class CBPWorkflowPersister
 {
 	const LOCK_BY_TIME = false;
 	protected $serviceInstanceId = "";
@@ -19,7 +19,7 @@ class CBPAllWorkflowPersister
 		trigger_error('Clone in not allowed.', E_USER_ERROR);
 	}
 
-	private function __construct()
+	protected function __construct()
 	{
 		$this->serviceInstanceId = uniqid("", true);
 		$this->useGZipCompression = \CBPWorkflowTemplateLoader::useGZipCompression();
@@ -28,7 +28,7 @@ class CBPAllWorkflowPersister
 	/**
 	 * @return self
 	 */
-	public static function GetPersister()
+	public static function getPersister()
 	{
 		if (!isset(self::$instance))
 		{
@@ -39,11 +39,16 @@ class CBPAllWorkflowPersister
 		return self::$instance;
 	}
 
-	private function RetrieveWorkflow($instanceId, $silent = false)
+	private function retrieveWorkflow($instanceId, $silent = false)
 	{
 		global $DB;
 
 		$queryCondition = $this->getLockerQueryCondition();
+
+		if (!$silent && !$this->lock($instanceId))
+		{
+			throw new Exception(GetMessage("BPCGWP_WF_LOCKED"), \CBPRuntime::EXCEPTION_CODE_INSTANCE_LOCKED);
+		}
 
 		$dbResult = $DB->Query(
 			"SELECT WORKFLOW, WORKFLOW_RO, IF (".$queryCondition.", 'Y', 'N') as UPDATEABLE ".
@@ -63,16 +68,27 @@ class CBPAllWorkflowPersister
 			}
 			elseif (!$silent)
 			{
+				$this->unlock($instanceId);
 				throw new Exception(GetMessage("BPCGWP_WF_LOCKED"), \CBPRuntime::EXCEPTION_CODE_INSTANCE_LOCKED);
+			}
+
+			if (!$silent)
+			{
+				$this->unlock($instanceId);
 			}
 
 			return [$arResult["WORKFLOW"], $arResult["WORKFLOW_RO"]];
 		}
 
+		if (!$silent)
+		{
+			$this->unlock($instanceId);
+		}
+
 		throw new Exception(GetMessage("BPCGWP_INVALID_WF"), \CBPRuntime::EXCEPTION_CODE_INSTANCE_NOT_FOUND);
 	}
 
-	protected function InsertWorkflow($id, $buffer, $status, $bUnlocked, array $creationData = [])
+	protected function insertWorkflow($id, $buffer, $status, $bUnlocked, array $creationData = [])
 	{
 		global $DB;
 
@@ -152,12 +168,12 @@ class CBPAllWorkflowPersister
 		}
 	}
 
-	protected function GetOwnershipTimeout()
+	protected function getOwnershipTimeout()
 	{
 		return time() + $this->ownershipDelta;
 	}
 
-	public function LoadWorkflow($instanceId, $silent = false)
+	public function loadWorkflow($instanceId, $silent = false)
 	{
 		[$state, $ro] = $this->RetrieveWorkflow($instanceId, $silent);
 
@@ -169,7 +185,7 @@ class CBPAllWorkflowPersister
 		throw new Exception("WorkflowNotFound");
 	}
 
-	private function RestoreFromSerializedForm($buffer, $ro)
+	protected function restoreFromSerializedForm($buffer, $ro)
 	{
 		if ($this->useGZipCompression)
 		{
@@ -197,15 +213,7 @@ class CBPAllWorkflowPersister
 		return $activity;
 	}
 
-	public static function __InsertWorkflowHack($id, $buffer)
-	{
-		$p = CBPWorkflowPersister::GetPersister();
-		if ($p->useGZipCompression)
-			$buffer = gzcompress($buffer, 9);
-		$p->InsertWorkflow($id, $buffer, 1, true);
-	}
-
-	public function SaveWorkflow(CBPActivity $rootActivity, $bUnlocked)
+	public function saveWorkflow(CBPActivity $rootActivity, $bUnlocked)
 	{
 		$creationData = [];
 		if ($rootActivity->workflow->isNew())
@@ -241,7 +249,7 @@ class CBPAllWorkflowPersister
 		$this->InsertWorkflow($rootActivity->GetWorkflowInstanceId(), $buffer, $workflowStatus, $bUnlocked, $creationData);
 	}
 
-	private function GetSerializedForm(CBPActivity $rootActivity)
+	protected function getSerializedForm(CBPActivity $rootActivity)
 	{
 		$buffer = $rootActivity->Save();
 
@@ -261,7 +269,7 @@ class CBPAllWorkflowPersister
 		return $buffer;
 	}
 
-	public function UnlockWorkflow(CBPActivity $rootActivity)
+	public function unlockWorkflow(CBPActivity $rootActivity)
 	{
 		global $DB;
 
@@ -305,9 +313,49 @@ class CBPAllWorkflowPersister
 			"		AND OWNED_UNTIL < ".$DB->CurrentTimeFunction().") ".
 			") ";
 	}
-}
 
-//Compatibility
-class CBPWorkflowPersister extends CBPAllWorkflowPersister
-{
+	private function lock(string $workflowId): bool
+	{
+		if (!$this->useDbLock())
+		{
+			return true;
+		}
+
+		return $this->lockDb($workflowId);
+	}
+
+	private function unlock(string $workflowId): bool
+	{
+		if (!$this->useDbLock())
+		{
+			return true;
+		}
+
+		return $this->lockDb($workflowId, true);
+	}
+
+	private function useDbLock()
+	{
+		static $use;
+
+		if ($use === null)
+		{
+			$use = (Main\Config\Option::get('bizproc', 'workflow_dblock', 'N') === 'Y');
+		}
+
+		return $use;
+	}
+
+	private function lockDb(string $workflowId, bool $release = false): bool
+	{
+		$name = 'bizproc_' . $workflowId;
+		$connection = Main\Application::getInstance()->getConnection();
+
+		if ($release)
+		{
+			return $connection->unlock($name);
+		}
+
+		return $connection->lock($name);
+	}
 }

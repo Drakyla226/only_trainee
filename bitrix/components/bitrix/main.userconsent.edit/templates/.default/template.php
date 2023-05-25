@@ -4,13 +4,14 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\Uri;
 
 /** @var CMain $APPLICATION */
 /** @var array $arParams */
 /** @var array $arResult */
 
 CUtil::InitJSCore(["popup"]);
-Extension::load(['sidepanel', 'ui.forms']);
+Extension::load(['sidepanel', 'ui.forms', 'ui.design-tokens']);
 
 $bodyClass = $APPLICATION->GetPageProperty('BodyClass');
 $APPLICATION->SetPageProperty('BodyClass', ($bodyClass ? $bodyClass.' ' : '') . 'no-all-paddings no-background user-consent-content-modifier');
@@ -30,7 +31,10 @@ $APPLICATION->IncludeComponent('bitrix:ui.sidepanel.wrappermenu', '', [
 	'VIEW_TARGET' => 'left-panel-consent-edit'
 ]);
 
-$formAction = CHTTP::urlAddParams($APPLICATION->getCurPageParam(), ['save' => 'y']);
+$formAction = (new Uri($APPLICATION->getCurPageParam()))
+	->addParams(['save' => 'y'])
+	->getUri()
+;
 ?>
 
 <div class="main-user-consent-errors">

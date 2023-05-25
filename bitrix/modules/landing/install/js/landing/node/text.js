@@ -3,14 +3,10 @@
 
 	BX.namespace("BX.Landing");
 
-
 	var escapeText = BX.Landing.Utils.escapeText;
 	var headerTagMatcher = BX.Landing.Utils.Matchers.headerTag;
 	var changeTagName = BX.Landing.Utils.changeTagName;
 	var textToPlaceholders = BX.Landing.Utils.textToPlaceholders;
-	var isTable;
-	var currentTable;
-	var isSelectedAll;
 
 
 	/**
@@ -27,11 +23,13 @@
 		BX.Landing.Block.Node.apply(this, arguments);
 
 		this.type = "text";
+		this.tableBaseFontSize = '22';
 
 		this.onClick = this.onClick.bind(this);
 		this.onPaste = this.onPaste.bind(this);
 		this.onDrop = this.onDrop.bind(this);
 		this.onInput = this.onInput.bind(this);
+		this.onKeyDown = this.onKeyDown.bind(this);
 		this.onMousedown = this.onMousedown.bind(this);
 		this.onMouseup = this.onMouseup.bind(this);
 
@@ -41,7 +39,7 @@
 		this.node.addEventListener("paste", this.onPaste);
 		this.node.addEventListener("drop", this.onDrop);
 		this.node.addEventListener("input", this.onInput);
-		this.node.addEventListener("keydown", this.onInput);
+		this.node.addEventListener("keydown", this.onKeyDown);
 
 		document.addEventListener("mouseup", this.onMouseup);
 	};
@@ -73,41 +71,28 @@
 		/**
 		 * Handles change event
 		 * @param {boolean} [preventAdjustPosition]
-		 * @param {boolean} [preventHistory]
+		 * @param {?boolean} [preventHistory = false]
 		 */
 		onChange: function(preventAdjustPosition, preventHistory)
 		{
-			this.superClass.onChange.call(this, arguments);
+			this.superClass.onChange.call(this, preventHistory);
 			if (!preventAdjustPosition)
 			{
 				BX.Landing.UI.Panel.EditorPanel.getInstance().adjustPosition(this.node);
 			}
 			if (!preventHistory)
 			{
-				BX.Landing.History.getInstance().push(
-					new BX.Landing.History.Entry({
-						block: this.getBlock().id,
-						selector: this.selector,
-						command: "editText",
-						undo: this.lastValue,
-						redo: this.getValue()
-					})
-				);
+				BX.Landing.History.getInstance().push();
 			}
-			if (isTable)
+		},
+
+		onKeyDown: function(event)
+		{
+			if (event.code === 'Backspace')
 			{
-				var tBody = currentTable.getElementsByTagName('tBody');
-				var tableContainerWidth = currentTable.getBoundingClientRect().width;
-				var tBodyWidth = tBody[0].getBoundingClientRect().width;
-				if (tableContainerWidth > tBodyWidth)
-				{
-					currentTable.classList.add('landing-table-scroll-hidden');
-				}
-				else
-				{
-					currentTable.classList.remove('landing-table-scroll-hidden');
-				}
+				this.onBackspaceDown(event);
 			}
+			this.onInput(event);
 		},
 
 
@@ -133,7 +118,7 @@
 				var tableFontSize = parseInt(window.getComputedStyle(event.srcElement).getPropertyValue('font-size'));
 				if (event.srcElement.textContent === ''
 					&& event.srcElement.classList.contains('landing-table-td')
-					&& tableFontSize < 22)
+					&& tableFontSize < this.tableBaseFontSize)
 				{
 					event.srcElement.classList.add('landing-table-td-height');
 				}
@@ -190,6 +175,10 @@
 			{
 				var sourceText = event.clipboardData.getData("text/plain");
 				var encodedText = BX.Text.encode(sourceText);
+				if (this.isLinkPasted(sourceText))
+				{
+					encodedText = this.prepareToLink(encodedText);
+				}
 				var formattedHtml = encodedText.replace(new RegExp('\n', 'g'), "<br>");
 				document.execCommand("insertHTML", false, formattedHtml);
 			}
@@ -233,10 +222,17 @@
 					if (this.isTable(event))
 					{
 						this.disableEdit();
+						BX.Landing.Block.Node.Text.currentNode.node.querySelectorAll('.landing-table-container')
+							.forEach(function(table) {
+								if (!table.hasAttribute('table-prepare'))
+								{
+									BX.Landing.Block.Node.Text.prototype.prepareNewTable(table);
+								}
+							})
 						var tableFontSize = parseInt(window.getComputedStyle(event.srcElement).getPropertyValue('font-size'));
 						if (event.srcElement.textContent === ''
 							&& event.srcElement.classList.contains('landing-table-td')
-							&& tableFontSize < 22)
+							&& tableFontSize < this.tableBaseFontSize)
 						{
 							event.srcElement.classList.add('landing-table-td-height');
 						}
@@ -247,6 +243,10 @@
 					}
 					else
 					{
+						if (!this.manifest.textOnly && !BX.Landing.UI.Panel.StylePanel.getInstance().isShown())
+						{
+							BX.Landing.UI.Panel.EditorPanel.getInstance().show(this.node, null, this.buttons);
+						}
 						if (BX.Landing.Block.Node.Text.nodeTableContainerList)
 						{
 							BX.Landing.Block.Node.Text.nodeTableContainerList.forEach(function(tableContainer) {
@@ -347,35 +347,17 @@
 
 				BX.Landing.Block.Node.Text.currentNode = this;
 
-				var buttons = [];
-
-				buttons.push(this.getDesignButton());
+				this.buttons = [];
+				this.buttons.push(this.getDesignButton());
 
 				if (this.isHeader())
 				{
-					buttons.push(this.getChangeTagButton());
+					this.buttons.push(this.getChangeTagButton());
 					this.getChangeTagButton().onChangeHandler = this.onChangeTag.bind(this);
-				}
-
-				if (!this.manifest.textOnly && !this.isTable(event))
-				{
-					BX.Landing.UI.Panel.EditorPanel.getInstance().show(this.node, null, buttons);
 				}
 
 				this.lastValue = this.getValue();
 				this.node.contentEditable = true;
-
-				//delete br tags for new table in Firefox
-				if (this.isTable(event))
-				{
-					BX.Landing.Block.Node.Text.currentNode.node.querySelectorAll('.landing-table-container')
-						.forEach(function(table) {
-							if (!table.hasAttribute('table-prepare'))
-							{
-								BX.Landing.Block.Node.Text.prototype.prepareNewTable(table);
-							}
-						})
-				}
 
 				this.node.setAttribute("title", "");
 			}
@@ -482,7 +464,7 @@
 		{
 			if (this.node.querySelector('.landing-table-container') !== null)
 			{
-				var node = this.node.cloneNode(true);
+				const node = this.node.cloneNode(true);
 				this.prepareTable(node);
 				return textToPlaceholders(node.innerHTML);
 			}
@@ -506,14 +488,13 @@
 		isTable: function(event)
 		{
 			var nodeIsTable = false;
-			if (BX.Landing.Block.Node.Text.currentNode)
+			if (BX.Landing.Block.Node.Text.currentNode && event)
 			{
 				BX.Landing.Block.Node.Text.currentNode.node.querySelectorAll('.landing-table-container')
 					.forEach(function(table) {
 						if (table.contains(event.srcElement))
 						{
 							nodeIsTable = true;
-							currentTable = table;
 						}
 					})
 			}
@@ -642,6 +623,7 @@
 
 			if (event.srcElement.classList.contains('landing-table-th-select-all'))
 			{
+				var isSelectedAll;
 				if (event.srcElement.classList.contains('landing-table-th-select-all-selected'))
 				{
 					isSelectedAll = true;
@@ -909,6 +891,63 @@
 				})
 			})
 			return node;
+		},
+
+		onBackspaceDown: function(event) {
+			var selection = window.getSelection();
+			var position = selection.getRangeAt(0).startOffset;
+			if (position === 0)
+			{
+				var focusNode = selection.focusNode;
+				if (!BX.Type.isNil(focusNode) && focusNode.nodeType !== 3)
+				{
+					if (focusNode.firstChild.nodeType === 3 && focusNode.firstChild.firstChild.nodeType === 3)
+					{
+						focusNode = focusNode.firstChild.firstChild;
+					}
+					else if (focusNode.firstChild.nodeType !== 3)
+					{
+						focusNode = focusNode.firstChild;
+					}
+					else
+					{
+						focusNode = null;
+					}
+				}
+				if (focusNode)
+				{
+					var focusNodeParent = focusNode.parentNode;
+					var allowedNodeName = ['BLOCKQUOTE', 'UL'];
+					if (focusNodeParent && allowedNodeName.includes(focusNodeParent.nodeName))
+					{
+						var focusNodeContainer = document.createElement('div');
+						focusNodeContainer.append(focusNode);
+						focusNodeParent.append(focusNodeContainer);
+					}
+					var contentNode = focusNode.parentNode.parentNode;
+					while (contentNode && !allowedNodeName.includes(contentNode.nodeName))
+					{
+						contentNode = contentNode.parentNode;
+					}
+					if (contentNode && contentNode.childNodes.length === 1)
+					{
+						contentNode.after(focusNode.parentNode);
+						contentNode.remove();
+
+						event.preventDefault();
+					}
+				}
+			}
+		},
+
+		isLinkPasted: function(text) {
+			var reg = /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$/;
+			return !!text.match(reg);
+		},
+
+		prepareToLink: function(text)
+		{
+			return "<a class='g-bg-transparent' href='" + text + "' target='_blank'> " + text + " </a>";
 		},
 	};
 

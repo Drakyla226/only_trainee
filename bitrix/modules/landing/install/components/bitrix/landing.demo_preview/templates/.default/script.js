@@ -61,6 +61,8 @@
 		this.langId = BX.type.isString(params.langId)
 						? params.langId
 						: '';
+		this.folderId = params.folderId || 0;
+		this.urlPreview = params.urlPreview || '';
 
 		this.onCreateButtonClick = proxy(this.onCreateButtonClick, this);
 		this.onCancelButtonClick = proxy(this.onCancelButtonClick, this);
@@ -122,6 +124,12 @@
 			this.setBaseUrl();
 			this.setDefaultColor();
 			this.showPreview();
+			this.buildHeader();
+
+			if (BX.SidePanel.Instance.isReload === true)
+			{
+				this.createButton.click();
+			}
 		},
 
 		setBaseUrl: function(url) {
@@ -224,6 +232,65 @@
 				.then(this.hideLoader());
 		},
 
+		buildHeader: function() {
+			var qrContainer = BX.create('div');
+			new QRCode(qrContainer, {
+				text: this.urlPreview,
+				width: 156,
+				height: 156,
+				colorLight: "transparent"
+			});
+
+			this.showPopupButton = document.querySelector(".mobile-view");
+			if (this.showPopupButton)
+			{
+				var popupPreview = BX.PopupWindowManager.create(
+					'landing-popup-preview',
+					this.showPopupButton,
+					{
+					content: BX.create('div', {
+						props: { className: 'landing-popup-preview-content' },
+						children: [
+							BX.create('div', {
+								props: { className: 'landing-popup-preview-title' },
+								text: this.messages.LANDING_TPL_POPUP_TITLE
+							}),
+							BX.create('div', {
+								props: { className: 'landing-popup-preview-qr' },
+								children: [
+									qrContainer
+								],
+							}),
+							BX.create('div', {
+								props: { className: 'landing-popup-preview-text' },
+								text: this.messages.LANDING_TPL_POPUP_TEXT
+							}),
+						]
+					}),
+					closeIcon : true,
+					closeByEsc : true,
+					noAllPaddings : true,
+					autoHide: true,
+					animation: 'fading-slide',
+					angle: {
+						position: "top",
+						offset: 75
+					},
+					minWidth: 375,
+					maxWidth: 375,
+					contentBackground: "transparent",
+				}
+				);
+
+				this.showPopupButton.addEventListener(
+					'click',
+					function()
+					{
+						popupPreview.toggle();
+					});
+			}
+		},
+
 		/**
 		 * Creates frame if needed
 		 * @return {Function}
@@ -248,13 +315,9 @@
 
 						if (!this.previewFrame.style.width)
 						{
-							var containerWidth = this.imageContainer.clientWidth;
-
 							void style(this.previewFrame, {
-								"width": "1000px",
-								"height": "calc((100vh - 140px) * (100 / "+((containerWidth/1000)*100)+"))",
-								"transform": "scale("+(containerWidth/1000)+") translateZ(0)",
-								"transform-origin": "top left",
+								"width": "100%",
+								"height": "calc(100vh - 69px)",
 								"border": "none"
 							});
 						}
@@ -368,7 +431,7 @@
 					result[this.themesPalette.dataset.name] = this.getActiveColorNode().dataset.value;
 				}
 			}
-			result[this.title.dataset.name] = this.title.value;
+			result[this.title.dataset.name] = this.title.value.replaceAll('&', '').replaceAll('?', '');
 			result[this.description.dataset.name] = this.description.value;
 
 			return result;
@@ -401,7 +464,15 @@
 		{
 			event.preventDefault();
 
-			if(this.isStore() && this.IsLoadedFrame) {
+			const metrika = new BX.Landing.Metrika(true);
+			metrika.sendLabel(
+				null,
+				'createTemplate',
+				event.target.href
+			);
+
+			if (this.isStore() && this.IsLoadedFrame)
+			{
 				this.loaderText = BX.create("div", { props: { className: "landing-template-preview-loader-text"},
 					text: this.messages.LANDING_LOADER_WAIT});
 
@@ -419,10 +490,17 @@
 			{
 				if (this.IsLoadedFrame)
 				{
-					this.showLoader();
-					this.initCatalogParams();
-					this.createCatalog();
+					this.showLoader().then(() => {
+						this.initCatalogParams();
+						this.createCatalog();
+					});
 				}
+			}
+			else if (this.zipInstallPath)
+			{
+				this.finalRedirectAjax(
+					this.getCreateUrl()
+				);
 			}
 			else
 			{
@@ -496,13 +574,17 @@
 		{
 			if (this.zipInstallPath)
 			{
-				var add = [];
-				var value = this.getValue();
-				for (var name in value)
+				let add = [];
+				const value = this.getValue();
+				for (let name in value)
 				{
 					add['additional[' + name + ']'] = value[name];
 				}
+
 				add['additional[siteId]'] = this.siteId;
+				add['additional[folderId]'] = this.folderId;
+				add['from'] = this.createParamsStrFromUrl(url);
+
 				if (this.adminSection && this.langId !== '')
 				{
 					add['lang'] = this.langId;
@@ -510,17 +592,61 @@
 
 				if (typeof top.BX.SidePanel !== 'undefined')
 				{
-					top.BX.SidePanel.Instance.open(
-						addQueryParams(this.zipInstallPath, add),
-						{
-							cacheable: false,
-							allowChangeHistory: false,
-							width: 491,
-							data: {
-								rightBoundary: 0,
-							},
+					const popupImport = document.querySelector(".landing-popup-import");
+					const popupImportLoaderContainer = document.querySelector(".landing-popup-import-loader");
+					const previewFrame = document.querySelector(".preview-left");
+					if (previewFrame)
+					{
+						this.loader.show(popupImportLoaderContainer);
+						BX.Dom.addClass(previewFrame, 'landing-import-start');
+					}
+					add['inSlider'] = 'N';
+					if (this.siteId !== 0)
+					{
+						add['createType'] = 'PAGE';
+					}
+					BX.ajax({
+						method: 'POST',
+						dataType: 'html',
+						url: addQueryParams(this.zipInstallPath, add),
+						onsuccess: data => {
+							const promise = new Promise(function(resolve) {
+								const result = BX.Dom.create('div', {html: data});
+								BX.Dom.style(result, 'display', 'none');
+								popupImport.append(result);
+								let restImportElement;
+								let helperLandingElement;
+								setInterval(
+									() => {
+										restImportElement = result.querySelector('.rest-configuration-wrapper');
+										helperLandingElement = result.querySelector('.app-install-helper-landing');
+										if (restImportElement !== null)
+										{
+											resolve(restImportElement);
+										}
+										if (helperLandingElement !== null)
+										{
+											resolve(helperLandingElement);
+										}
+									},
+									300
+								);
+							});
+							promise.then(result => {
+								if (BX.Dom.hasClass(result, 'rest-configuration-wrapper'))
+								{
+									this.loader.hide();
+									BX.Dom.append(result, popupImport);
+									BX.Dom.style(popupImportLoaderContainer, 'display', 'none');
+								}
+								if (BX.Dom.hasClass(result, 'app-install-helper-landing'))
+								{
+									BX.Dom.removeClass(previewFrame, 'landing-import-start');
+									top.BX.UI.InfoHelper.show('limit_subscription_market_access');
+								}
+							});
 						}
-					);
+					});
 				}
 			}
 			else if (this.disableStoreRedirect)
@@ -632,6 +758,30 @@
 				loader.hide();
 				removeClass(imageContainer, "landing-template-preview-overlay");
 			}
+		},
+
+		createParamsStrFromUrl(url)
+		{
+			var appCodeMatch = url.match(/&app_code=[^&]+/i);
+			var appCode = '';
+			if (appCodeMatch !== null)
+			{
+				appCode = appCodeMatch[0].substr(10);
+			}
+			var titleMatch = url.match(/&title=[^&]+/iu);
+			var title = '';
+			if (titleMatch !== null)
+			{
+				title = titleMatch[0].substr(7);
+			}
+			var hrefUrlMatch = url.match(/&preview_id=[^&]+/i);
+			var hrefId = '';
+			if (hrefUrlMatch !== null)
+			{
+				hrefId = hrefUrlMatch[0].substr(12);
+			}
+
+			return '|' + appCode + '|' + title + '|' + hrefId;
 		}
 	};
 })();

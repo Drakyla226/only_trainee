@@ -5,28 +5,38 @@
 /** @global string $mid */
 $module_id = 'catalog';
 
-use Bitrix\Main\Loader,
-	Bitrix\Main\ModuleManager,
-	Bitrix\Main\Localization\Loc,
-	Bitrix\Main\Config\Option,
-	Bitrix\Main,
-	Bitrix\Currency,
-	Bitrix\Catalog,
-	Bitrix\Sale;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main;
+use Bitrix\Currency;
+use Bitrix\Catalog;
+use Bitrix\Sale;
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 
-define('CATALOG_NEW_OFFERS_IBLOCK_NEED','-1');
-
-$bReadOnly = !$USER->CanDoOperation('catalog_settings');
-if (!$USER->CanDoOperation('catalog_read') && $bReadOnly)
-	return;
+const CATALOG_NEW_OFFERS_IBLOCK_NEED = '-1';
 
 Loader::includeModule('catalog');
+
+$accessController = AccessController::getCurrent();
+$bReadOnly = !$accessController->check(ActionDictionary::ACTION_CATALOG_SETTINGS_ACCESS);
+if (!$accessController->check(ActionDictionary::ACTION_CATALOG_READ) && $bReadOnly)
+{
+	return;
+}
+
 Loc::loadMessages(__FILE__);
 
 $useSaleDiscountOnly = false;
 $saleIsInstalled = ModuleManager::isModuleInstalled('sale');
 if ($saleIsInstalled)
-	$useSaleDiscountOnly = (string)Option::get('sale', 'use_sale_discount_only') == 'Y';
+{
+	$useSaleDiscountOnly = Option::get('sale', 'use_sale_discount_only') == 'Y';
+}
+
+$crmInstalled = ModuleManager::isModuleInstalled('crm');
 
 $applyDiscSaveModeList = CCatalogDiscountSave::GetApplyModeList(true);
 
@@ -117,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 		}
 	}
 
-	$default_outfile_action = (isset($_REQUEST['default_outfile_action']) ? (string)$_REQUEST['default_outfile_action'] : '');
+	$default_outfile_action = (string)($_REQUEST['default_outfile_action'] ?? '');
 	if ($default_outfile_action!="D" && $default_outfile_action!="H" && $default_outfile_action!="F")
 	{
 		$default_outfile_action = "D";
@@ -151,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 	foreach ($serialSelectFields as &$oneSelect)
 	{
 		$fieldsClear = array();
-		$fieldsRaw = (isset($_POST[$oneSelect]) ? $_POST[$oneSelect] : array());
+		$fieldsRaw = ($_POST[$oneSelect] ?? []);
 		if (!is_array($fieldsRaw))
 		{
 			$fieldsRaw = array($fieldsRaw);
@@ -242,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 	if ($USER->IsAdmin() && CBXFeatures::IsFeatureEnabled('SaleRecurring'))
 	{
 		$arOldAvailContentGroups = array();
-		$oldAvailContentGroups = (string)Option::get('catalog', 'avail_content_groups');
+		$oldAvailContentGroups = Option::get('catalog', 'avail_content_groups');
 		if ($oldAvailContentGroups != '')
 			$arOldAvailContentGroups = explode(",", $oldAvailContentGroups);
 		if (!empty($arOldAvailContentGroups))
@@ -281,22 +291,25 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 		'save_product_without_price',
 		'save_product_with_empty_price_range',
 		'show_catalog_tab_with_offers',
+		'use_offer_marking_code_group',
 		'default_product_vat_included',
 		'product_form_show_offers_iblock',
 		'product_form_simple_search',
 		'product_form_show_offer_name',
-		'enable_processing_deprecated_events'
+		'enable_processing_deprecated_events',
 	);
 	if ($enabledCommonCatalog)
 	{
 		$checkboxFields[] = 'product_card_slider_enabled';
 	}
+	if (!$crmInstalled)
+	{
+		$checkboxFields[] = 'show_store_shipping_center';
+	}
 
 	foreach ($checkboxFields as $oneCheckbox)
 	{
-		if (empty($_POST[$oneCheckbox]) || !is_string($_POST[$oneCheckbox]))
-			continue;
-		$value = (string)$_POST[$oneCheckbox];
+		$value = (string)($_POST[$oneCheckbox] ?? '');
 		if ($value !== 'Y' && $value !== 'N')
 			continue;
 		Option::set('catalog', $oneCheckbox, $value, '');
@@ -326,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 	}
 	unset($oldProcessingEvents, $newProcessingEvents);
 
-	$strUseStoreControlBeforeSubmit = (string)Option::get('catalog', 'default_use_store_control');
+	$strUseStoreControlBeforeSubmit = Option::get('catalog', 'default_use_store_control');
 	$strUseStoreControl = (isset($_POST['use_store_control']) && (string)$_POST['use_store_control'] === 'Y' ? 'Y' : 'N');
 
 	if ($strUseStoreControlBeforeSubmit != $strUseStoreControl)
@@ -353,7 +366,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 				$strWarning .= Loc::getMessage("CAT_STORE_SYNCHRONIZE_WARNING_1");
 			}
 		}
-		elseif($strUseStoreControl == 'N')
+		else
 		{
 			$strWarning .= Loc::getMessage("CAT_STORE_DEACTIVATE_NOTICE_1");
 		}
@@ -395,8 +408,6 @@ if ($_SERVER['REQUEST_METHOD'] == "POST" && !empty($_POST['Update']) && !$bReadO
 				Option::set('catalog', 'get_discount_percent_from_base_price', $discountPercent, '');
 			unset($discountPercent);
 		}
-/*		$strDiscountVat = (!empty($_REQUEST['discount_vat']) && $_REQUEST['discount_vat'] == 'N' ? 'N' : 'Y');
-		Option::set('catalog', 'discount_vat', $strDiscountVat, ''); */
 	}
 
 	$bNeedAgent = false;
@@ -1288,12 +1299,14 @@ if ($USER->IsAdmin())
 $tabControl = new CAdminTabControl("tabControl", $aTabs, true, true);
 
 $currentSettings = array();
-$currentSettings['discsave_apply'] = (string)Option::get('catalog', 'discsave_apply');
-$currentSettings['get_discount_percent_from_base_price'] = (string)Option::get(($saleIsInstalled ? 'sale' : 'catalog'), 'get_discount_percent_from_base_price');
-$currentSettings['save_product_with_empty_price_range'] = (string)Option::get('catalog', 'save_product_with_empty_price_range');
-$currentSettings['default_product_vat_included'] = (string)Option::get('catalog', 'default_product_vat_included');
-$currentSettings['enable_processing_deprecated_events'] = (string)Option::get('catalog', 'enable_processing_deprecated_events');
-$currentSettings['product_card_slider_enabled'] = (string)Option::get('catalog', 'product_card_slider_enabled');
+$currentSettings['discsave_apply'] = Option::get('catalog', 'discsave_apply');
+$currentSettings['get_discount_percent_from_base_price'] = Option::get(($saleIsInstalled ? 'sale' : 'catalog'), 'get_discount_percent_from_base_price');
+$currentSettings['save_product_with_empty_price_range'] = Option::get('catalog', 'save_product_with_empty_price_range');
+$currentSettings['use_offer_marking_code_group'] = Option::get('catalog', 'use_offer_marking_code_group');
+$currentSettings['default_product_vat_included'] = Option::get('catalog', 'default_product_vat_included');
+$currentSettings['enable_processing_deprecated_events'] = Option::get('catalog', 'enable_processing_deprecated_events');
+$currentSettings['product_card_slider_enabled'] = Option::get('catalog', 'product_card_slider_enabled');
+$currentSettings['show_store_shipping_center'] = Option::get('catalog', 'show_store_shipping_center');
 
 $strShowCatalogTab = Option::get('catalog', 'show_catalog_tab_with_offers');
 $strSaveProductWithoutPrice = Option::get('catalog', 'save_product_without_price');
@@ -1419,6 +1432,22 @@ if ($enabledCommonCatalog)
 		<input type="checkbox" name="show_catalog_tab_with_offers" id="show_catalog_tab_with_offers_y" value="Y"<?if ('Y' == $strShowCatalogTab) echo " checked";?>>
 	</td>
 </tr>
+<?php
+if (Catalog\Product\SystemField\MarkingCodeGroup::isAllowed()):
+	$check = ($currentSettings['use_offer_marking_code_group'] === 'Y' ? ' checked' : '');
+	?>
+	<tr>
+		<td style="width: 40%;">
+			<span id="hint_use_offer_marking_code_group"></span> <label for="use_offer_marking_code_group"><?= Loc::getMessage('CAT_USE_OFFER_MARKING_CODE_GROUP'); ?></label>
+		</td>
+		<td>
+			<input type="hidden" name="use_offer_marking_code_group" id="use_offer_marking_code_group_n" value="N">
+			<input type="checkbox" name="use_offer_marking_code_group" id="use_offer_marking_code_group_y" value="Y"<?= $check; ?>>
+		</td>
+	</tr>
+	<?php
+endif;
+?>
 <tr>
 	<td style="width: 40%;"><label for="default_product_vat_included"><? echo Loc::getMessage("CAT_PRODUCT_DEFAULT_VAT_INCLUDED"); ?></label></td>
 	<td>
@@ -1448,7 +1477,7 @@ if ($enabledCommonCatalog)
 	</td>
 </tr>
 <?
-if (!$readOnly)
+if (!$bReadOnly)
 {
 ?>
 <tr>
@@ -1508,6 +1537,19 @@ if ($saleIsInstalled && Loader::includeModule('sale'))
 	</tr>
 	<?
 }
+if (!$crmInstalled)
+{
+	$checked = ($currentSettings['show_store_shipping_center'] === 'Y' ? ' checked' : '');
+	?>
+	<td style="width: 40%;">
+		<span id="hint_show_store_shipping_center"></span> <label for="show_store_shipping_center"><?= Loc::getMessage('CAT_SHOW_STORE_SHIPPING_CENTER'); ?></label>
+	</td>
+	<td>
+		<input type="hidden" name="show_store_shipping_center" id="show_store_shipping_center_n" value="N">
+		<input type="checkbox" name="show_store_shipping_center" id="show_store_shipping_center_y" value="Y"<?= $checked; ?>>
+	</td>
+	<?php
+}
 if (!$useSaleDiscountOnly)
 {
 	if (Catalog\Config\Feature::isCumulativeDiscountsEnabled())
@@ -1553,17 +1595,8 @@ if (!$useSaleDiscountOnly)
 
 </tr>
 <?
-/*
-$strDiscountVat = Option::get('catalog', 'discount_vat');
-?>
-<tr>
-	<td width="40%"><label for="discount_vat_y"><? echo Loc::getMessage("CAT_DISCOUNT_VAT"); ?></label></td>
-	<td width="60%"><input type="hidden" name="discount_vat" id="discount_vat_n" value="N"><input type="checkbox" name="discount_vat" id="discount_vat_y" value="Y"<?if ('Y' == $strDiscountVat) echo " checked";?>></td>
-</tr>
-<?
-*/
 }
-$enableViewedProducts = (string)Option::get('catalog', 'enable_viewed_products');
+$enableViewedProducts = Option::get('catalog', 'enable_viewed_products');
 $viewedTime = (int)Option::get('catalog', 'viewed_time');
 $viewedCount = (int)Option::get('catalog', 'viewed_count');
 $viewedPeriod = (int)Option::get('catalog', 'viewed_period');
@@ -1734,7 +1767,7 @@ if ($canUseYandexMarket)
 	<td style="vertical-align: top;">
 <?
 $arVal = array();
-$strVal = (string)Option::get('catalog', 'allowed_product_fields');
+$strVal = Option::get('catalog', 'allowed_product_fields');
 if ($strVal != '')
 {
 	$arVal = array_fill_keys(explode(',', $strVal), true);
@@ -1759,7 +1792,7 @@ unset($productFields);
 	<td style="vertical-align: top;">
 <?
 $arVal = array();
-$strVal = (string)Option::get('catalog', 'allowed_price_fields');
+$strVal = Option::get('catalog', 'allowed_price_fields');
 if ($strVal != '')
 {
 	$arVal = array_fill_keys(explode(',', $strVal), true);
@@ -1791,7 +1824,7 @@ unset($oneField, $priceFields);
 	<td>
 <?
 $arVal = array();
-$strVal = (string)Option::get('catalog', 'allowed_group_fields');
+$strVal = Option::get('catalog', 'allowed_group_fields');
 if ($strVal != '')
 {
 	$arVal = array_fill_keys(explode(',', $strVal), true);
@@ -1813,7 +1846,7 @@ unset($sectionFields);
 	<td style="vertical-align: top;">
 <?
 $arVal = array();
-$strVal = (string)Option::get('catalog', 'allowed_currencies');
+$strVal = Option::get('catalog', 'allowed_currencies');
 if ($strVal != '')
 {
 	$arVal = array_fill_keys(explode(',', $strVal), true);
@@ -2134,7 +2167,7 @@ if ($USER->IsAdmin())
 		$tabControl->BeginNextTab();
 
 		$arVal = array();
-		$strVal = (string)Option::get('catalog', 'avail_content_groups');
+		$strVal = Option::get('catalog', 'avail_content_groups');
 		if ($strVal != '')
 			$arVal = explode(',', $strVal);
 
@@ -2170,8 +2203,13 @@ $tabControl->Buttons();
 <input type="button" <?if ($bReadOnly) echo "disabled" ?> title="<?echo Loc::getMessage("CAT_OPTIONS_BTN_HINT_RESTORE_DEFAULT")?>" onclick="RestoreDefaults();" value="<?echo Loc::getMessage("CAT_OPTIONS_BTN_RESTORE_DEFAULT")?>">
 </form>
 <script type="text/javascript">
+BX.hint_replace(
+	BX('hint_use_offer_marking_code_group'),
+	'<?=CUtil::JSEscape(Loc::getMessage('USE_OFFER_MARKING_CODE_GROUP_HINT')); ?>'
+);
 BX.hint_replace(BX('hint_reservation'), '<?=CUtil::JSEscape(Loc::getMessage('CAT_ENABLE_RESERVATION_HINT')); ?>');
 BX.hint_replace(BX('hint_show_catalog_tab_with_offers'), '<?=CUtil::JSEscape(Loc::getMessage('CAT_ENABLE_SHOW_CATALOG_TAB_WITH_OFFERS')); ?>');
+BX.hint_replace(BX('hint_show_store_shipping_center'), '<?=CUtil::JSEscape(Loc::getMessage('CAT_SHOW_STORE_SHIPPING_CENTER_HINT')); ?>');
 </script>
 <?
 $tabControl->End();
@@ -2399,9 +2437,9 @@ if (!$useSaleDiscountOnly || $catalogCount > 0)
 			unset($userListID[0]);
 		if (!empty($userListID))
 		{
-			$strClearQuantityDate = (string)Option::get('catalog', 'clear_quantity_date');
-			$strClearQuantityReservedDate = (string)Option::get('catalog', 'clear_reserved_quantity_date');
-			$strClearStoreDate = (string)Option::get('catalog', 'clear_store_date');
+			$strClearQuantityDate = Option::get('catalog', 'clear_quantity_date');
+			$strClearQuantityReservedDate = Option::get('catalog', 'clear_reserved_quantity_date');
+			$strClearStoreDate = Option::get('catalog', 'clear_store_date');
 
 			$arUserList = array();
 			$strNameFormat = CSite::GetNameFormat(true);
@@ -2435,13 +2473,18 @@ if (!$useSaleDiscountOnly || $catalogCount > 0)
 		}
 		$boolStoreExists = false;
 		$arStores = array();
-		$arStores[] = array("ID" => -1, "ADDRESS" => Loc::getMessage("CAT_ALL_STORES"));
+		$arStores[] = [
+			'ID' => -1,
+			'TITLE' => '',
+			'ADDRESS' => Loc::getMessage("CAT_ALL_STORES"),
+			'SORT' => 0,
+		];
 		$rsStores = CCatalogStore::GetList(
 			array('SORT' => 'ASC', 'ID' => 'ASC'),
 			array('ACTIVE' => 'Y'),
 			false,
 			false,
-			array('ID', 'TITLE', 'ADDRESS')
+			array('ID', 'TITLE', 'ADDRESS', 'SORT')
 		);
 		while ($arStore = $rsStores->GetNext())
 		{

@@ -4,6 +4,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use \Bitrix\Landing\Folder;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Site;
 use \Bitrix\Landing\Landing;
@@ -159,6 +160,7 @@ class LandingViewComponent extends LandingBaseComponent
 				$landing
 			),
 			'sliderConditions' => $this->getSliderConditions(),
+			'sliderFullConditions' => $this->getSliderFullConditions(),
 			'rights' => [
 				'settings' => in_array(
 					Rights::ACCESS_TYPES['sett'],
@@ -373,7 +375,12 @@ class LandingViewComponent extends LandingBaseComponent
 		{
 			$pages = $this->getLandings(array(
 				'filter' => array(
-					'SITE_ID' => $landing->getSiteId()
+					'SITE_ID' => $landing->getSiteId(),
+					[
+						'LOGIC' => 'OR',
+						['FOLDER_ID' => null],
+						['!FOLDER_ID' => Folder::getFolderIdsForSite($landing->getSiteId(), ['=DELETED' => 'Y']) ?: [-1]]
+					]
 				)
 			));
 			foreach ($pages as $page)
@@ -649,6 +656,7 @@ class LandingViewComponent extends LandingBaseComponent
 				$options = $event->getParameter('options');
 				$meta = $landing->getMeta();
 				$options['url'] = $arResult['~LANDING_FULL_URL'] ?? $landing->getPublicUrl();
+				$options['allow_svg'] = Manager::getOption('allow_svg_content') === 'Y';
 				$options['folder_id'] = $landing->getFolderId();
 				$options['version'] = Manager::getVersion();
 				$options['default_section'] = $this->getCurrentBlockSection($type);
@@ -883,9 +891,9 @@ class LandingViewComponent extends LandingBaseComponent
 							}
 						}
 						if (
-							!empty($block['type']) &&
-							!in_array($type, $block['type']) &&
-							($b24 || $block['type'] == 'null')
+							!empty($block['type'])
+							&& !in_array($type, $block['type'], true)
+							&& ($b24 || in_array('NULL', $block['type'], true))
 						)
 						{
 							unset($section['items'][$code]);
@@ -1119,7 +1127,13 @@ class LandingViewComponent extends LandingBaseComponent
 		$sliderConditions = [];
 
 		$sliderUrlKeys = [
-			'landing_edit', 'site_edit', 'site_show', 'landing_design', 'site_design'
+			'landing_edit',
+			'site_edit',
+			'site_show',
+			'landing_design',
+			'site_design',
+			'landing_settings',
+			'site_settings',
 		];
 		$sefUrls = isset($this->arParams['SEF'])
 					? $this->arParams['SEF']
@@ -1148,6 +1162,18 @@ class LandingViewComponent extends LandingBaseComponent
 		}
 
 		return array_values($sliderConditions);
+	}
+
+	/**
+	 * Gets conditions for slider init, open in fullscrean
+	 * @return array
+	 */
+	public function getSliderFullConditions(): array
+	{
+		$addUrl = $this->getUrlAdd(false);
+		$addUrl = strpos($addUrl, '?') ? explode('?', $addUrl)[0] : $addUrl;
+
+		return [$addUrl];
 	}
 
 	/**
@@ -1243,27 +1269,6 @@ class LandingViewComponent extends LandingBaseComponent
 					$asset->disableOptimizeCss();
 					$asset->disableOptimizeJs();
 				}
-				// get settings placements
-				$this->arResult['PLACEMENTS_SETTINGS'] = array();
-				if (\Bitrix\Main\Loader::includeModule('rest'))
-				{
-					$res = \Bitrix\Rest\PlacementTable::getList(array(
-						'select' => array(
-							'ID', 'APP_ID', 'PLACEMENT', 'TITLE',
-							'APP_NAME' => 'REST_APP.APP_NAME'
-						),
-						'filter' => array(
-							'=PLACEMENT' => 'LANDING_SETTINGS'
-						),
-						'order' => array(
-							'ID' => 'DESC'
-						)
-					));
-					while ($row = $res->fetch())
-					{
-						$this->arResult['PLACEMENTS_SETTINGS'][] = $row;
-					}
-				}
 				// can publication / edit settings for page?
 				if ($this->arResult['SPECIAL_TYPE'])
 				{
@@ -1315,7 +1320,6 @@ class LandingViewComponent extends LandingBaseComponent
 					$this->arResult['SITE'],
 					$rights
 				);
-				$this->arResult['TOP_PANEL_CONFIG']['placements'] = $this->arResult['PLACEMENTS_SETTINGS'];
 
 				if (\Bitrix\Main\Loader::includeModule('bitrix24'))
 				{

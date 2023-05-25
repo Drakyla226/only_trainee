@@ -20,8 +20,7 @@ $MESS["C2IT_BOUND_LR1"] = "Price \"#TYPE#\": lower bound of the quantity (#LEFT#
 $MESS["C2IT_BOUND_RECOUNT"] = "Saving a product may incur recalculation of bounds.";
 $MESS["C2IT_BOUND_WRONG"] = "Quantity bounds are incorrect:";
 $MESS["C2IT_CAN_BUY_NULL_EXT"] = "Make out-of-stock items available for purchase including those with negative quantity";
-$MESS["C2IT_COST_CURRENCY"] = "Purchase price currency";
-$MESS["C2IT_COST_PRICE"] = "Purchase price";
+$MESS["C2IT_COST_PRICE_EXT"] = "Purchase price:";
 $MESS["C2IT_CURRENCY"] = "Currency";
 $MESS["C2IT_DEFAULT_NEGATIVE"] = "default";
 $MESS["C2IT_DISCOUNTS"] = "Discounts";
@@ -78,6 +77,8 @@ $MESS["C2IT_PRICE_TYPE"] = "Price type";
 $MESS["C2IT_PROD_AMOUNT"] = "Quantity";
 $MESS["C2IT_PROD_QUANTITY_RESERVED"] = "Reserved";
 $MESS["C2IT_REGULAR"] = "Recurrent";
+$MESS["C2IT_SERVICE_COST_PRICE"] = "Cost of service:";
+$MESS["C2IT_SERVICE_SIMPLE_AVAILABLE"] = "Availability:";
 $MESS["C2IT_SINGLE"] = "One-time";
 $MESS["C2IT_SITE"] = "Site";
 $MESS["C2IT_STORE"] = "Warehouses";
@@ -108,6 +109,8 @@ $MESS["CAT_E_PRICE_EXT"] = "You are about to save the product item in simplified
 All prices that have been previously specified in extended mode will be irreparably LOST.
 Are sure you want to continue?";
 $MESS["CAT_VAT"] = "Tax rate";
+$MESS["CAT_VAT_ID_CATALOG_HINT"] = "If a product doesn't specify a tax rate, the catalog tax rate (#VAT_NAME#) will be used for calculations. You can change it on the catalog settings page.";
+$MESS["CAT_VAT_ID_EMPTY"] = "not selected";
 $MESS["CAT_VAT_INCLUDED"] = "Tax included in price";
 $MESS["CAT_YES"] = "yes";
 $MESS["ENABLE_STORE_TRACE"] = "Enable stock control";

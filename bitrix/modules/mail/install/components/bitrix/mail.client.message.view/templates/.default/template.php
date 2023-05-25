@@ -1,13 +1,24 @@
 <?php
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Mail\Helper;
 
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
 
-\Bitrix\Main\UI\Extension::load(['ui.icons.b24']);
+\Bitrix\Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
+	'ui.icons.b24',
+	'ui.alerts',
+]);
 
 $bodyClass = $APPLICATION->getPageProperty('BodyClass', false);
 $APPLICATION->setPageProperty('BodyClass', trim(sprintf('%s %s', $bodyClass, 'pagetitle-toolbar-field-view pagetitle-mail-view')));
+
+$emailsLimitToSendMessage = Helper\LicenseManager::getEmailsLimitToSendMessage();
 
 $message = $arResult['MESSAGE'];
 
@@ -212,16 +223,16 @@ $renderBindLink = function ($item)
 
 <script type="text/javascript">
 
-<? $emailMaxSize = (int) \Bitrix\Main\Config\Option::get('main', 'max_file_size', 0); ?>
-
 BX.message({
+	EMAILS_LIMIT_TO_SEND_MESSAGE: '<?=$emailsLimitToSendMessage?>',
 	MAIL_MESSAGE_AJAX_ERROR: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_AJAX_ERROR')) ?>',
+	MAIL_MESSAGE_NEW_TARIFF_RESTRICTION: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_NEW_TARIFF_RESTRICTION', ['#COUNT#'=> $emailsLimitToSendMessage])) ?>',
 	MAIL_MESSAGE_NEW_EMPTY_RCPT: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_NEW_EMPTY_RCPT')) ?>',
 	MAIL_MESSAGE_NEW_UPLOADING: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_NEW_UPLOADING')) ?>',
-	MAIL_MESSAGE_MAX_SIZE: <?=$emailMaxSize ?>,
+	MAIL_MESSAGE_MAX_SIZE: <?=Helper\Message::getMaxAttachedFilesSize() ?>,
 	MAIL_MESSAGE_MAX_SIZE_EXCEED: '<?=\CUtil::jsEscape(Loc::getMessage(
 		'MAIL_MESSAGE_MAX_SIZE_EXCEED',
-		['#SIZE#' => \CFile::formatSize($emailMaxSize)]
+		['#SIZE#' => \CFile::formatSize(Helper\Message::getMaxAttachedFilesSizeAfterEncoding(),1)]
 	)) ?>',
 	MAIL_MESSAGE_READ_CONFIRMED_SHORT: '<?=\CUtil::jsEscape(Loc::getMessage('MAIL_MESSAGE_READ_CONFIRMED_SHORT')) ?>',
 	MAIL_MESSAGE_DELETE_CONFIRM: '<?=\CUtil::jsEscape(Loc::getMessage('CRM_ACT_EMAIL_DELETE_CONFIRM')) ?>',

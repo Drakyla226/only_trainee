@@ -16,13 +16,14 @@ $MESS["MAIL_CLIENT_DENIED"] = "Доступ запрещен";
 $MESS['MAIL_CLIENT_MAILBOX_ADD'] = "Подключить новый";
 
 $MESS['MAIL_CLIENT_MAILBOX_SYNC_BAR'] = "Синхронизация";
-$MESS['MAIL_CLIENT_MAILBOX_SYNC_BAR_INTERRUPTED'] = "Синхронизация прервана";
+$MESS['MAIL_CLIENT_MAILBOX_SYNC_BAR_INTERRUPTED'] = "Мы не можем выполнить синхронизацию.";
 $MESS['MAIL_CLIENT_MAILBOX_INDEX_BAR'] = "Индексация";
 
 $MESS["MAIL_DISK_ACTION_SAVE_TO_OWN_FILES"] = "Сохранить на Битрикс24.Диск";
 $MESS["MAIL_DISK_FILE_DOWNLOAD_ARCHIVE"] = "Скачать все файлы одним архивом";
 
 $MESS["MAIL_MESSAGE_NEW_EMPTY_RCPT"] = "Пожалуйста, укажите получателей в поле 'Кому'";
+$MESS["MAIL_MESSAGE_NEW_TARIFF_RESTRICTION"] = "На вашем тарифном плане действуют ограничения:<br/>\"Кому\", \"Копия\", \"Скрытая копия\" - #COUNT# Email (получатель)";
 $MESS["MAIL_MESSAGE_NEW_UPLOADING"] = "Пожалуйста, дождитесь окончания загрузки вложений";
 $MESS["MAIL_MESSAGE_MAX_SIZE_EXCEED"] = "Превышен максимальный размер вложений (#SIZE#)";
 
@@ -152,6 +153,7 @@ $MESS['MAIL_MESSAGE_LIST_FILTER_ATTACHMENTS'] = "С вложениями";
 
 $MESS['MAIL_MESSAGE_LIST_FILTER_PRESET_SPAM'] = "Спам";
 $MESS['MAIL_MESSAGE_LIST_FILTER_PRESET_INCOME'] = "Входящие";
+$MESS['MAIL_MESSAGE_LIST_FILTER_ANY_DIR'] = "Любая папка";
 $MESS['MAIL_MESSAGE_LIST_FILTER_PRESET_OUTCOME'] = "Отправленные";
 $MESS['MAIL_MESSAGE_LIST_FILTER_PRESET_TRASH'] = "Удаленные";
 $MESS['MAIL_MESSAGE_LIST_FILTER_PRESET_BIND_TASK'] = "Задача";
@@ -165,6 +167,7 @@ $MESS['MAIL_MESSAGE_LIST_ADDRESSBOOK_LINK'] = "Адресная книга";
 $MESS['MAIL_MESSAGE_LIST_BLACKLIST_LINK'] = "Черный список";
 $MESS['MAIL_MESSAGE_LIST_SIGNATURE_LINK'] = "Настроить подпись";
 $MESS['MAIL_MESSAGE_LIST_COLUMN_MANAGEMENT'] = "Управление колонками";
+$MESS['MAIL_MESSAGE_LIST_INTEGRATION_WITH_CRM'] = "Интеграция с CRM";
 
 $MESS['MAIL_MESSAGE_LIST_CONFIRM_DELETE'] = "Письма будут безвозвратно удалены. <br>Вы никак не сможете их восстановить.";
 $MESS['MAIL_MESSAGE_LIST_CONFIRM_TITLE'] = "Подтвердите действие";
@@ -207,3 +210,6 @@ $MESS["INTERFACE_MAIL_CHECK_ALL"] = "Отметить все/снять отме
 $MESS["MAIL_READ_ALL_BUTTON"] = "Прочитать всё";
 
 $MESS["MAIL_MESSAGE_LIST_COLUMN_ICAL"] = "Приглашение на мероприятие";
+
+$MESS["MAIL_MESSAGE_WARNING_GO_TO_MAILBOX"] = "Ошибка синхронизации. Открыть письмо в #LINK#";
+$MESS["MAIL_MESSAGE_WARNING_SYNC_ERROR"] = "Ошибка синхронизации";

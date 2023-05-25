@@ -362,18 +362,19 @@ class EnumType extends BaseType
 
 	public static function getDefaultValue(array $userField, array $additionalParameters = [])
 	{
-		static::getEnumList($userField, $additionalParameters);
-
 		if (!isset($userField['ENUM']))
 		{
 			$userField['ENUM'] = [];
 			$enumValuesManager = new \CUserFieldEnum();
 			$dbRes = $enumValuesManager->getList(
 				[],
-				['USER_FIELD_ID' => $userField['ID']]
+				[
+					'USER_FIELD_ID' => $userField['ID'],
+					'DEF' => 'Y',
+				]
 			);
 
-			while($enumValue = $dbRes->fetch())
+			while ($enumValue = $dbRes->fetch())
 			{
 				$userField['ENUM'][] = [
 					'ID' => $enumValue['ID'],
@@ -389,17 +390,15 @@ class EnumType extends BaseType
 		return static::getFieldValue($userField, $additionalParameters);
 	}
 
-	public function onBeforeSave($userField, $value)
+	public static function onBeforeSave($userField, $value)
 	{
 		return ($userField['MULTIPLE'] !== 'Y' && is_array($value)) ? array_shift($value) : $value;
 	}
 
 	public static function getFieldValue(array $userField, array $additionalParameters = [])
 	{
-		if(
-			!$additionalParameters['bVarsFromForm']
-			&& !isset($additionalParameters['VALUE'])
-		)
+		$bVarsFromForm = ($additionalParameters['bVarsFromForm'] ?? false);
+		if(!$bVarsFromForm && !isset($additionalParameters['VALUE']))
 		{
 			if(
 				isset($userField['ENTITY_VALUE_ID'], $userField['ENUM'])

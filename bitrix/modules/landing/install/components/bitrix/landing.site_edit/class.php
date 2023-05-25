@@ -205,7 +205,7 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 			{
 				$this->id = 0;
 				$this->arParams['SITE_ID'] = 0;
-				$this->addError('ACCESS_DENIED', '', true);
+				$this->addError('LANDING_ERROR_SETTINGS_ACCESS_DENIED', '', true);
 			}
 
 			if (!$this->id)
@@ -433,7 +433,7 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 			{
 				$prepareColors['allColors'][] = $colorItem['color'];
 			}
-			if (isset($colorItem['base']) && $colorItem['base'] === true)
+			if (isset($colorItem['base']) && $colorItem['base'] === true && $colorItem['baseInSettings'] !== false)
 			{
 				$prepareColors['startColors'][] = $colorItem['color'];
 			}

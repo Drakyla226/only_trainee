@@ -1,12 +1,15 @@
 "use strict";
 
 import { Util } from 'calendar.util';
-import { Type, Event, Loc, Tag, Dom, Runtime, Text } from 'main.core';
+import { Type, Event, Loc, Dom, Runtime, Text, Tag } from 'main.core';
 import { Entry, EntryManager } from 'calendar.entry';
-import { MeetingStatusControl, Reminder } from 'calendar.controls';
+import { MeetingStatusControl } from 'calendar.controls';
 import { BaseEvent, EventEmitter } from 'main.core.events';
 import { Planner } from 'calendar.planner';
 import { ControlButton } from 'intranet.control-button';
+import { BitrixVue } from 'ui.vue3';
+import { ViewEventSlider } from './view-event-slider';
+import { CalendarSection } from 'calendar.sectionmanager';
 
 export class EventViewForm {
 	permissions = {};
@@ -17,6 +20,8 @@ export class EventViewForm {
 	RELOAD_FINISHED = 'RELOAD_FINISHED';
 	reloadStatus = null;
 	entityChanged = false;
+	LOAD_DELAY = 500;
+	app = null;
 
 	constructor(options = {})
 	{
@@ -31,9 +36,13 @@ export class EventViewForm {
 		this.BX = Util.getBX();
 
 		this.sliderOnLoad = this.onLoadSlider.bind(this);
-		this.handlePullBind = this.handlePull.bind(this);
+		this.showUserListPopupBind = this.showUserListPopup.bind(this);
 		this.keyHandlerBind = this.keyHandler.bind(this);
 		this.destroyBind = this.destroy.bind(this);
+
+		this.loadPlannerDataDebounce = Runtime.debounce(this.loadPlannerData, this.LOAD_DELAY, this);
+
+		this.pullEventList = new Set();
 	}
 
 	initInSlider(slider, promiseResolve)
@@ -41,9 +50,7 @@ export class EventViewForm {
 		this.slider = slider;
 		EventEmitter.subscribe(slider, "SidePanel.Slider:onLoad", this.sliderOnLoad);
 		EventEmitter.subscribe(slider, "SidePanel.Slider:onCloseComplete", this.destroyBind);
-
 		Event.bind(document, 'keydown', this.keyHandlerBind);
-		EventEmitter.subscribe('onPullEvent-calendar', this.handlePullBind);
 
 		this.createContent(slider).then(function(html)
 			{
@@ -66,15 +73,18 @@ export class EventViewForm {
 	{
 		EventEmitter.unsubscribe(this.slider, "SidePanel.Slider:onLoad", this.sliderOnLoad);
 		EventEmitter.unsubscribe(this.slider, "SidePanel.Slider:onCloseComplete", this.destroyBind);
-		EventEmitter.unsubscribe('onPullEvent-calendar', this.handlePullBind);
 		Event.unbind(document, 'keydown', this.keyHandlerBind);
+
+		if (this.app)
+		{
+			this.app.unmount();
+		}
 
 		if (this.intranetControllButton && this.intranetControllButton.destroy)
 		{
 			this.intranetControllButton.destroy();
 		}
 
-		// this.BX.SidePanel.Instance.destroy(this.sliderId);
 		Util.closeAllPopups();
 		this.opened = false;
 	}
@@ -100,57 +110,100 @@ export class EventViewForm {
 		this.reloadStatus = this.RELOAD_FINISHED;
 	}
 
+	loadComponentAssets(json)
+	{
+		if (!json)
+		{
+			return;
+		}
+		let assets = JSON.parse(json).data.assets;
+		let promise = new Promise(function(resolve, reject) {
+			let css = assets.css;
+			BX.load(css, function() {
+				BX.loadScript(assets.js, resolve);
+			});
+		});
+		promise.then(function() {
+			let strings = assets.string;
+			let stringAsset = strings.join('\n');
+			BX.html(document.head, stringAsset, { useAdjacentHTML: true });
+		});
+	}
+
 	createContent(slider)
 	{
 		return new Promise((resolve) => {
-			this.BX.ajax.runAction('calendar.api.calendarajax.getViewEventSlider', {
+			this.BX.ajax.runAction('calendar.api.calendareventviewform.getCalendarViewSliderParams', {
 				analyticsLabel: {calendarAction: 'view_event', formType: 'full'},
 				data: {
 					entryId: this.entryId,
 					dateFrom: Util.formatDate(this.entryDateFrom),
 					timezoneOffset: this.timezoneOffset
 				}
-			}).then(
-				response => {
-					let html = '';
-					if ((Type.isFunction(slider.isOpen) && slider.isOpen()) || slider.isOpen === true)
+			}).then(response => {
+				const viewEventSliderRoot = document.createElement('div');
+
+				if ((Type.isFunction(slider.isOpen) && slider.isOpen()) || slider.isOpen === true)
+				{
+					let params = response.data;
+					params.eventExists = !!(params.entry.ID);
+
+					//load components' css and js
+					if (params.filesView)
 					{
-						html = response.data.html;
-						slider.getData().set("sliderContent", html);
-						let params = response.data.additionalParams;
-
-						this.userId = params.userId;
-						this.uid = params.uniqueId;
-						this.entryUrl = params.entryUrl;
-						this.userTimezone = params.userTimezone;
-						this.dayOfWeekMonthFormat = params.dayOfWeekMonthFormat;
-						this.plannerFeatureEnabled = !!params.plannerFeatureEnabled;
-						if (this.planner && !this.plannerFeatureEnabled)
-						{
-							this.planner.lock();
-						}
-
-						this.handleEntryData(params.entry, params.userIndex, params.section);
+						this.loadComponentAssets(params.filesView);
 					}
-					resolve(html);
-				},
-				response => {
-					if (response.errors && response.errors.length)
+					if (params.crmView)
 					{
-						slider.getData().set(
-							"sliderContent",
-							'<div class="calendar-slider-alert">'
-								+ '<div class="calendar-slider-alert-inner">'
-									+ '<div class="calendar-slider-alert-img"></div>'
-									+ '<h1 class="calendar-slider-alert-text">' + Text.encode(response.errors[0].message) + '</h1>'
-								+ '</div>'
-							+ '</div>'
-						);
+						this.loadComponentAssets(params.crmView);
+						this.BX.ajax.runAction('calendar.api.calendareventviewform.getCrmView', {
+							data: { signedEvent: params.signedEvent }
+						});
 					}
 
-					this.displayError(response.errors);
-					resolve(response);
-				});
+					//set vue component to slider
+					this.app = BitrixVue.createApp(ViewEventSlider, {
+						params: params,
+						reloadPlannerCallback: this.loadPlannerDataDebounce,
+						showUserListPopupCallback: this.showUserListPopupBind,
+					});
+					this.app.mount(viewEventSliderRoot);
+
+					slider.sliderContent = viewEventSliderRoot;
+
+					//set local params
+					this.userId = params.userId;
+					this.uid = params.id;
+					this.entryUrl = params.entryUrl;
+					this.userTimezone = params.userTimezone;
+					this.dayOfWeekMonthFormat = params.dayOfWeekMonthFormat;
+					this.plannerFeatureEnabled = !!params.plannerFeatureEnabled;
+					if (this.planner && !this.plannerFeatureEnabled)
+					{
+						this.planner.lock();
+					}
+					this.handleEntryData(params.entry, params.userIndex, params.section);
+				}
+
+				resolve(viewEventSliderRoot);
+			},
+			response => {
+				if (response.errors && response.errors.length)
+				{
+					slider.getData().set(
+						"sliderContent",
+						'<div class="calendar-slider-alert">'
+						+ '<div class="calendar-slider-alert-inner">'
+						+ '<div class="calendar-slider-alert-img"></div>'
+						+ '<h1 class="calendar-slider-alert-text">' + Text.encode(response.errors[0].message) + '</h1>'
+						+ '</div>'
+						+ '</div>'
+					);
+				}
+
+				this.displayError(response.errors);
+				resolve(response);
+			})
 		});
 	}
 
@@ -165,7 +218,6 @@ export class EventViewForm {
 		if (this.DOM.buttonSet)
 		{
 			this.initPlannerControl(uid);
-			this.initUserListControl(uid);
 		}
 
 		const innerTimeWrap = this.DOM.content.querySelector(`#${uid}_time_inner_wrap`);
@@ -199,6 +251,7 @@ export class EventViewForm {
 			this.DOM.reminderWrap = this.DOM.sidebarInner.querySelector('.calendar-slider-sidebar-remind-wrap');
 			if (Type.isDomNode(this.DOM.reminderWrap))
 			{
+				Dom.clean(this.DOM.reminderWrap);
 				let viewMode = !this.canDo(this.entry, 'edit')
 					&& this.entry.getCurrentStatus() === false;
 
@@ -281,7 +334,27 @@ export class EventViewForm {
 
 		// Init "Videocall" control
 		this.DOM.videoCall = this.DOM.sidebarInner.querySelector('.calendar-slider-sidebar-videocall');
+		Dom.clean(this.DOM.videoCall);
 		if (
+			Type.isElementNode(this.DOM.videoCall)
+			&& this.entry
+			&& this.entry.data['PARENT_ID']
+			&& this.entry.data['EVENT_TYPE'] === '#shared#'
+		)
+		{
+			this.DOM.videoCall.style.display = '';
+			this.conferenceButton = Tag.render`
+				<div class="ui-btn-split ui-btn-icon-camera-blue intranet-control-btn ui-btn-light-border ui-btn-icon-inline" style="width: 100%">
+					<button class="ui-btn-main calendar-slider-conference-button">
+						${Loc.getMessage('EC_CALENDAR_CONFERENCE')}
+					</button>
+				</div>
+			`;
+			Event.bind(this.conferenceButton, 'click', this.handleConferenceButtonClick.bind(this));
+
+			Dom.append(this.conferenceButton, this.DOM.videoCall);
+		}
+		else if (
 			BX?.Intranet?.ControlButton
 			&& Type.isElementNode(this.DOM.videoCall)
 			&& this.entry.getCurrentStatus() !== false
@@ -301,11 +374,16 @@ export class EventViewForm {
 				}
 			});
 		}
+		else
+		{
+			this.DOM.videoCall.style.display = 'none';
+		}
 	}
 
 	handleEntryData(entryData, userIndex, sectionData)
 	{
 		this.entry = new Entry({data: entryData, userIndex: userIndex});
+		this.section = new CalendarSection(sectionData);
 
 		if (Type.isPlainObject(sectionData))
 		{
@@ -320,7 +398,7 @@ export class EventViewForm {
 		this.plannerId = uid + '_view_slider_planner';
 		this.DOM.plannerWrapOuter = this.DOM.content.querySelector(`.calendar-slider-detail-timeline`);
 		this.DOM.plannerWrap = this.DOM.plannerWrapOuter.querySelector(`.calendar-view-planner-wrap`);
-
+		Dom.clean(this.DOM.plannerWrap);
 		this.planner = new Planner({
 			wrap: this.DOM.plannerWrap,
 			minWidth: parseInt(this.DOM.plannerWrap.offsetWidth),
@@ -340,37 +418,21 @@ export class EventViewForm {
 			}
 		}, 500);
 
-		this.loadPlannerData().then(()=>{});
-	}
+		const plannerData = {
+			entryId: this.entry.id || 0,
+			entryLocation: this.entry.data.LOCATION || '',
+			ownerId: this.ownerId,
+			hostId: this.entry.getMeetingHost(),
+			type: this.type,
+			entityList: this.entry.getAttendeesEntityList(),
+			dateFrom: Util.formatDate(this.entry.from.getTime() - Util.getDayLength() * 3),
+			dateTo: Util.formatDate(this.entry.to.getTime() + Util.getDayLength() * 10),
+			timezone: this.userTimezone,
+			location: this.entry.getLocation(),
+			entry: this.entry
+		};
 
-	initUserListControl(uid)
-	{
-		let userList = {y : [], i: [], q: [], n: []};
-
-		if (this.entry.isMeeting())
-		{
-			this.entry.getAttendees().forEach(function(user)
-			{
-				if (user.STATUS === 'H')
-				{
-					userList.y.push(user);
-				}
-				else if (userList[user.STATUS.toLowerCase()])
-				{
-					userList[user.STATUS.toLowerCase()].push(user);
-				}
-			}, this);
-		}
-
-		this.DOM.attendeesListY = this.DOM.content.querySelector(`#${uid}_attendees_y`);
-		this.DOM.attendeesListN = this.DOM.content.querySelector(`#${uid}_attendees_n`);
-		this.DOM.attendeesListQ = this.DOM.content.querySelector(`#${uid}_attendees_q`);
-		this.DOM.attendeesListI = this.DOM.content.querySelector(`#${uid}_attendees_i`);
-
-		Event.bind(this.DOM.attendeesListY, 'click', ()=>{this.showUserListPopup(this.DOM.attendeesListY, userList.y);});
-		Event.bind(this.DOM.attendeesListN, 'click', ()=>{this.showUserListPopup(this.DOM.attendeesListN, userList.n);});
-		Event.bind(this.DOM.attendeesListQ, 'click', ()=>{this.showUserListPopup(this.DOM.attendeesListQ, userList.q);});
-		Event.bind(this.DOM.attendeesListI, 'click', ()=>{this.showUserListPopup(this.DOM.attendeesListI, userList.i);});
+		this.loadPlannerDataDebounce(plannerData);
 	}
 
 	showUserListPopup(node, userList)
@@ -385,20 +447,45 @@ export class EventViewForm {
 			this.DOM.userListPopupWrap = this.BX.create('DIV', {props: {className: 'calendar-user-list-popup-block'}});
 			userList.forEach(function (user)
 			{
-				let userWrap = this.DOM.userListPopupWrap.appendChild(this.BX.create('DIV', {props: {className: 'calendar-slider-sidebar-user-container calendar-slider-sidebar-user-card'}}));
+				let userAvatar = `
+					<div class="ui-icon ui-icon-common-user"  style="width: 34px; height: 34px;">
+						<i></i>
+					</div>
+				`;
+				if (user.AVATAR && user.AVATAR !== '/bitrix/images/1.gif')
+				{
+					userAvatar = `<img src="${user.AVATAR}" width="34" height="34">`;
+				}
+				if (user.EMAIL_USER)
+				{
+					userAvatar = `
+						<div class="ui-icon ui-icon ui-icon-common-user-mail" style="width: 34px; height: 34px;">
+							<i></i>
+						</div>
+					`;
+				}
+				if (user.SHARING_USER)
+				{
+					userAvatar = `
+						<div class="ui-icon ui-icon-common-user ui-icon-common-user-sharing" style="width: 34px; height: 34px;">
+							<i></i>
+						</div>
+					`;
+				}
 
-				userWrap.appendChild(this.BX.create('DIV', {props: {className: 'calendar-slider-sidebar-user-block-avatar'}}))
-					.appendChild(this.BX.create('DIV', {props: {className: 'calendar-slider-sidebar-user-block-item'}}))
-					.appendChild(this.BX.create('IMG', {props: {width: 34, height: 34, src: user.AVATAR}}));
-
-				userWrap.appendChild(this.BX.create("DIV", {props: {className: 'calendar-slider-sidebar-user-info'}}))
-					.appendChild(this.BX.create("A", {
-						props: {
-							href: user.URL ? user.URL : '#',
-							className: 'calendar-slider-sidebar-user-info-name'
-						},
-						text: user.DISPLAY_NAME
-					}));
+				const userWrap = Tag.render`
+					<div class="calendar-slider-sidebar-user-container calendar-slider-sidebar-user-card">
+						<div class="calendar-slider-sidebar-user-block-avatar">
+							<div class="calendar-slider-sidebar-user-block-item">
+								${userAvatar}
+							</div>
+						</div>
+						<div class="calendar-slider-sidebar-user-info">
+							<a href="${user.URL ? user.URL : '#'}" class="calendar-slider-sidebar-user-info-name">${user.DISPLAY_NAME}</a>
+						</div>
+					</div>
+				`;
+				this.DOM.userListPopupWrap.append(userWrap);
 			}, this);
 
 			this.userListPopup = this.BX.PopupWindowManager.create("user-list-popup-" + Math.random(), node, {
@@ -437,17 +524,17 @@ export class EventViewForm {
 			});
 
 			this.statusControl.subscribe('onSetStatus', (event) => {
-					if (event instanceof BaseEvent)
-					{
-						this.handleEntityChanges();
-						EntryManager.setMeetingStatus(this.entry, event.getData().status)
-							.then(() => {
-								this.statusControl.setStatus(this.entry.getCurrentStatus(), false);
-								this.statusControl.updateStatus();
-							});
-					}
+				if (event instanceof BaseEvent)
+				{
+					this.handleEntityChanges();
+					EntryManager.setMeetingStatus(this.entry, event.getData().status)
+						.then(() => {
+							this.statusControl.setStatus(this.entry.getCurrentStatus(), false);
+							this.statusControl.updateStatus();
+							EventEmitter.emit(`MeetingStatusControl_${uid}:onSetStatus`, event);
+						});
 				}
-			);
+			});
 		}
 	}
 
@@ -496,7 +583,7 @@ export class EventViewForm {
 				return false;
 			}
 
-			return this.permissions.edit;
+			return this.section.canDo('edit');
 		}
 
 		if ((action === 'view'))
@@ -512,49 +599,35 @@ export class EventViewForm {
 		return this.DOM.plannerWrap && Dom.hasClass(this.DOM.plannerWrap, 'calendar-edit-planner-wrap-shown');
 	}
 
-	loadPlannerData()
+	loadPlannerData(plannerData)
 	{
-		this.planner.showLoader();
 		return new Promise((resolve) => {
 			this.BX.ajax.runAction('calendar.api.calendarajax.updatePlanner', {
-					data: {
-						entryId: this.entry.id || 0,
-						entryLocation: this.entry.data.LOCATION || '',
-						ownerId: this.ownerId,
-						hostId: this.entry.getMeetingHost(),
-						type: this.type,
-						entityList: this.entry.getAttendeesEntityList(),
-						dateFrom: Util.formatDate(this.entry.from.getTime() - Util.getDayLength() * 3),
-						dateTo: Util.formatDate(this.entry.to.getTime() + Util.getDayLength() * 10),
-						timezone: this.userTimezone,
-						location: this.entry.getLocation(),
-					}
-				})
-				.then((response) => {
-						this.planner.hideLoader();
-						this.planner.update(
-							response.data.entries,
-							response.data.accessibility
-						);
+				data: plannerData
+			}).then((response) => {
+					this.planner.hideLoader();
+					this.planner.update(
+						response.data.entries,
+						response.data.accessibility
+					);
 
-						this.planner.updateSelector(
-							Util.adjustDateForTimezoneOffset(
-								this.entry.from,
-								this.entry.userTimezoneOffsetFrom,
-								this.entry.fullDay),
-							Util.adjustDateForTimezoneOffset(
-								this.entry.to,
-								this.entry.userTimezoneOffsetTo,
-								this.entry.fullDay
-							),
-							this.entry.fullDay
+					this.planner.updateSelector(
+						Util.adjustDateForTimezoneOffset(
+							plannerData.entry.from,
+							plannerData.entry.userTimezoneOffsetFrom,
+							plannerData.entry.fullDay),
+						Util.adjustDateForTimezoneOffset(
+							plannerData.entry.to,
+							plannerData.entry.userTimezoneOffsetTo,
+							plannerData.entry.fullDay
+						),
+						plannerData.entry.fullDay
 
-						);
-						resolve(response);
-					},
-					(response) => {resolve(response);}
-				);
-
+					);
+					resolve(response);
+				},
+				(response) => {resolve(response);}
+			);
 		});
 	}
 
@@ -579,68 +652,50 @@ export class EventViewForm {
 		}
 	}
 
-	handlePull(event: BaseEvent): void
-	{
-		if (!event instanceof BaseEvent)
-		{
-			return;
-		}
-
-		const data = event.getData();
-		const command = data[0];
-		switch(command)
-		{
-			case 'edit_event':
-			case 'delete_event':
-			case 'set_meeting_status':
-				const calendarContext = Util.getCalendarContext();
-				if (calendarContext)
-				{
-					if (this.planner && this.reloadStatus === this.RELOAD_FINISHED)
-					{
-						this.loadPlannerData().then(()=>{});
-					}
-				}
-				else
-				{
-					this.reloadSlider();
-				}
-				break;
-		}
-	}
-
 	handleEntityChanges()
 	{
 		this.entityChanged = true;
 	}
 
-	reloadSlider(): void
+	handleConferenceButtonClick()
 	{
-		if (this.reloadStatus === this.RELOAD_FINISHED)
+		if (this.conferenceButton)
 		{
-			const activeElement = document.activeElement
-			if (['IFRAME', 'TEXTAREA'].includes(activeElement.tagName.toUpperCase()))
-			{
-				return;
-			}
-
-			// Protection from reloading same page during changes (status or reminder)
-			if (this.entityChanged)
-			{
-				setTimeout(() => {
-					this.entityChanged = false;
-				}, 500);
-				return;
-			}
-
-			EventEmitter.unsubscribe(this.slider, "SidePanel.Slider:onLoad", this.sliderOnLoad);
-			EventEmitter.unsubscribe(this.slider, "SidePanel.Slider:onCloseComplete", this.destroyBind);
-			EventEmitter.unsubscribe('onPullEvent-calendar', this.handlePullBind);
-			Event.unbind(document, 'keydown', this.keyHandlerBind);
-
-			this.reloadStatus = this.RELOAD_REQUESTED;
-
-			this.slider.reload();
+			Dom.addClass(this.conferenceButton, 'ui-btn-wait');
 		}
+
+		this.getConferenceChatId();
+
+		if (this.conferenceButton)
+		{
+			Dom.removeClass(this.conferenceButton, 'ui-btn-wait');
+		}
+	}
+
+	getConferenceChatId()
+	{
+		return this.BX.ajax.runAction('calendar.api.calendarajax.getConferenceChatId', {
+			data: {
+				eventId: this.entry.data['PARENT_ID'],
+			},
+		}).then(
+			(response) => {
+				if (top.window.BXIM && response.data && response.data.chatId)
+				{
+					top.BXIM.openMessenger('chat' + parseInt(response.data.chatId));
+
+					return null;
+				}
+
+				alert(Loc.getMessage('EC_CONFERENCE_ERROR'));
+
+				return null;
+			},
+			(response) => {
+				alert(Loc.getMessage('EC_CONFERENCE_ERROR'));
+
+				return null;
+			}
+		);
 	}
 }

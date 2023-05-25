@@ -34,7 +34,7 @@ class CIMHistory
 		}
 
 		$searchText = trim($searchText);
-		if (mb_strlen($searchText) <= 3)
+		if (mb_strlen($searchText) < 3)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("IM_HISTORY_SEARCH_EMPTY"), "ERROR_SEARCH_EMPTY");
 			return false;
@@ -325,7 +325,7 @@ class CIMHistory
 		else
 		{
 			$arRelation = \CIMChat::GetPrivateRelation($fromUserId, $toUserId);
-			$chatId = $arRelation['CHAT_ID'];
+			$chatId = $arRelation['CHAT_ID'] ?? null;
 			$startId = $arRelation['START_ID'];
 		}
 
@@ -475,6 +475,9 @@ class CIMHistory
 					IM\Model\MessageTable::delete($messageInfo['ID']);
 				}
 			}
+
+			$primaryKey = ['USER_ID' => $this->user_id, 'ITEM_TYPE' => IM_MESSAGE_PRIVATE, 'ITEM_ID' => $userId];
+			IM\Model\RecentTable::update($primaryKey, ['ITEM_MID' => 0]);
 		}
 
 		return true;
@@ -510,6 +513,10 @@ class CIMHistory
 		{
 			$strSql = "UPDATE b_im_relation SET START_ID = ".intval($arRes['MAX_ID']).", LAST_ID = ".(intval($arRes['MAX_ID'])-1)." WHERE ID = ".intval($arRes['R1_ID']);
 			$dbRes = $DB->Query($strSql, false, "File: ".__FILE__."<br>Line: ".__LINE__);
+
+			$chatType = $ar ? $ar['MESSAGE_TYPE'] : IM_MESSAGE_CHAT;
+			$primaryKey = ['USER_ID' => $this->user_id, 'ITEM_TYPE' => $chatType, 'ITEM_ID' => $chatId];
+			IM\Model\RecentTable::update($primaryKey, ['ITEM_MID' => 0]);
 		}
 
 		return true;
@@ -517,8 +524,6 @@ class CIMHistory
 
 	function SearchChatMessage($searchText, $chatId, $bTimeZone = true)
 	{
-		global $DB;
-
 		$chatId = intval($chatId);
 		$searchText = trim($searchText);
 
@@ -528,64 +533,28 @@ class CIMHistory
 			return false;
 		}
 
-		$ormChat = IM\Model\ChatTable::getById($chatId);
-		if (!($chatData = $ormChat->fetch()))
+		if (!\Bitrix\Im\Dialog::hasAccess('chat'.$chatId, $this->user_id))
 		{
 			return false;
 		}
 
-		$crmEntityType = null;
-		$crmEntityId = null;
-		if ($chatData['TYPE'] == IM_MESSAGE_OPEN_LINE && \Bitrix\Main\Loader::includeModule('imopenlines'))
-		{
-			$explodeData = explode('|', $chatData['ENTITY_DATA_1']);
-			$crmEntityType = ($explodeData[0] == 'Y') ? $explodeData[1] : null;
-			$crmEntityId = ($explodeData[0] == 'Y') ? intval($explodeData[2]) : null;
-		}
+		$where = Array(
+			'=CHAT_ID' => $chatId,
+			'*%MESSAGE' => $searchText,
+		);
 
-		if (
-			$chatData['TYPE'] == IM_MESSAGE_OPEN_LINE
-			&& \Bitrix\Main\Loader::includeModule('imopenlines')
-			&& \Bitrix\ImOpenLines\Config::canJoin($chatId, $crmEntityType, $crmEntityId)
-		)
+		if($this->checkFullText($searchText))
 		{
 			$where = Array(
 				'=CHAT_ID' => $chatId,
-				'*%MESSAGE' => $searchText,
+				'*INDEX.SEARCH_CONTENT' => \Bitrix\Main\Search\Content::prepareStringToken($searchText),
 			);
-
-			if($this->checkFullText($searchText))
-			{
-				$where = Array(
-					'=CHAT_ID' => $chatId,
-					'*INDEX.SEARCH_CONTENT' => \Bitrix\Main\Search\Content::prepareStringToken($searchText),
-				);
-			}
 		}
-		else
+
+		$ar = \CIMChat::GetRelationById($chatId, $this->user_id);
+		if ($ar && $ar['START_ID'] > 0)
 		{
-			$where = Array(
-				'=RELATION.USER_ID' => $this->user_id,
-				'=RELATION.CHAT_ID' => $chatId,
-				'!=RELATION.MESSAGE_TYPE' => IM_MESSAGE_PRIVATE,
-				'*%MESSAGE' => $searchText,
-			);
-
-			if ($this->checkFullText($searchText))
-			{
-				$where = Array(
-					'=RELATION.USER_ID' => $this->user_id,
-					'=RELATION.CHAT_ID' => $chatId,
-					'!=RELATION.MESSAGE_TYPE' => IM_MESSAGE_PRIVATE,
-					'*INDEX.SEARCH_CONTENT' => \Bitrix\Main\Search\Content::prepareStringToken($searchText),
-				);
-			}
-
-			$ar = \CIMChat::GetRelationById($chatId, $this->user_id);
-			if ($ar && $ar['START_ID'] > 0)
-			{
-				$where['>=ID'] = intval($ar['START_ID']);
-			}
+			$where['>=ID'] = intval($ar['START_ID']);
 		}
 
 		$orm = \Bitrix\Im\Model\MessageTable::getList(
@@ -622,6 +591,7 @@ class CIMHistory
 			$usersMessage[$arRes['CHAT_ID']][] = $arRes['ID'];
 			$arMessageId[] = $arRes['ID'];
 		}
+
 		$params = CIMMessageParam::Get($arMessageId);
 		$arFiles = Array();
 		foreach ($params as $messageId => $param)
@@ -1116,6 +1086,10 @@ class CIMHistory
 				return false;
 			}
 		}
+		elseif ((int)$messageId < (int)$relations[$this->user_id]['START_ID'])
+		{
+			return false;
+		}
 
 		$dialogId = 0;
 		if ($message['CHAT_TYPE'] == IM_MESSAGE_PRIVATE)
@@ -1151,6 +1125,12 @@ class CIMHistory
 
 		$previousMessages = $this->GetPreviousMessages($messageId, $message['CHAT_ID'], $message['DATE_CREATE'], $previous, $timezone);
 		$nextMessages = $this->GetNextMessages($messageId, $message['CHAT_ID'], $message['DATE_CREATE'], $next, $timezone);
+
+		$startId = (int)($relations[$this->user_id]['START_ID'] ?? 0);
+		if ($startId > 0)
+		{
+			$previousMessages = array_filter($previousMessages, static fn (array $message) => (int)$message['ID'] >= $startId);
+		}
 
 		$messages = array_replace($previousMessages, $nextMessages);
 

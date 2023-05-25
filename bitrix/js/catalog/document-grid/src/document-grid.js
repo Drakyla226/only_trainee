@@ -12,6 +12,7 @@ export class DocumentGridManager
 		this.grid = BX.Main.gridManager.getInstanceById(this.gridId);
 		this.isConductDisabled = options.isConductDisabled;
 		this.masterSliderUrl = options.masterSliderUrl;
+		this.inventoryManagementSource = options.inventoryManagementSource;
 	}
 
 	getSelectedIds()
@@ -30,12 +31,16 @@ export class DocumentGridManager
 					text:  Loc.getMessage('DOCUMENT_GRID_CONTINUE'),
 					color: ButtonColor.SUCCESS,
 					onclick: (button, event) => {
+						button.setDisabled();
 						ajax.runAction(
 							'catalog.document.deleteList',
 							{
 								data: {
 									documentIds: [documentId],
-								}
+								},
+								analyticsLabel: {
+									inventoryManagementSource: this.inventoryManagementSource,
+								},
 							}
 						).then((response) => {
 							popup.destroy();
@@ -83,6 +88,10 @@ export class DocumentGridManager
 			}
 		}
 
+		actionConfig.analyticsLabel.inventoryManagementSource = this.inventoryManagementSource;
+
+		actionConfig.analyticsLabel.mode = 'single';
+
 		let popup = new Popup({
 			id: 'catalog_delete_document_popup',
 			titleBar: Loc.getMessage('DOCUMENT_GRID_DOCUMENT_CONDUCT_TITLE'),
@@ -92,6 +101,7 @@ export class DocumentGridManager
 					text:  Loc.getMessage('DOCUMENT_GRID_CONTINUE'),
 					color: ButtonColor.SUCCESS,
 					onclick: (button, event) => {
+						button.setDisabled();
 						ajax.runAction(
 							'catalog.document.conductList',
 							actionConfig
@@ -141,6 +151,10 @@ export class DocumentGridManager
 			}
 		}
 
+		actionConfig.analyticsLabel.mode = 'single';
+
+		actionConfig.analyticsLabel.inventoryManagementSource = this.inventoryManagementSource;
+
 		let popup = new Popup({
 			id: 'catalog_delete_document_popup',
 			titleBar: Loc.getMessage('DOCUMENT_GRID_DOCUMENT_CANCEL_TITLE'),
@@ -150,6 +164,7 @@ export class DocumentGridManager
 					text:  Loc.getMessage('DOCUMENT_GRID_CONTINUE'),
 					color: ButtonColor.SUCCESS,
 					onclick: (button, event) => {
+						button.setDisabled();
 						ajax.runAction(
 							'catalog.document.cancelList',
 							actionConfig
@@ -187,7 +202,10 @@ export class DocumentGridManager
 			{
 				data: {
 					documentIds
-				}
+				},
+				analyticsLabel: {
+					inventoryManagementSource: this.inventoryManagementSource,
+				},
 			}
 		).then((response) => {
 			this.grid.reload();
@@ -220,7 +238,11 @@ export class DocumentGridManager
 			{
 				data: {
 					documentIds
-				}
+				},
+				analyticsLabel: {
+					mode: 'list',
+					inventoryManagementSource: this.inventoryManagementSource,
+				},
 			}
 		).then((response) => {
 			this.grid.reload();
@@ -253,7 +275,11 @@ export class DocumentGridManager
 			{
 				data: {
 					documentIds
-				}
+				},
+				analyticsLabel: {
+					mode: 'list',
+					inventoryManagementSource: this.inventoryManagementSource,
+				},
 			}
 		).then((response) => {
 			this.grid.reload();

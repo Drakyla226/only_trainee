@@ -10,6 +10,7 @@
 export const EventType = Object.freeze({
 	dialog:
 	{
+		open: 'IM.Dialog:open',
 		newMessage: 'EventType.dialog.newMessage',
 
 		scrollOnStart: 'IM.Dialog:scrollOnStart',
@@ -24,6 +25,7 @@ export const EventType = Object.freeze({
 		clickOnUserName: 'IM.Dialog:clickOnUserName',
 		clickOnMessageMenu: 'IM.Dialog:clickOnMessageMenu',
 		clickOnMessageRetry: 'IM.Dialog:clickOnMessageRetry',
+		doubleClickOnMessage: 'IM.Dialog:doubleClickOnMessage',
 		clickOnUploadCancel: 'IM.Dialog:clickOnUploadCancel',
 		clickOnReadList: 'IM.Dialog:clickOnReadList',
 		setMessageReaction: 'IM.Dialog:setMessageReaction',
@@ -48,7 +50,12 @@ export const EventType = Object.freeze({
 		sendMessage: 'IM.Textarea:sendMessage',
 		fileSelected: 'IM.Textarea:fileSelected',
 		startWriting: 'IM.Textarea:startWriting',
+		stopWriting: 'IM.Textarea:stopWriting',
 		appButtonClick: 'IM.Textarea:appButtonClick'
+	},
+	uploader:
+	{
+		addMessageWithFile: 'IM.Uploader:addMessageWithFile'
 	},
 	conference:
 	{
@@ -62,5 +69,13 @@ export const EventType = Object.freeze({
 	notification:
 	{
 		updateState: 'IM.Notifications:restoreConnection',
-	}
+	},
+	mobile:
+	{
+		textarea: {
+			setText: 'IM.Mobile.Textarea:setText',
+			setFocus: 'IM.Mobile.Textarea:setFocus',
+		},
+		openUserList: 'IM.Mobile:openUserList'
+	},
 });

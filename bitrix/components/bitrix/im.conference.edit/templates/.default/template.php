@@ -6,6 +6,8 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Main\Page\Asset;
 
 \Bitrix\Main\UI\Extension::load([
+	"ui.design-tokens",
+	"ui.fonts.opensans",
 	"ui.forms",
 	"ui.buttons",
 	"ui.buttons.icons",
@@ -17,9 +19,10 @@ use Bitrix\Main\Page\Asset;
 	"im.lib.clipboard",
 	"im.component.conference.conference-edit",
 	"calendar.planner",
-	"calendar.util"
+	"calendar.util",
+	"loader",
+	"date",
 ]);
-\CJSCore::Init(["loader", "date"]);
 
 Asset::getInstance()->addCss('/bitrix/js/calendar/planner.css');
 $APPLICATION->SetPageProperty("BodyClass", ($bodyClass ? $bodyClass." " : "") . "no-background");

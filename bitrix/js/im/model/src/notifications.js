@@ -42,6 +42,7 @@ class NotificationsModel extends VuexBuilderModel
 			text: '',
 			sectionCode: NotificationTypesCodes.simple,
 			textConverted: '',
+			title: '',
 			unread: false,
 			display: true,
 			settingName: 'im|default',
@@ -586,6 +587,18 @@ class NotificationsModel extends VuexBuilderModel
 			result.settingName = fields.setting_name;
 		}
 
+		// rest format
+		if (Type.isString(fields.notify_title) && fields.notify_title.length > 0)
+		{
+			result.title = fields.notify_title;
+		}
+
+		// p&p format
+		if (Type.isString(fields.title) && fields.title.length > 0)
+		{
+			result.title = fields.title;
+		}
+
 		return result;
 	}
 
@@ -796,6 +809,8 @@ class NotificationsModel extends VuexBuilderModel
 
 			return html;
 		});
+
+		text = text.replace(/\[dialog=(chat\d+|\d+)(?: message=(\d+))?](.*?)\[\/dialog]/gi, (whole, dialogId, messageId, message) => message);
 
 		text = text.replace(/\[PCH=([0-9]{1,})\](.*?)\[\/PCH\]/ig, (whole, historyId, text) => text);
 

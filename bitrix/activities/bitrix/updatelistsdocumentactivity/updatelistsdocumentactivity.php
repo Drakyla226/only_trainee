@@ -20,6 +20,11 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 
 	public function Execute()
 	{
+		if (!\Bitrix\Main\Loader::includeModule('lists'))
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		$documentType = $this->DocumentType;
 		$elementId = $this->ElementId;
 
@@ -33,6 +38,7 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 		$fields = $this->Fields;
 
 		$documentService = $this->workflow->GetService("DocumentService");
+		$this->logDebug($elementId, $documentType);
 
 		$realDocumentType = null;
 		try
@@ -47,6 +53,9 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$fields = $this->prepareFieldsValues($documentId, $documentType, $fields);
+
+		$this->logDebugFields($documentType, $fields);
 		$documentService->UpdateDocument($documentId, $fields);
 
 		return CBPActivityExecutionStatus::Closed;
@@ -158,15 +167,7 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 			'formName' => $formName
 		));
 
-		$dialog->setMap([
-			'ElementId' => [
-				'Name' => GetMessage('BPULDA_ELEMENT_ID'),
-				'FieldName' => 'lists_element_id',
-				'Type' => 'string',
-				'Required' => true
-			],
-			'DocumentType' => self::getDocumentTypeField()
-		]);
+		$dialog->setMap(static::getPropertiesMap($paramDocumentType));
 
 		$listsDocumentFields = $documentType ? self::getDocumentFields($documentType) : [];
 		$listsDocumentFieldTypes = $documentType ? $documentService->GetDocumentFieldTypes($documentType) : [];
@@ -185,6 +186,19 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 		));
 
 		return $dialog;
+	}
+
+	protected static function getPropertiesMap(array $documentType, array $context = []): array
+	{
+		return [
+			'ElementId' => [
+				'Name' => GetMessage('BPULDA_ELEMENT_ID'),
+				'FieldName' => 'lists_element_id',
+				'Type' => 'string',
+				'Required' => true
+			],
+			'DocumentType' => self::getDocumentTypeField()
+		];
 	}
 
 	public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate, &$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$errors)
@@ -255,7 +269,7 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 				);
 			}
 
-			if ($r != null)
+			if (!CBPHelper::isEmptyValue($r))
 			{
 				$arProperties["Fields"][$fieldKey] = $r;
 			}
@@ -381,5 +395,87 @@ class CBPUpdateListsDocumentActivity extends CBPActivity
 		$field['Settings'] = ['Groups' => $groups];
 
 		return $field;
+	}
+
+	private function logDebug($id, $type)
+	{
+		if (!method_exists($this, 'getDebugInfo'))
+		{
+			return;
+		}
+
+		if (!$this->workflow->isDebug())
+		{
+			return;
+		}
+
+		$debugInfo = $this->getDebugInfo([
+			'ElementId' => $id,
+			'DocumentType' => implode('@', $type),
+		]);
+
+		$this->writeDebugInfo($debugInfo);
+	}
+
+	private function logDebugFields(array $docType, array $values)
+	{
+		if (!method_exists($this, 'getDebugInfo'))
+		{
+			return;
+		}
+
+		if (!$this->workflow->isDebug())
+		{
+			return;
+		}
+
+		$fields = array_filter(
+			static::getDocumentFields($docType),
+			fn($fieldId) => array_key_exists($fieldId, $values),
+			ARRAY_FILTER_USE_KEY
+		);
+
+		$debugInfo = $this->getDebugInfo($values, $fields);
+		$this->writeDebugInfo($debugInfo);
+	}
+
+	protected function prepareFieldsValues(
+		array $documentId,
+		array $documentType,
+		array $fields
+	): array
+	{
+		$documentService = $this->workflow->GetService('DocumentService');
+
+		$documentFields = $documentService->GetDocumentFields($documentType);
+		$documentFieldsAliasesMap = CBPDocument::getDocumentFieldsAliasesMap($documentFields);
+
+		$resultFields = [];
+		foreach ($fields as $key => $value)
+		{
+			if (!isset($documentFields[$key]) && isset($documentFieldsAliasesMap[$key]))
+			{
+				$key = $documentFieldsAliasesMap[$key];
+			}
+
+			if (($property = $documentFields[$key]) && $value)
+			{
+				$fieldTypeObject = $documentService->getFieldTypeObject($documentType, $property);
+				if ($fieldTypeObject)
+				{
+					$fieldTypeObject->setDocumentId($documentId);
+					$value = $fieldTypeObject->externalizeValue('Document', $value);
+				}
+			}
+
+			if (is_null($value))
+			{
+				$value = '';
+			}
+
+			$resultFields[$key] = $value;
+		}
+
+		return $resultFields;
 	}
 }

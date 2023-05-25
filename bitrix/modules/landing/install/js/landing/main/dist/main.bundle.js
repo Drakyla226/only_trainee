@@ -49,15 +49,7 @@ this.BX = this.BX || {};
 	  return true;
 	}
 
-	function _templateObject() {
-	  var data = babelHelpers.taggedTemplateLiteral(["", ""]);
-
-	  _templateObject = function _templateObject() {
-	    return data;
-	  };
-
-	  return data;
-	}
+	var _templateObject;
 
 	BX.Landing.getMode = function () {
 	  return 'edit';
@@ -374,7 +366,7 @@ this.BX = this.BX || {};
 	  }, {
 	    key: "appendBlock",
 	    value: function appendBlock(data, withoutAnimation) {
-	      var block = main_core.Tag.render(_templateObject(), data.content);
+	      var block = main_core.Tag.render(_templateObject || (_templateObject = babelHelpers.taggedTemplateLiteral(["", ""])), data.content);
 	      block.id = "block".concat(data.id);
 
 	      if (!withoutAnimation) {
@@ -608,7 +600,7 @@ this.BX = this.BX || {};
 	        s.src = "".concat(u, "?").concat(r);
 	        var h = d.getElementsByTagName('script')[0];
 	        h.parentNode.insertBefore(s, h);
-	      })(rootWindow, rootWindow.document, 'https://landing.bitrix24.ru/bitrix/js/crm/form_loader.js', 'b24formFeedBack');
+	      })(rootWindow, rootWindow.document, 'https://product-feedback.bitrix24.com/bitrix/js/crm/form_loader.js', 'b24formFeedBack');
 	    }
 	    /**
 	     * Creates blocks list panel sidebar button
@@ -623,7 +615,7 @@ this.BX = this.BX || {};
 	      return new BX.Landing.UI.Button.SidebarButton(category, {
 	        text: options.name,
 	        child: !options.separator,
-	        className: options.new ? 'landing-ui-new-section' : '',
+	        className: options["new"] ? 'landing-ui-new-section' : '',
 	        onClick: this.onBlocksListCategoryChange.bind(this, category)
 	      });
 	    }
@@ -650,6 +642,34 @@ this.BX = this.BX || {};
 	        }
 
 	        this.onBlocksListCategoryChange(category);
+	      }
+	    }
+	  }, {
+	    key: "removeBlockFromList",
+	    value: function removeBlockFromList(blockCode) {
+	      var removed = false;
+
+	      for (var category in this.blocks) {
+	        if (this.blocks[category].items[blockCode] !== undefined) {
+	          delete this.blocks[category].items[blockCode];
+	          removed = true;
+	        }
+	      }
+
+	      if (this.lastBlocks.indexOf(blockCode) !== -1) {
+	        this.lastBlocks.splice(this.lastBlocks.indexOf(blockCode), 1);
+	        removed = true;
+	      } // refresh panel
+
+
+	      if (removed) {
+	        var activeCategoryButton = this.getBlocksPanel().sidebarButtons.find(function (button) {
+	          return main_core.Dom.hasClass(button.layout, 'landing-ui-active');
+	        });
+
+	        if (activeCategoryButton) {
+	          this.onBlocksListCategoryChange(activeCategoryButton.id);
+	        }
 	      }
 	    }
 	    /**
@@ -816,14 +836,15 @@ this.BX = this.BX || {};
 	    /**
 	     * Adds block from server response
 	     * @param {addBlockResponse} res
-	     * @param {boolean} [preventHistory = false]
 	     * @param {boolean} [withoutAnimation = false]
+	     * @param {boolean} [insertBefore = false]
 	     * @return {Promise<T>}
 	     */
 
 	  }, {
 	    key: "addBlock",
-	    value: function addBlock(res, preventHistory, withoutAnimation) {
+	    value: function addBlock(res, withoutAnimation) {
+
 	      if (this.lastBlocks) {
 	        this.lastBlocks.unshift(res.manifest.codeOriginal || res.manifest.code);
 	      }
@@ -831,34 +852,6 @@ this.BX = this.BX || {};
 	      var self = this;
 	      var block = this.appendBlock(res, withoutAnimation);
 	      return this.loadBlockDeps(res).then(function (blockRes) {
-	        if (!main_core.Type.isBoolean(preventHistory) || preventHistory === false) {
-	          var lid = null;
-	          var id = null;
-
-	          if (self.currentBlock) {
-	            lid = self.currentBlock.lid;
-	            id = self.currentBlock.id;
-	          }
-
-	          if (self.currentArea) {
-	            lid = main_core.Dom.attr(self.currentArea, 'data-landing');
-	            id = main_core.Dom.attr(self.currentArea, 'data-site');
-	          } // Add history entry
-
-
-	          BX.Landing.History.getInstance().push(new BX.Landing.History.Entry({
-	            block: blockRes.id,
-	            selector: "#block".concat(blockRes.id),
-	            command: 'addBlock',
-	            undo: '',
-	            redo: {
-	              currentBlock: id,
-	              lid: lid,
-	              code: blockRes.manifest.code
-	            }
-	          }));
-	        }
-
 	        self.currentBlock = null;
 	        self.currentArea = null;
 	        var blockId = parseInt(res.id);
@@ -885,7 +878,7 @@ this.BX = this.BX || {};
 	        return self.runBlockScripts(res).then(function () {
 	          return block;
 	        });
-	      }).catch(function (err) {
+	      })["catch"](function (err) {
 	        console.warn(err);
 	      });
 	    }
@@ -899,12 +892,13 @@ this.BX = this.BX || {};
 
 	  }, {
 	    key: "onAddBlock",
-	    value: function onAddBlock(blockCode, restoreId, preventHistory) {
+	    value: function onAddBlock(blockCode, restoreId) {
 	      var _this7 = this;
 
+	      var preventHistory = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : false;
 	      var id = main_core.Text.toNumber(restoreId);
 	      this.hideBlocksPanel();
-	      return this.showBlockLoader().then(this.loadBlock(blockCode, id)).then(function (res) {
+	      return this.showBlockLoader().then(this.loadBlock(blockCode, id, preventHistory)).then(function (res) {
 	        return new Promise(function (resolve) {
 	          setTimeout(function () {
 	            resolve(res);
@@ -913,7 +907,7 @@ this.BX = this.BX || {};
 	      }).then(function (res) {
 	        res.manifest.codeOriginal = blockCode;
 
-	        var p = _this7.addBlock(res, preventHistory, false);
+	        var p = _this7.addBlock(res, false, _this7.insertBefore);
 
 	        _this7.insertBefore = false;
 
@@ -1082,12 +1076,13 @@ this.BX = this.BX || {};
 	     * Load new block from server
 	     * @param {string} blockCode
 	     * @param {int} [restoreId]
+	     * @param {boolean} [preventHistory = false]
 	     * @returns {Function}
 	     */
 
 	  }, {
 	    key: "loadBlock",
-	    value: function loadBlock(blockCode, restoreId) {
+	    value: function loadBlock(blockCode, restoreId, preventHistory) {
 	      var _this9 = this;
 
 	      return function () {
@@ -1106,7 +1101,8 @@ this.BX = this.BX || {};
 
 	        var requestBody = {
 	          lid: lid,
-	          siteId: siteId
+	          siteId: siteId,
+	          preventHistory: preventHistory ? 1 : 0
 	        };
 	        var fields = {
 	          ACTIVE: 'Y',
@@ -1114,6 +1110,11 @@ this.BX = this.BX || {};
 	          AFTER_ID: _this9.currentBlock ? _this9.currentBlock.id : 0,
 	          RETURN_CONTENT: 'Y'
 	        };
+
+	        if (!main_core.Type.isBoolean(preventHistory) || preventHistory === false) {
+	          // Change history steps
+	          BX.Landing.History.getInstance().push();
+	        }
 
 	        if (!restoreId) {
 	          requestBody.fields = fields;
@@ -1134,29 +1135,14 @@ this.BX = this.BX || {};
 	          });
 	        }
 
-	        requestBody = {
-	          undeleete: {
-	            action: 'Landing::markUndeletedBlock',
-	            data: {
-	              lid: lid,
-	              block: restoreId
-	            }
-	          },
-	          getContent: {
-	            action: 'Block::getContent',
-	            data: {
-	              block: restoreId,
-	              lid: lid,
-	              fields: fields,
-	              editMode: 1
-	            }
-	          }
-	        };
-	        return BX.Landing.Backend.getInstance().batch('Landing::addBlock', requestBody, {
-	          code: blockCode
+	        return BX.Landing.Backend.getInstance().action('Block::getContent', {
+	          block: restoreId,
+	          lid: lid,
+	          fields: fields,
+	          editMode: 1
 	        }).then(function (res) {
-	          res.getContent.result.id = restoreId;
-	          return res.getContent.result;
+	          res.id = restoreId;
+	          return res;
 	        });
 	      };
 	    }
@@ -1180,7 +1166,7 @@ this.BX = this.BX || {};
 	        favoriteMy: !!block.favoriteMy,
 	        repo_id: block.repo_id,
 	        mode: mode,
-	        isNew: block.new === true,
+	        isNew: block["new"] === true,
 	        onClick: this.onAddBlock.bind(this, blockKey)
 	      });
 	    }

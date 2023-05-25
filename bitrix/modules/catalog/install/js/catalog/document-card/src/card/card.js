@@ -1,4 +1,4 @@
-import {Loc, Reflection, Tag} from "main.core";
+import {Loc, Reflection, Type} from "main.core";
 import {BaseCard} from "catalog.entity-card";
 import {EventEmitter} from "main.core.events";
 import {Dialog} from 'ui.entity-selector';
@@ -18,13 +18,6 @@ class DocumentCard extends BaseCard
 	static #modelFactory;
 	static #controllersFactory;
 
-	static initializeEntityEditorFactories()
-	{
-		DocumentCard.registerFieldFactory();
-		DocumentCard.registerModelFactory();
-		DocumentCard.registerDocumentControllersFactory();
-	}
-
 	constructor(id, settings)
 	{
 		super(id, settings);
@@ -34,6 +27,9 @@ class DocumentCard extends BaseCard
 		this.signedParameters = settings.signedParameters;
 		this.isConductLocked = settings.isConductLocked;
 		this.masterSliderUrl = settings.masterSliderUrl;
+		this.editorName = settings.includeCrmEntityEditor ? 'BX.Crm.EntityEditor' : 'BX.UI.EntityEditor';
+		this.inventoryManagementSource = settings.inventoryManagementSource;
+		this.activeTabId = 'main';
 
 		this.isTabAnalyticsSent = false;
 
@@ -77,7 +73,24 @@ class DocumentCard extends BaseCard
 					if (slider)
 					{
 						slider.url = BX.Uri.addParam(slider.getUrl(), {DOCUMENT_TYPE: type});
-						slider.url = BX.Uri.removeParam(slider.url, ['firstTime']);
+						slider.url = BX.Uri.removeParam(slider.url, ['firstTime', 'focusedTab']);
+
+						if (this.activeTabId !== 'main')
+						{
+							slider.url = BX.Uri.addParam(slider.getUrl(), {focusedTab: this.activeTabId});
+						}
+
+						if (type === 'A' || type === 'S')
+						{
+							slider.requestMethod = 'post';
+							slider.requestParams = {
+								'preloadedFields': {
+									'DOCUMENT_FIELDS': this.getDocumentFieldsForTypeSwitching(),
+									'PRODUCTS': this.getProductsForTypeSwitching(),
+								}
+							};
+						}
+
 						slider.setFrameSrc();
 					}
 				},
@@ -93,6 +106,56 @@ class DocumentCard extends BaseCard
 			e.preventDefault();
 			popupMenu.show();
 		});
+	}
+
+	getDocumentFieldsForTypeSwitching()
+	{
+		const documentFields = {};
+		const editor = this.getEditorInstance();
+		if (!editor)
+		{
+			return documentFields;
+		}
+
+		const form = editor.getFormElement();
+		const formData = new FormData(form);
+		const formProps = Object.fromEntries(formData);
+
+		const fieldsToTransfer = ['TITLE', 'CURRENCY', 'TOTAL'];
+		fieldsToTransfer.forEach((field) => {
+			documentFields[field] = formProps[field] ?? '';
+		});
+
+		return documentFields;
+	}
+
+	getProductsForTypeSwitching()
+	{
+		const products = [];
+		if (!Reflection.getClass('BX.Catalog.Store.ProductList.Instance'))
+		{
+			return products;
+		}
+
+		const productFields = ['ID', 'STORE_TO', {'ELEMENT_ID': 'SKU_ID'}, 'AMOUNT', 'PURCHASING_PRICE', 'BASE_PRICE', 'BASE_PRICE_EXTRA', 'BASE_PRICE_EXTRA_RATE'];
+		BX.Catalog.Store.ProductList.Instance.getProductsFields().forEach((productRow) => {
+			let product = {};
+			productFields.forEach((field) => {
+				if (Type.isObject(field))
+				{
+					const destinationField = Object.keys(field)[0];
+					const sourceField = field[destinationField];
+					product[destinationField] = productRow[sourceField] ?? '';
+				}
+				else
+				{
+					product[field] = productRow[field] ?? '';
+				}
+			});
+			products.push(product);
+		});
+
+		return products;
 	}
 
 	openMasterSlider()
@@ -136,9 +199,9 @@ class DocumentCard extends BaseCard
 		return;
 	}
 
-	static registerDocumentControllersFactory()
+	focusOnTab(tabId)
 	{
-		DocumentCard.#controllersFactory = new ControllersFactory();
+		EventEmitter.emit('BX.Catalog.EntityCard.TabManager:onOpenTab', {tabId: tabId});
 	}
 
 	// deprecated
@@ -155,9 +218,10 @@ class DocumentCard extends BaseCard
 
 	getEditorInstance()
 	{
-		if (Reflection.getClass('BX.UI.EntityEditor'))
+		const editorInstance = Reflection.getClass(this.editorName);
+		if (editorInstance)
 		{
-			return BX.UI.EntityEditor.getDefault();
+			return editorInstance.getDefault();
 		}
 
 		return null;
@@ -176,6 +240,11 @@ class DocumentCard extends BaseCard
 
 	subscribeToUserSelectorEvent()
 	{
+		if (this.editorName !== 'BX.UI.EntityEditor')
+		{
+			return;
+		}
+
 		EventEmitter.subscribe('BX.UI.EntityEditorUser:openSelector', (event) => {
 			let eventData = event.data[1];
 			const dialog = new Dialog({
@@ -232,7 +301,7 @@ class DocumentCard extends BaseCard
 
 	subscribeToValidationFailedEvent()
 	{
-		EventEmitter.subscribe('BX.UI.EntityEditor:onFailedValidation', (event) => {
+		EventEmitter.subscribe(this.editorName + ':onFailedValidation', (event) => {
 			EventEmitter.emit('BX.Catalog.EntityCard.TabManager:onOpenTab', {tabId: 'main'});
 		});
 		EventEmitter.subscribe('onProductsCheckFailed', (event) => {
@@ -242,7 +311,7 @@ class DocumentCard extends BaseCard
 
 	subscribeToOnSaveEvent()
 	{
-		EventEmitter.subscribe('BX.UI.EntityEditor:onSave', (event) => {
+		EventEmitter.subscribe(this.editorName + ':onSave', (event) => {
 			const eventEditor = event.data[0];
 			const action = event.data[1]?.actionId;
 			if (eventEditor && eventEditor._ajaxForm)
@@ -278,6 +347,7 @@ class DocumentCard extends BaseCard
 					form.addUrlParams({
 						documentType: this.documentType,
 						isNewDocument: this.entityId <= 0 ? 'Y' : 'N',
+						inventoryManagementSource: this.inventoryManagementSource,
 					});
 				}
 			}
@@ -294,15 +364,21 @@ class DocumentCard extends BaseCard
 					tab: 'products',
 					isNewDocument: this.entityId <= 0 ? 'Y' : 'N',
 					documentType: this.documentType,
+					inventoryManagementSource: this.inventoryManagementSource,
 				});
 				this.isTabAnalyticsSent = true;
+			}
+
+			if (tabId)
+			{
+				this.activeTabId = tabId;
 			}
 		});
 	}
 
 	subscribeToDirectActionEvent()
 	{
-		EventEmitter.subscribe('BX.UI.EntityEditor:onDirectAction', (event) => {
+		EventEmitter.subscribe(this.editorName + ':onDirectAction', (event) => {
 
 			const eventEditor = event.data[0];
 
@@ -327,6 +403,15 @@ class DocumentCard extends BaseCard
 
 				event.data[0]._ajaxForms['CONDUCT'].addUrlParams({
 					documentType: this.documentType,
+					inventoryManagementSource: this.inventoryManagementSource,
+				});
+			}
+
+			if (event.data[1]?.actionId === 'CANCEL_CONDUCT')
+			{
+				event.data[0]._ajaxForms['CANCEL_CONDUCT'].addUrlParams({
+					documentType: this.documentType,
+					inventoryManagementSource: this.inventoryManagementSource,
 				});
 			}
 		});
@@ -474,6 +559,11 @@ class DocumentCard extends BaseCard
 	static registerModelFactory()
 	{
 		DocumentCard.#modelFactory = new ModelFactory();
+	}
+
+	static registerDocumentControllersFactory(eventName)
+	{
+		DocumentCard.#controllersFactory = new ControllersFactory(eventName);
 	}
 
 	setSliderText()

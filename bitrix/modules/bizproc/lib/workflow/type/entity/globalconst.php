@@ -3,6 +3,7 @@ namespace Bitrix\Bizproc\Workflow\Type\Entity;
 
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main;
+use Bitrix\Main\ORM\Event;
 
 /**
  * Class GlobalConstTable
@@ -13,9 +14,9 @@ use Bitrix\Main;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_GlobalConst_Query query()
- * @method static EO_GlobalConst_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_GlobalConst_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_GlobalConst_Result getById($id)
- * @method static EO_GlobalConst_Result getList(array $parameters = array())
+ * @method static EO_GlobalConst_Result getList(array $parameters = [])
  * @method static EO_GlobalConst_Entity getEntity()
  * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalConst createObject($setDefaultValues = true)
  * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalConst_Collection createCollection()
@@ -98,7 +99,7 @@ class GlobalConstTable extends Main\ORM\Data\DataManager
 
 		// PROPERTY_SETTINGS ?
 		$fields = [
-			'NAME' => $property['Name'],
+			'NAME' => trim($property['Name']),
 			'DESCRIPTION' => $property['Description'],
 			'PROPERTY_TYPE' => $property['Type'],
 			'IS_REQUIRED' => $property['Required'] ? 'Y' : 'N',
@@ -112,26 +113,25 @@ class GlobalConstTable extends Main\ORM\Data\DataManager
 			'MODIFIED_BY' => $property['ModifiedBy'],
 		];
 
-		if ($fields['CREATED_BY'] === null)
+		if ($userId === null)
 		{
-			unset($fields['CREATED_BY']);
-			unset($fields['CREATED_DATE']);
+			unset($fields['CREATED_BY'], $fields['CREATED_DATE'], $fields['MODIFIED_BY'], $fields['MODIFIED_DATE']);
 		}
 
-		if ($fields['MODIFIED_BY'] === null)
+		$oldProperty = static::getByPrimary((string)$constId)->fetch();
+		if ($oldProperty)
 		{
-			unset($fields['MODIFIED_BY']);
-			unset($fields['MODIFIED_DATE']);
-		}
+			if (isset($oldProperty['CREATED_BY']))
+			{
+				unset($fields['CREATED_BY'], $fields['CREATED_DATE']);
+			}
 
-		$count = static::getCount(['=ID' => $constId]);
-		if ($count > 0)
-		{
 			$result = static::update($constId, $fields);
 		}
 		else
 		{
-			$result = static::add($fields + ['ID' => $constId]);
+			$fields['ID'] = $constId;
+			$result = static::add($fields);
 		}
 
 		return $result;
@@ -161,22 +161,20 @@ class GlobalConstTable extends Main\ORM\Data\DataManager
 		$normalized = [];
 		$normalizedAsField = FieldType::normalizeProperty($property);
 
-		$normalized['Visibility'] = $property['Visibility'] ? (string)$property['Visibility'] : 'GLOBAL';
-		$normalized['CreatedBy'] = ((int)$property['CreatedBy'] !== 0) ? (int)$property['CreatedBy'] : $userId;
-		try
-		{
-			$normalized['CreatedDate'] = $property['CreatedDate']
-				? new Main\Type\DateTime($property['CreatedDate'])
-				: new Main\Type\DateTime()
-			;
-		}
-		catch (\Bitrix\Main\ObjectException $e)
-		{
-		}
-
+		$normalized['Visibility'] = isset($property['Visibility']) ? (string)$property['Visibility'] : 'GLOBAL';
 		$normalized['ModifiedBy'] = $userId;
+		$normalized['CreatedBy'] = $userId;
 		$normalized['ModifiedDate'] = new Main\Type\DateTime();
+		$normalized['CreatedDate'] = $normalized['ModifiedDate'];
 
 		return array_merge($normalized, $normalizedAsField);
+	}
+
+	public static function onBeforeUpdate(Event $event)
+	{
+		$result = new Main\ORM\EventResult();
+		$result->unsetFields(['PROPERTY_TYPE', 'IS_REQUIRED', 'IS_MULTIPLE', 'VISIBILITY']);
+
+		return $result;
 	}
 }

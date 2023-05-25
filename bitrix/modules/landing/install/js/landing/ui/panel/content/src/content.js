@@ -1,8 +1,12 @@
+import 'ui.design-tokens';
+import 'ui.fonts.opensans';
+
 import {Type, Dom, Tag, Event} from 'main.core';
 import {BasePanel} from 'landing.ui.panel.base';
 import getDeltaFromEvent from './internal/get-delta-from-event';
 import calculateDurationTransition from './internal/calculate-duration-transition';
 import scrollTo from './internal/scroll-to';
+
 import './css/style.css';
 import 'landing.utils';
 
@@ -288,6 +292,7 @@ export class Content extends BasePanel
 			{
 				Dom.addClass(document.body, 'landing-ui-hide-action-panels');
 			}
+			Dom.addClass(document.body, "landing-ui-action-panels-disable-scrollbar");
 
 			void BX.Landing.Utils.Show(this.overlay);
 			return BX.Landing.Utils.Show(this.layout).then(() => {
@@ -306,6 +311,7 @@ export class Content extends BasePanel
 			{
 				Dom.removeClass(document.body, 'landing-ui-hide-action-panels');
 			}
+			Dom.removeClass(document.body, "landing-ui-action-panels-disable-scrollbar");
 
 			void BX.Landing.Utils.Hide(this.overlay);
 			return BX.Landing.Utils.Hide(this.layout).then(() => {
@@ -348,6 +354,7 @@ export class Content extends BasePanel
 	clearSidebar()
 	{
 		Dom.clean(this.sidebar);
+		this.sidebarButtons = new BX.Landing.UI.Collection.ButtonCollection();
 	}
 
 	setTitle(title)
