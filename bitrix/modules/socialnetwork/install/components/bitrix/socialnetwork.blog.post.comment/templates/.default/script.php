@@ -24,10 +24,9 @@ $formParams = [
 	"PARSER" => Array(
 		"Bold", "Italic", "Underline", "Strike", "ForeColor",
 		"FontList", "FontSizeList", "RemoveFormat", "Quote",
-		"Code",
-		(!$arResult['NoCommentUrl'] ? 'CreateLink' : ''),
+		"Code", (!$arResult['NoCommentUrl'] ? 'CreateLink' : ''),
 		"Image",
-		($arResult['allowImageUpload'] === 'Y' ? 'UploadImage' : ''),
+		($arResult['allowImageUpload'] === 'Y' ? 'UploadImage' : 'UploadFile'),
 		($arResult['allowVideo'] === 'Y' ? 'InputVideo' : ''),
 		"Table", "Justify", "InsertOrderedList",
 		"InsertUnorderedList",
@@ -77,11 +76,10 @@ $formParams = [
 	"SMILES" => COption::GetOptionInt("blog", "smile_gallery_id", 0),
 	"LHE" => array(
 		"documentCSS" => "body {color:#434343;}",
-		"iframeCss" => "html body {padding-left: 14px!important; font-size: 13px!important; line-height: 18px!important;}",
+		"iframeCss" => "html body {padding-left: 14px!important; line-height: 18px!important;}",
 //		"ctrlEnterHandler" => "__submit" . $arResult['FORM_ID'],
 		"id" => "idLHE_blogCommentForm" . $arResult['FORM_ID'],
-		"fontFamily" => "'Helvetica Neue', Helvetica, Arial, sans-serif",
-		"fontSize" => "12px",
+		"fontSize" => "14px",
 		"bInitByJS" => true,
 		"height" => 80
 	),

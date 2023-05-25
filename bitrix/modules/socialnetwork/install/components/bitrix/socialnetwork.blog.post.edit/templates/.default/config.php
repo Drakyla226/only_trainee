@@ -10,7 +10,9 @@ return [
 	'js' => 'script.js',
 	'rel' => [
 		'main.core',
-		'ui.entity-selector'
+		'ui.entity-selector',
+		'ui.design-tokens',
+		'ui.fonts.opensans',
 	],
 	'skip_core' => false,
 ];

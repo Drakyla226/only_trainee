@@ -667,7 +667,7 @@ class CDeliveryRusPost
 
 	private static function getLocationToCode($arLocationTo)
 	{
-		$code = self::getRegionCodeByOldName($arLocationTo['REGION_NAME_LANG']); // old location
+		$code = self::getRegionCodeByOldName($arLocationTo['REGION_NAME_LANG'] ?? ''); // old location
 
 		if($code == '' && CSaleLocation::isLocationProMigrated())
 		{
@@ -777,7 +777,7 @@ class CDeliveryRusPost
 
 		if(empty($data))
 		{
-			require_once(dirname(__FILE__).'/rus_post/old_loc_to_codes.php');
+			require_once(__DIR__.'/rus_post/old_loc_to_codes.php');
 			$data = $locToCode;
 		}
 

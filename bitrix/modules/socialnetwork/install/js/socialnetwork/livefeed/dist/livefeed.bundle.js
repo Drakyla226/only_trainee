@@ -336,7 +336,8 @@ this.BX = this.BX || {};
 	          state: newState
 	        });
 
-	        main_core.ajax.runAction('socialnetwork.api.livefeed.logentry.' + (newState === 'Y' ? 'pin' : 'unpin'), {
+	        var action = newState === 'Y' ? 'socialnetwork.api.livefeed.logentry.pin' : 'socialnetwork.api.livefeed.logentry.unpin';
+	        main_core.ajax.runAction(action, {
 	          data: {
 	            params: {
 	              logId: logId
@@ -421,7 +422,14 @@ this.BX = this.BX || {};
 	            params: {
 	              logId: logId
 	            }
-	          }
+	          },
+	          headers: [{
+	            name: main_core.Loc.getMessage('SONET_EXT_LIVEFEED_AJAX_ENTITY_HEADER_NAME'),
+	            value: params.entityValue || ''
+	          }, {
+	            name: main_core.Loc.getMessage('SONET_EXT_LIVEFEED_AJAX_TOKEN_HEADER_NAME'),
+	            value: params.tokenValue || ''
+	          }]
 	        }).then(function (response) {
 	          return resolve(response.data);
 	        }, function (response) {
@@ -460,13 +468,17 @@ this.BX = this.BX || {};
 	        }
 
 	        var postToMove = post.parentNode.classList.contains("".concat(_this6["class"].post)) ? post.parentNode : post;
+	        var entityValue = post.getAttribute('data-security-entity-pin');
+	        var tokenValue = post.getAttribute('data-security-token-pin');
 
 	        if (state === 'Y') {
 	          var originalPostHeight = postToMove.offsetHeight;
 	          postToMove.setAttribute('bx-data-height', originalPostHeight);
 
 	          _this6.getPinnedData({
-	            logId: logId
+	            logId: logId,
+	            entityValue: entityValue,
+	            tokenValue: tokenValue
 	          }).then(function (data) {
 	            var pinnedPanelTitleNode = post.querySelector('.feed-post-pinned-title');
 	            var pinnedPanelDescriptionNode = post.querySelector('.feed-post-pinned-desc');
@@ -1857,24 +1869,24 @@ this.BX = this.BX || {};
 	        var _event$getData = event.getData(),
 	            _event$getData2 = babelHelpers.slicedToArray(_event$getData, 2),
 	            command = _event$getData2[0],
-	            params = _event$getData2[1];
+	            eventParams = _event$getData2[1];
 
-	        if (command !== 'user_counter' || !params[_this.currentSiteId] || !params[_this.currentSiteId][_this.currentCounterType]) {
+	        if (command !== 'user_counter' || !eventParams[_this.currentSiteId] || !eventParams[_this.currentSiteId][_this.currentCounterType]) {
 	          return;
 	        }
 
-	        _this.changeCounter(main_core.Runtime.clone(params[_this.currentSiteId][_this.currentCounterType]));
+	        _this.changeCounter(main_core.Runtime.clone(eventParams[_this.currentSiteId][_this.currentCounterType]));
 	      });
 	      main_core_events.EventEmitter.subscribe('onImUpdateCounter', function (event) {
 	        var _event$getData3 = event.getData(),
 	            _event$getData4 = babelHelpers.slicedToArray(_event$getData3, 1),
-	            arCount = _event$getData4[0];
+	            counterData = _event$getData4[0];
 
-	        if (!main_core.Type.isObjectLike(arCount) || main_core.Type.isUndefined(arCount[_this.currentCounterType])) {
+	        if (!main_core.Type.isObjectLike(counterData) || main_core.Type.isUndefined(counterData[_this.currentCounterType])) {
 	          return;
 	        }
 
-	        _this.changeCounter(arCount[_this.currentCounterType]);
+	        _this.changeCounter(counterData[_this.currentCounterType]);
 	      });
 	      main_core_events.EventEmitter.subscribe('OnUCCommentWasRead', function (event) {
 	        var _event$getData5 = event.getData(),
@@ -2181,9 +2193,35 @@ this.BX = this.BX || {};
 	var MoreButton$$1 = /*#__PURE__*/function () {
 	  function MoreButton$$1() {
 	    babelHelpers.classCallCheck(this, MoreButton$$1);
+	    main_core_events.EventEmitter.subscribe('BX.Livefeed:recalculateComments', this.onRecalculateLivefeedComments.bind(this));
 	  }
 
-	  babelHelpers.createClass(MoreButton$$1, null, [{
+	  babelHelpers.createClass(MoreButton$$1, [{
+	    key: "onRecalculateLivefeedComments",
+	    value: function onRecalculateLivefeedComments(baseEvent) {
+	      var _baseEvent$getCompatD = baseEvent.getCompatData(),
+	          _baseEvent$getCompatD2 = babelHelpers.slicedToArray(_baseEvent$getCompatD, 1),
+	          data = _baseEvent$getCompatD2[0];
+
+	      if (!main_core.Type.isDomNode(data.rootNode)) {
+	        return;
+	      }
+
+	      var informerBlock = data.rootNode;
+	      var moreBlock = informerBlock.querySelector(".".concat(MoreButton$$1.cssClass.more));
+
+	      if (moreBlock) {
+	        informerBlock.classList.remove(MoreButton$$1.cssClass.postSeparator);
+	      }
+
+	      MoreButton$$1.recalcPost({
+	        arPos: {
+	          height: data.rootNode.offsetHeight + data.rootNode.offsetTop
+	        },
+	        informerBlock: informerBlock
+	      });
+	    }
+	  }], [{
 	    key: "recalcPost",
 	    value: function recalcPost(params) {
 	      if (!main_core.Type.isDomNode(params.informerBlock)) {
@@ -2210,7 +2248,7 @@ this.BX = this.BX || {};
 	      var _this = this;
 
 	      var buttonsList = FeedInstance.getMoreButtons();
-	      buttonsList.forEach(function (buttonData, index, object) {
+	      buttonsList.forEach(function (buttonData, key) {
 	        if (!main_core.Type.isPlainObject(buttonData) || !main_core.Type.isStringFilled(buttonData.bodyBlockID)) {
 	          return;
 	        }
@@ -2229,6 +2267,25 @@ this.BX = this.BX || {};
 	              var innerNode = outerNode.querySelector("div.".concat(_this.cssClass.postTextInner));
 	              innerNode.style.overflowX = 'scroll';
 	            }
+
+	            var moreButton = outerNode.querySelector(".".concat(_this.cssClass.more));
+
+	            if (moreButton) {
+	              main_core.Event.unbindAll(moreButton, 'click');
+	              main_core.Event.bind(moreButton, 'click', function (e) {
+	                BX.UI.Animations.expand({
+	                  moreButtonNode: e.currentTarget,
+	                  type: 'post',
+	                  classBlock: _this.cssClass.postText,
+	                  classOuter: _this.cssClass.postTextInner,
+	                  classInner: _this.cssClass.postTextInnerInner,
+	                  heightLimit: 300,
+	                  callback: function callback(textBlock) {
+	                    _this.expand(textBlock);
+	                  }
+	                });
+	              });
+	            }
 	          }
 	        }
 
@@ -2239,8 +2296,9 @@ this.BX = this.BX || {};
 	          informerBlock: main_core.Type.isStringFilled(buttonData.informerBlockID) ? document.getElementById(buttonData.informerBlockID) : null
 	        });
 
-	        object.splice(index, 1);
+	        buttonsList["delete"](key);
 	      });
+	      FeedInstance.setMoreButtons(buttonsList);
 	      var feedContainer = document.getElementById('log_internal_container');
 
 	      if (!feedContainer) {
@@ -2620,6 +2678,7 @@ this.BX = this.BX || {};
 
 	        var emptyLivefeed = main_core.Type.isPlainObject(responseData.componentResult) && main_core.Type.isStringFilled(responseData.componentResult.EMPTY) ? responseData.componentResult.EMPTY : 'N';
 	        var forcePageRefresh = main_core.Type.isPlainObject(responseData.componentResult) && main_core.Type.isStringFilled(responseData.componentResult.FORCE_PAGE_REFRESH) ? responseData.componentResult.FORCE_PAGE_REFRESH : 'N';
+	        var isFilterUsed = main_core.Type.isPlainObject(responseData.componentResult) && main_core.Type.isStringFilled(responseData.componentResult.FILTER_USED) && responseData.componentResult.FILTER_USED === 'Y';
 
 	        if (forcePageRefresh === 'Y') {
 	          top.window.location.reload();
@@ -2635,20 +2694,18 @@ this.BX = this.BX || {};
 	        }
 
 	        main_core.Dom.clean(feedContainer);
-	        var emptyBlock = emptyLivefeed === 'Y' && document.getElementById('feed-empty-wrap') ? document.getElementById('feed-empty-wrap') : null;
+	        var emptyBlock = document.getElementById('feed-empty-wrap');
 
 	        if (emptyBlock) {
-	          feedContainer.appendChild(main_core.Dom.create('div', {
-	            props: {
-	              className: 'feed-wrap'
-	            },
-	            children: [emptyBlock]
-	          }));
-	          emptyBlock.style.display = 'block';
-	          var emptyTextNode = emptyBlock.querySelector('.feed-wrap-empty');
+	          if (emptyLivefeed === 'Y') {
+	            emptyBlock.style.display = 'block';
+	            var emptyTextNode = emptyBlock.querySelector('.feed-wrap-empty');
 
-	          if (emptyTextNode) {
-	            emptyTextNode.innerHTML = main_core.Loc.getMessage('SONET_C30_T_EMPTY_SEARCH');
+	            if (emptyTextNode) {
+	              emptyTextNode.innerHTML = isFilterUsed ? main_core.Loc.getMessage('SONET_C30_T_EMPTY_SEARCH') : main_core.Loc.getMessage('SONET_C30_T_EMPTY');
+	            }
+	          } else {
+	            emptyBlock.style.display = 'none';
 	          }
 	        }
 
@@ -3043,12 +3100,15 @@ this.BX = this.BX || {};
 	        obj.form[key].value = value;
 	      });
 	      this.onLightEditorShow(text, data);
-	      var matches = obj.currentEntity.ENTITY_XML_ID.match(/^TASK_(\d+)$/i);
 
-	      if (matches && this.resultFieldTaskIdList.includes(parseInt(matches[1]))) {
-	        BX.Tasks.ResultManager.showField();
-	      } else {
-	        BX.Tasks.ResultManager.hideField();
+	      if (!BX.Type.isUndefined(BX.Tasks)) {
+	        var matches = obj.currentEntity.ENTITY_XML_ID.match(/^TASK_(\d+)$/i);
+
+	        if (matches && this.resultFieldTaskIdList.includes(parseInt(matches[1]))) {
+	          BX.Tasks.ResultManager.showField();
+	        } else {
+	          BX.Tasks.ResultManager.hideField();
+	        }
 	      }
 	    }
 	  }, {
@@ -3115,7 +3175,7 @@ this.BX = this.BX || {};
 	    babelHelpers.classCallCheck(this, Feed);
 	    this.entryData = {};
 	    this.feedInitialized = false;
-	    this.moreButtonDataList = [];
+	    this.moreButtonDataList = new Map();
 	  }
 
 	  babelHelpers.createClass(Feed, [{
@@ -3436,6 +3496,11 @@ this.BX = this.BX || {};
 	      node.insertBefore(main_core.Tag.render(_templateObject2$2 || (_templateObject2$2 = babelHelpers.taggedTemplateLiteral(["<div class=\"feed-add-error\" style=\"margin: 18px 37px 4px 84px;\"><span class=\"feed-add-info-text\"><span class=\"feed-add-info-icon\"></span><span>", "</span></span></div>"])), main_core.Loc.getMessage('sonetLMenuDeleteFailure')), node.firstChild);
 	    }
 	  }, {
+	    key: "setMoreButtons",
+	    value: function setMoreButtons(value) {
+	      this.moreButtonDataList = value;
+	    }
+	  }, {
 	    key: "getMoreButtons",
 	    value: function getMoreButtons() {
 	      return this.moreButtonDataList;
@@ -3443,12 +3508,12 @@ this.BX = this.BX || {};
 	  }, {
 	    key: "clearMoreButtons",
 	    value: function clearMoreButtons() {
-	      this.moreButtonDataList = [];
+	      this.moreButtonDataList.clear();
 	    }
 	  }, {
 	    key: "addMoreButton",
-	    value: function addMoreButton(data) {
-	      this.moreButtonDataList.push(data);
+	    value: function addMoreButton(key, data) {
+	      this.moreButtonDataList.set(key, data);
 	    }
 	  }, {
 	    key: "setNoTasksNotificationRead",
@@ -3484,6 +3549,7 @@ this.BX = this.BX || {};
 	var InformerInstance = new Informer();
 	var FilterInstance = new Filter();
 	var PageInstance = new Page();
+	var MoreButtonInstance = new MoreButton$$1();
 	new TaskCreator();
 
 	exports.FeedInstance = FeedInstance;
@@ -3491,6 +3557,7 @@ this.BX = this.BX || {};
 	exports.InformerInstance = InformerInstance;
 	exports.FilterInstance = FilterInstance;
 	exports.PageInstance = PageInstance;
+	exports.MoreButtonInstance = MoreButtonInstance;
 	exports.Post = Post$$1;
 	exports.TaskCreator = TaskCreator;
 	exports.Loader = Loader;

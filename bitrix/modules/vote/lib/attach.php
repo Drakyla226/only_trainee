@@ -39,6 +39,19 @@ Loc::loadMessages(__FILE__);
  * <li> CREATED_BY int
  * </ul>
  *
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Attach_Query query()
+ * @method static EO_Attach_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Attach_Result getById($id)
+ * @method static EO_Attach_Result getList(array $parameters = array())
+ * @method static EO_Attach_Entity getEntity()
+ * @method static \Bitrix\Vote\EO_Attach createObject($setDefaultValues = true)
+ * @method static \Bitrix\Vote\EO_Attach_Collection createCollection()
+ * @method static \Bitrix\Vote\EO_Attach wakeUpObject($row)
+ * @method static \Bitrix\Vote\EO_Attach_Collection wakeUpCollection($rows)
  */
 class AttachTable extends Entity\DataManager
 {
@@ -621,7 +634,7 @@ class Attach extends BaseObject implements \ArrayAccess
 		]);
 		$this->getConnector()->checkFields($data);
 		Vote::checkData($data, $data["ID"]);
-		if ($data["TITLE"] == '' && is_array($data["QUESTIONS"]))
+		if (($data["TITLE"] ?? null) == '' && is_array($data["QUESTIONS"]))
 		{
 			$q = reset($data["QUESTIONS"]);
 			if (is_array($q) && $q["QUESTION"] <> '')
@@ -681,7 +694,7 @@ class Attach extends BaseObject implements \ArrayAccess
 			$this->attach = $attach;
 			$this->vote = $vote;
 		}
-		else if ($this->attach["ID"] > 0)
+		else if ($this->attach["ID"] ?? null > 0)
 		{
 			$this->attach = null;
 			$this->vote = null;

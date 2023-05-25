@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\Context;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
@@ -14,9 +15,12 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Filter;
 use Bitrix\Socialnetwork\Helper;
+use Bitrix\Socialnetwork\Internals\Counter\CounterDictionary;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Socialnetwork\Item\Workgroup\AccessManager;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Main\Search;
+use Bitrix\Socialnetwork\WorkgroupTable;
 
 Loader::includeModule('socialnetwork');
 
@@ -28,9 +32,6 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 	protected const PRESET_REQUESTS_OUT = 'requests_out';
 	protected const PRESET_EXTERNAL = 'external';
 	protected const PRESET_AUTO = 'auto';
-
-	protected const COUNTER_REQUESTS_IN = 'workgroup_requests_in';
-	protected const COUNTER_REQUESTS_OUT = 'workgroup_requests_out';
 
 	protected $gridId = 'SOCIALNETWORK_WORKGROUP_USER_LIST';
 	protected $filterId = 'SOCIALNETWORK_WORKGROUP_USER_LIST';
@@ -58,6 +59,9 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		'ROLE',
 		'AUTO_MEMBER',
 		'INITIATED_BY_TYPE',
+		'INITIATED_BY_USER_ID',
+		'USER_ID',
+		'GROUP_ID',
 		'DEPARTMENT',
 		'DATE_CREATE',
 		'IS_SCRUM_MASTER',
@@ -173,25 +177,6 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		];
 	}
 
-	private function getFilterFields(\Bitrix\Main\Filter\Filter $entityFilter, array $usedFields = []): array
-	{
-		$result = [];
-
-		$fields = $entityFilter->getFields();
-
-		foreach ($fields as $fieldName => $field)
-		{
-			if (!in_array($fieldName, $usedFields, true))
-			{
-				continue;
-			}
-
-			$result[] = $field->toArray();
-		}
-
-		return $result;
-	}
-
 	private function clearFilter($componentResult): void
 	{
 		$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->filterId, $componentResult['FILTER_PRESETS']);
@@ -242,10 +227,10 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		switch ($this->arParams['MODE'])
 		{
 			case 'REQUESTS_IN':
-				$result = self::COUNTER_REQUESTS_IN;
+				$result = CounterDictionary::COUNTER_WORKGROUP_REQUESTS_IN;
 				break;
 			case 'REQUESTS_OUT':
-				$result = self::COUNTER_REQUESTS_OUT;
+				$result = CounterDictionary::COUNTER_WORKGROUP_REQUESTS_OUT;
 				break;
 			default:
 				$result = '';
@@ -276,7 +261,6 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 
 		$currentPresetId = $componentResult['CURRENT_PRESET_ID'];
 		$extranetAvailable = \Bitrix\Main\Filter\UserDataProvider::getExtranetAvailability();
-		$autoMemberAvailable = \Bitrix\Socialnetwork\Filter\UserToGroupDataProvider::getAutoMemberAvailability();
 
 		$result[self::PRESET_ALL] = [
 			'name' => Loc::getMessage('SOCIALNETWORK_GROUP_USER_LIST_FILTER_PRESET_ALL'),
@@ -451,7 +435,7 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		}
 	}
 
-	protected function addQueryFilter(\Bitrix\Main\Entity\Query $query, array $gridFilter, $componentResult): bool
+	protected function addQueryFilter(\Bitrix\Main\Entity\Query $query, array $gridFilter, $componentResult)
 	{
 		$query->addFilter('=GROUP_ID', $this->arParams['GROUP_ID']);
 
@@ -588,8 +572,6 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 				}
 			}
 		}
-
-		return true;
 	}
 
 	private function addQuerySelect(\Bitrix\Main\Entity\Query $query, \Bitrix\Main\Grid\Options $gridOptions, array $componentResult = []): void
@@ -888,7 +870,11 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 
 	protected function getSelect(\Bitrix\Main\Grid\Options $gridOptions, array $componentResult = []): array
 	{
-		$result = [ 'USER.ID', 'USER.CONFIRM_CODE', 'ROLE', 'INITIATED_BY_TYPE', 'INITIATED_BY_USER_ID', 'AUTO_MEMBER', 'DATE_CREATE'  ];
+		$result = [
+			'GROUP_ID', 'USER_ID',
+			'ROLE', 'INITIATED_BY_TYPE', 'INITIATED_BY_USER_ID', 'AUTO_MEMBER', 'DATE_CREATE',
+			'USER.ID', 'USER.CONFIRM_CODE',
+		];
 		if (ModuleManager::isModuleInstalled('intranet'))
 		{
 			$result[] = 'USER.USER_TYPE';
@@ -984,7 +970,7 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 			return;
 		}
 
-		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+		$request = Context::getCurrent()->getRequest();
 		$postAction = 'action_button_' .$this->gridId;
 
 		if (
@@ -1037,38 +1023,59 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		$removeModeratorRelationIdList = [];
 		$rejectIncomingRequestRelationIdList = [];
 
+		$group = WorkgroupTable::getList([
+			'filter' => [
+				'=ID' => $groupId,
+			],
+			'select' => [
+				'ID',
+				'CLOSED',
+				'PROJECT',
+				'SCRUM_MASTER_ID',
+				'INITIATE_PERMS',
+			],
+		])->fetchObject();
+
+		$currentUserRelation = UserToGroupTable::getList([
+			'filter' => [
+				'=GROUP_ID' => $groupId,
+				'=USER_ID' => Helper\User::getCurrentUserId(),
+			],
+			'select' => [ 'ID', 'ROLE', 'USER_ID', 'GROUP_ID', 'INITIATED_BY_TYPE' ],
+		])->fetchObject();
+
 		$res = UserToGroupTable::getList([
 			'filter' => [
 				'=GROUP_ID' => $groupId,
 				'@USER_ID' => $idList,
 			],
-			'select' => [ 'ID', 'USER', 'ROLE', 'INITIATED_BY_TYPE', 'INITIATED_BY_USER_ID', 'AUTO_MEMBER' ],
+			'select' => [
+				'ID',
+				'GROUP_ID',
+				'USER_ID',
+				'USER',
+				'ROLE',
+				'INITIATED_BY_TYPE',
+				'INITIATED_BY_USER_ID',
+				'AUTO_MEMBER',
+			],
 		]);
 		$relations = $res->fetchCollection();
 
 		foreach ($relations as $relation)
 		{
+			$accessManager = new AccessManager(
+				$group,
+				$relation,
+				$currentUserRelation,
+			);
+
 			if ($this->actionData['NAME'] === 'delete')
 			{
-				$canRemoveModerator = Helper\Workgroup::canRemoveModerator([
-					'relation' => $relation,
-					'groupId' => $groupId,
-				]);
-
-				$canDeleteOutgoingRequest = Helper\Workgroup::canDeleteOutgoingRequest([
-					'relation' => $relation,
-					'groupId' => $groupId,
-				]);
-
-				$canExclude = Helper\Workgroup::canExclude([
-					'relation' => $relation,
-					'groupId' => $groupId,
-				]);
-
-				$canProcessIncomingRequest = Helper\Workgroup::canProcessIncomingRequest([
-					'relation' => $relation,
-					'groupId' => $groupId,
-				]);
+				$canRemoveModerator = $accessManager->canRemoveModerator();
+				$canDeleteOutgoingRequest = $accessManager->canDeleteOutgoingRequest();
+				$canExclude = $accessManager->canExclude();
+				$canProcessIncomingRequest = $accessManager->canProcessIncomingRequest();
 
 				if (
 					!$canDeleteOutgoingRequest
@@ -1224,7 +1231,12 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 
 		$result['FILTER_PRESETS'] = $this->getFilterPresets($result);
 
-		if ((\Bitrix\Main\Context::getCurrent()->getRequest()->getPost('apply_filter') !== 'Y'))
+		$request = Context::getCurrent()->getRequest();
+
+		if (
+			($request->getPost('apply_filter') !== 'Y')
+			&& ($request->get('grid_action') !== 'pagination')
+		)
 		{
 			$this->clearFilter($result);
 		}
@@ -1249,31 +1261,16 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 			'FILTER' => $result['FILTER'],
 		]);
 
-		$result['PROCESS_EXTRANET'] = (
-			(
-				isset($gridFilter['EXTRANET'])
-				&& in_array($gridFilter['EXTRANET'], ['Y', 'N'])
-			)
-			|| !empty($gridFilter['DEPARTMENT'])
-			|| $gridFilter['PRESET_ID'] === 'company'
-				? 'N'
-				: 'Y'
-		);
-
 		$query = new \Bitrix\Main\Entity\Query(UserToGroupTable::getEntity());
 		$this->addQueryRuntime($query, $result);
 		$this->addQueryOrder($query, $gridOptions, $result);
-		if (!$this->addQueryFilter($query, $gridFilter, $result))
-		{
-			return $result;
-		}
+		$this->addQueryFilter($query, $gridFilter, $result);
 		$this->addQuerySelect($query, $gridOptions, $result);
 		$query->countTotal(true);
 		$query->setOffset($nav->getOffset());
 		$query->setLimit($nav->getLimit());
 		$query->disableDataDoubling();
 		$res = $query->exec();
-
 		$records = $res->fetchCollection();
 
 		$gridColumns = $gridOptions->getVisibleColumns();
@@ -1295,6 +1292,21 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		$rowsList = [];
 		$showActionsColumn = false;
 
+		$currentUserRelation = UserToGroupTable::getList([
+			'filter' => [
+				'=GROUP_ID' => (int)$this->arParams['GROUP_ID'],
+				'=USER_ID' => Helper\User::getCurrentUserId(),
+			],
+			'select' => [ 'ID', 'ROLE', 'USER_ID', 'GROUP_ID', 'INITIATED_BY_TYPE' ],
+		])->fetchObject();
+
+		$group = \Bitrix\Socialnetwork\WorkgroupTable::getList([
+			'filter' => [
+				'=ID' => (int)$this->arParams['GROUP_ID'],
+			],
+			'select' => [ 'ID', 'CLOSED', 'PROJECT', 'SCRUM_MASTER_ID', 'INITIATE_PERMS' ],
+		])->fetchObject();
+
 		foreach ($records as $record)
 		{
 			$row['ROW_FIELDS'] = $record;
@@ -1306,6 +1318,8 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 				'RELATION' => $row['ROW_FIELDS'],
 				'PATH_TO_USER' => $this->arParams['PATH_TO_USER'],
 				'GROUP_ID' => $this->arParams['GROUP_ID'],
+				'GROUP' => $group,
+				'CURRENT_RELATION' => $currentUserRelation,
 			]);
 
 			if (
@@ -1660,11 +1674,17 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		return $result;
 	}
 
-	public function actAction(string $action = '', array $fields = []): array
+	public function actAction(string $action = '', array $fields = []): ?array
 	{
 		if (!$this->checkAction($action))
 		{
-			throw new \Bitrix\Main\NotSupportedException(Loc::getMessage('SOCIALNETWORK_GROUP_USER_LIST_ERROR_ACTION_NOT_SUPPORTED'));
+			$this->errorCollection->setError(
+				new Error(
+					Loc::getMessage('SOCIALNETWORK_GROUP_USER_LIST_ERROR_ACTION_NOT_SUPPORTED')
+				)
+			);
+
+			return null;
 		}
 
 		try
@@ -1697,6 +1717,12 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 					break;
 				case self::AJAX_ACTION_DELETE_OUTGOING_REQUEST:
 					$result = Helper\Workgroup::deleteOutgoingRequest([
+						'groupId' => (int)($this->arParams['GROUP_ID'] ?? 0),
+						'userId' => (int)($fields['userId'] ?? 0),
+					]);
+					break;
+				case self::AJAX_ACTION_DELETE_INCOMING_REQUEST:
+					$result = Helper\Workgroup::deleteIncomingRequest([
 						'groupId' => (int)($this->arParams['GROUP_ID'] ?? 0),
 						'userId' => (int)($fields['userId'] ?? 0),
 					]);
@@ -1745,9 +1771,11 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 			}
 
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode());
+			$this->errorCollection->setError(new Error($e->getMessage()));
+
+			return null;
 		}
 
 		return [
@@ -1764,13 +1792,14 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 			self::AJAX_ACTION_REMOVE_MODERATOR,
 			self::AJAX_ACTION_EXCLUDE,
 			self::AJAX_ACTION_DELETE_OUTGOING_REQUEST,
+			self::AJAX_ACTION_DELETE_INCOMING_REQUEST,
 			self::AJAX_ACTION_ACCEPT_INCOMING_REQUEST,
 			self::AJAX_ACTION_REJECT_INCOMING_REQUEST,
 			self::AJAX_ACTION_REINVITE,
 		], true);
 	}
 
-	public function disconnectDepartmentAction(array $fields = []): array
+	public function disconnectDepartmentAction(array $fields = []): ?array
 	{
 		try
 		{
@@ -1779,9 +1808,11 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 				'departmentId' => (int)($fields['id'] ?? 0),
 			]);
 		}
-		catch(Exception $e)
+		catch (\Exception $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode());
+			$this->errorCollection->setError(new Error($e->getMessage()));
+
+			return null;
 		}
 
 		return [

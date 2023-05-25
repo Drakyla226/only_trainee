@@ -2,6 +2,12 @@
 
 use Bitrix\Disk\File;
 use Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker;
+use Bitrix\Main\AccessDeniedException;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\InvalidOperationException;
+use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\Config\Option;
@@ -525,12 +531,12 @@ class CSocNetLogRestService extends IRestService
 			if ($postId <= 0)
 			{
 				$e = $APPLICATION->getException();
-				throw new Exception($e ? $e->getString() : 'Cannot add blog post');
+				throw new SystemException($e ? $e->getString() : 'Cannot add blog post');
 			}
 		}
 		catch (Exception $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode());
+			throw new SystemException($e->getMessage(), $e->getCode());
 		}
 
 		return $postId;
@@ -546,12 +552,12 @@ class CSocNetLogRestService extends IRestService
 			if ($postId <= 0)
 			{
 				$e = $APPLICATION->getException();
-				throw new Exception($e ? $e->getString() : 'Cannot update blog post');
+				throw new SystemException($e ? $e->getString() : 'Cannot update blog post');
 			}
 		}
 		catch (Exception $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode());
+			throw new SystemException($e->getMessage(), $e->getCode());
 		}
 
 		return $postId;
@@ -567,7 +573,7 @@ class CSocNetLogRestService extends IRestService
 		}
 		catch (Exception $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode());
+			throw new SystemException($e->getMessage(), $e->getCode());
 		}
 
 		return $result;
@@ -579,12 +585,12 @@ class CSocNetLogRestService extends IRestService
 
 		if ($postId <= 0)
 		{
-			throw new Exception('Wrong post ID');
+			throw new ArgumentException('Wrong post ID');
 		}
 
 		if (!Loader::includeModule('blog'))
 		{
-			throw new Exception('Blog module not installed');
+			throw new InvalidOperationException('Blog module not installed');
 		}
 
 		$siteId = (
@@ -643,7 +649,7 @@ class CSocNetLogRestService extends IRestService
 
 		if (empty($blogPostPermsNewList))
 		{
-			throw new Exception('Wrong destinations');
+			throw new ArgumentException('Wrong destinations');
 		}
 
 		$currentUserId = (
@@ -661,7 +667,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ($currentUserPerm <= \Bitrix\Blog\Item\Permissions::READ)
 		{
-			throw new Exception('No read perms');
+			throw new AccessDeniedException('No read perms');
 		}
 
 		$resultFields = array(
@@ -690,11 +696,12 @@ class CSocNetLogRestService extends IRestService
 
 		if ($resultFields['ERROR_MESSAGE'])
 		{
-			throw new Exception($resultFields['ERROR_MESSAGE']);
+			throw new SystemException($resultFields['ERROR_MESSAGE']);
 		}
-		elseif ($resultFields['PUBLISH_STATUS'] !== BLOG_PUBLISH_STATUS_PUBLISH)
+
+		if ($resultFields['PUBLISH_STATUS'] !== BLOG_PUBLISH_STATUS_PUBLISH)
 		{
-			throw new Exception('No permissions to share by this user (ID =' . $currentUserId . ')');
+			throw new AccessDeniedException('No permissions to share by this user (ID =' . $currentUserId . ')');
 		}
 
 		$permsFull = array();
@@ -757,14 +764,14 @@ class CSocNetLogRestService extends IRestService
 
 		if (!is_array($fields))
 		{
-			throw new Exception('Incorrect input data');
+			throw new ArgumentTypeException('Incorrect input data');
 		}
 
 		$arParams["postId"] = (int)$fields['POST_ID'];
 
 		if ($arParams['postId'] <= 0)
 		{
-			throw new Exception('Wrong post ID');
+			throw new ArgumentException('Wrong post ID');
 		}
 
 		$arParams["nTopCount"] = 500;
@@ -1069,13 +1076,13 @@ class CSocNetLogRestService extends IRestService
 
 		if (!Loader::includeModule('blog'))
 		{
-			throw new Exception('No blog module installed');
+			throw new InvalidOperationException('No blog module installed');
 		}
 
 		$postId = (int)$fields['POST_ID'];
 		if ($postId <= 0)
 		{
-			throw new Exception('No post found');
+			throw new ArgumentException('No post found');
 		}
 
 		$res = CBlogPost::getList(
@@ -1091,13 +1098,13 @@ class CSocNetLogRestService extends IRestService
 		$post = $res->fetch();
 		if (!$post)
 		{
-			throw new Exception('No post found');
+			throw new ObjectNotFoundException('No post found');
 		}
 
 		$blog = CBlog::getById($post["BLOG_ID"]);
 		if (!$blog)
 		{
-			throw new Exception('No blog found');
+			throw new ObjectNotFoundException('No blog found');
 		}
 
 		if (
@@ -1110,7 +1117,7 @@ class CSocNetLogRestService extends IRestService
 		))
 		)
 		{
-			throw new Exception('Duplicate comment');
+			throw new AccessDeniedException('Duplicate comment');
 		}
 
 		$userIP = CBlogUser::getUserIP();
@@ -1145,7 +1152,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ($perm === \Bitrix\Blog\Item\Permissions::DENY)
 		{
-			throw new Exception('No permissions');
+			throw new AccessDeniedException('No permissions');
 		}
 
 		if ($perm === \Bitrix\Blog\Item\Permissions::PREMODERATE)
@@ -1156,7 +1163,7 @@ class CSocNetLogRestService extends IRestService
 		$result = CBlogComment::add($commentFields);
 		if (!$result)
 		{
-			throw new Exception('Blog comment hasn\'t been added');
+			throw new SystemException('Blog comment hasn\'t been added');
 		}
 
 		if (
@@ -1225,12 +1232,12 @@ class CSocNetLogRestService extends IRestService
 
 		if ($commentId <= 0)
 		{
-			throw new Exception('Wrong comment ID');
+			throw new ArgumentException('Wrong comment ID');
 		}
 
 		if (!Loader::includeModule('blog'))
 		{
-			throw new Exception('Blog module not installed');
+			throw new InvalidOperationException('Blog module not installed');
 		}
 
 		$currentUserId = (
@@ -1248,13 +1255,13 @@ class CSocNetLogRestService extends IRestService
 
 		if ($currentUserPerm < \Bitrix\Blog\Item\Permissions::FULL)
 		{
-			throw new Exception('No delete perms');
+			throw new AccessDeniedException('No delete perms');
 		}
 
 		$commentFields = \Bitrix\Blog\Item\Comment::getById($commentId)->getFields();
 		if (empty($commentId))
 		{
-			throw new Exception('No comment found');
+			throw new ObjectNotFoundException('No comment found');
 		}
 
 		if ($result = CBlogComment::Delete($commentId))
@@ -1444,7 +1451,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ($commentId <= 0)
 		{
-			throw new Exception('Wrong comment ID');
+			throw new ArgumentException('Wrong comment ID');
 		}
 
 		$currentUserId = (
@@ -1458,7 +1465,7 @@ class CSocNetLogRestService extends IRestService
 		$commentFields = \Bitrix\Socialnetwork\Item\LogComment::getById($commentId)->getFields();
 		if (empty($commentFields))
 		{
-			throw new Exception('No comment found');
+			throw new ObjectNotFoundException('No comment found');
 		}
 
 		$currentUserPerm = self::getLogCommentPerm(array(
@@ -1468,7 +1475,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ($currentUserPerm < self::PERM_WRITE)
 		{
-			throw new Exception('No write perms');
+			throw new AccessDeniedException('No write perms');
 		}
 
 		$result = CSocNetLogComments::Delete($commentId);
@@ -1485,7 +1492,7 @@ class CSocNetLogRestService extends IRestService
 	{
 		if (!Loader::includeModule('blog'))
 		{
-			throw new Exception('Blog module not installed');
+			throw new InvalidOperationException('Blog module not installed');
 		}
 
 		$result = Bitrix\Blog\Item\Permissions::DENY;
@@ -1690,7 +1697,7 @@ class CSocNetLogRestService extends IRestService
 	{
 		if (!is_array($fields))
 		{
-			throw new Exception('Incorrect input data');
+			throw new ArgumentTypeException('Incorrect input data');
 		}
 
 		foreach ($fields as $key => $value)
@@ -1732,12 +1739,38 @@ class CSocNetLogRestService extends IRestService
 			unset($fields['IMAGE']);
 		}
 
+		if (!isset($fields['SITE_ID']))
+		{
+			$siteIdForCheck = SITE_ID;
+			$fields['SITE_ID'] = [ $siteIdForCheck ];
+		}
+		elseif (!is_array($fields['SITE_ID']))
+		{
+			$siteIdForCheck = ((string)$fields['SITE_ID'] === '' ? SITE_ID : $fields['SITE_ID']);
+			$fields['SITE_ID'] = [ $siteIdForCheck ];
+		}
+		else
+		{
+			$siteIdForCheck = $fields['SITE_ID'][0];
+		}
+
 		if (
-			!is_set($fields, "SITE_ID")
-			|| (string)$fields["SITE_ID"] === ''
+			Loader::includeModule('extranet')
+			&& !CExtranet::isIntranetUser()
 		)
 		{
-			$fields["SITE_ID"] = array(SITE_ID);
+			$siteIdForCheck = self::getExtranetSiteId();
+			$fields['SITE_ID'][] = $siteIdForCheck;
+			$fields['VISIBLE'] = 'N';
+			$fields['OPENED'] = 'N';
+		}
+
+		if (!\Bitrix\Socialnetwork\Helper\Workgroup::canCreate([
+			'siteId' => $siteIdForCheck,
+			'checkAdminSession' => false,
+		]))
+		{
+			throw new AccessDeniedException('You have no permissions to create a group');
 		}
 
 		if (
@@ -1805,42 +1838,40 @@ class CSocNetLogRestService extends IRestService
 
 		if ($groupId <= 0)
 		{
-			throw new Exception('Cannot create group');
+			throw new SystemException('Cannot create group');
 		}
-		else
+
+		CSocNetFeatures::SetFeature(
+			SONET_ENTITY_GROUP,
+			$groupId,
+			'files',
+			true
+		);
+
+		if (
+			isset($fields['GROUP_THEME_ID'])
+			&& Loader::includeModule('intranet')
+		)
 		{
-			CSocNetFeatures::SetFeature(
-				SONET_ENTITY_GROUP,
-				$groupId,
-				'files',
-				true
-			);
+			$siteTemplateId = 'bitrix24';
 
-			if (
-				isset($fields['GROUP_THEME_ID'])
-				&& Loader::includeModule('intranet')
-			)
+			if ($themePicker = new ThemePicker($siteTemplateId, SITE_ID, self::getCurrentUserId(), ThemePicker::ENTITY_TYPE_SONET_GROUP, $groupId))
 			{
-				$siteTemplateId = 'bitrix24';
-
-				if ($themePicker = new ThemePicker($siteTemplateId, SITE_ID, self::getCurrentUserId(), ThemePicker::ENTITY_TYPE_SONET_GROUP, $groupId))
+				if (empty($fields['GROUP_THEME_ID']))
 				{
-					if (empty($fields['GROUP_THEME_ID']))
-					{
-						$themesList = $themePicker->getPatternThemes();
-						$themePickerData = $themesList[array_rand($themesList)];
-						$fields['GROUP_THEME_ID'] = $themePickerData['id'];
-					}
+					$themesList = $themePicker->getPatternThemes();
+					$themePickerData = $themesList[array_rand($themesList)];
+					$fields['GROUP_THEME_ID'] = $themePickerData['id'];
+				}
 
-					try
-					{
-						$themePicker->setCurrentThemeId($fields['GROUP_THEME_ID']);
-						unset($themePicker);
-					}
-					catch (\Bitrix\Main\ArgumentException $exception)
-					{
+				try
+				{
+					$themePicker->setCurrentThemeId($fields['GROUP_THEME_ID']);
+					unset($themePicker);
+				}
+				catch (ArgumentException $exception)
+				{
 
-					}
 				}
 			}
 		}
@@ -1910,20 +1941,21 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$groupID <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
-		if (!Workgroup::canUpdate([
+		if (!Workgroup\Access::canUpdate([
 			'groupId' => $groupID,
+			'checkAdminSession' => false,
 		]))
 		{
-			throw new Exception('User has no permissions to update group');
+			throw new AccessDeniedException('User has no permissions to update group');
 		}
 
 		$res = CSocNetGroup::Update($groupID, $arFields, false);
 		if ((int)$res <= 0)
 		{
-			throw new Exception('Cannot update group');
+			throw new SystemException('Cannot update group');
 		}
 
 		return $res;
@@ -1935,7 +1967,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ($groupId <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
 		$filter = [
@@ -1948,27 +1980,23 @@ class CSocNetLogRestService extends IRestService
 		}
 
 		$res = CSocNetGroup::GetList([], $filter);
-		$groupFiels = $res->Fetch();
-		if (is_array($groupFiels))
+		$groupFields = $res->Fetch();
+		if (!is_array($groupFields))
 		{
-			if (
-				(int)$groupFiels["OWNER_ID"] === self::getCurrentUserId()
-				|| self::isCurrentUserAdmin()
-			)
-			{
-				if (!CSocNetGroup::Delete($groupFiels["ID"]))
-				{
-					throw new Exception('Cannot delete group');
-				}
-			}
-			else
-			{
-				throw new Exception('User has no permissions to delete group');
-			}
+			throw new ObjectNotFoundException('Socialnetwork group not found');
 		}
-		else
+
+		if (
+			(int)$groupFields["OWNER_ID"] !== self::getCurrentUserId()
+			&& !self::isCurrentUserAdmin()
+		)
 		{
-			throw new Exception('Socialnetwork group not found');
+			throw new AccessDeniedException('User has no permissions to delete group');
+		}
+
+		if (!CSocNetGroup::Delete($groupFields["ID"]))
+		{
+			throw new SystemException('Cannot delete group');
 		}
 
 		return true;
@@ -1985,7 +2013,7 @@ class CSocNetLogRestService extends IRestService
 		}
 		catch(Exception $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode());
+			throw new SystemException($e->getMessage(), $e->getCode());
 		}
 	}
 
@@ -2079,50 +2107,51 @@ class CSocNetLogRestService extends IRestService
 	{
 		$GROUP_ID = (int)$arFields['ID'];
 
-		if ($GROUP_ID > 0)
+		if ($GROUP_ID <= 0)
 		{
-			$filter = [
-				'ID' => $GROUP_ID,
-			];
-
-			if (!self::isCurrentUserAdmin())
-			{
-				$filter['CHECK_PERMISSIONS'] = self::getCurrentUserId();
-
-				if (self::getCurrentUserType() === 'extranet')
-				{
-					$filter['GROUP_SITE_ID'] = self::getExtranetSiteId();
-				}
-			}
-
-			$dbRes = CSocNetGroup::GetList(array(), $filter);
-			$arGroup = $dbRes->Fetch();
-			if (is_array($arGroup))
-			{
-				$dbRes = CSocNetUserToGroup::GetList(
-					array('ID' => 'ASC'),
-					array(
-						'GROUP_ID' => $arGroup['ID'],
-						'<=ROLE' => SONET_ROLES_USER,
-						'=USER_ACTIVE' => 'Y'
-					), false, false, array('USER_ID', 'ROLE')
-				);
-
-				$res = array();
-				while ($arRes = $dbRes->Fetch())
-				{
-					$res[] = $arRes;
-				}
-
-				return $res;
-			}
-
-			throw new Exception('Socialnetwork group not found');
+			throw new ArgumentException('Wrong socialnetwork group ID');
 		}
-		else
+
+		$filter = [
+			'ID' => $GROUP_ID,
+		];
+
+		if (!self::isCurrentUserAdmin())
 		{
-			throw new Exception('Wrong socialnetwork group ID');
+			$filter['CHECK_PERMISSIONS'] = self::getCurrentUserId();
+
+			if (self::getCurrentUserType() === 'extranet')
+			{
+				$filter['SITE_ID'] = self::getExtranetSiteId();
+			}
 		}
+
+		$res = CSocNetGroup::GetList([], $filter);
+		$groupFields = $res->fetch();
+		if (!is_array($groupFields))
+		{
+			throw new ObjectNotFoundException('Socialnetwork group not found');
+		}
+
+		$res = CSocNetUserToGroup::getList(
+			[ 'ID' => 'ASC' ],
+			array(
+				'GROUP_ID' => $groupFields['ID'],
+				'<=ROLE' => SONET_ROLES_USER,
+				'=USER_ACTIVE' => 'Y'
+			),
+			false,
+			false,
+			[ 'USER_ID', 'ROLE' ]
+		);
+
+		$result = [];
+		while ($relationFields = $res->fetch())
+		{
+			$result[] = $relationFields;
+		}
+
+		return $result;
 	}
 
 	public static function inviteGroupUsers($arFields): array
@@ -2133,7 +2162,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$groupID <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
 		if (
@@ -2141,7 +2170,7 @@ class CSocNetLogRestService extends IRestService
 			|| (is_array($arUserID) && count($arUserID) <= 0)
 		)
 		{
-			throw new Exception('Wrong user IDs');
+			throw new ArgumentException('Wrong user IDs');
 		}
 
 		if (!is_array($arUserID))
@@ -2156,26 +2185,24 @@ class CSocNetLogRestService extends IRestService
 			"CHECK_PERMISSIONS" => self::getCurrentUserId(),
 		));
 		$arGroup = $dbRes->Fetch();
-		if (is_array($arGroup))
+		if (!is_array($arGroup))
 		{
-			foreach ($arUserID as $user_id)
-			{
-				$isCurrentUserTmp = (self::getCurrentUserId() === (int)$user_id);
-				$canInviteGroup = CSocNetUserPerms::CanPerformOperation(self::getCurrentUserId(), $user_id, "invitegroup", self::isCurrentUserAdmin());
-				$user2groupRelation = CSocNetUserToGroup::GetUserRole($user_id, $arGroup["ID"]);
-
-				if (
-					!$isCurrentUserTmp && $canInviteGroup && !$user2groupRelation
-					&& CSocNetUserToGroup::SendRequestToJoinGroup(self::getCurrentUserId(), $user_id, $arGroup["ID"], $message, true)
-				)
-				{
-					$arSuccessID[] = $user_id;
-				}
-			}
+			throw new ObjectNotFoundException('Socialnetwork group not found');
 		}
-		else
+
+		foreach ($arUserID as $user_id)
 		{
-			throw new Exception('Socialnetwork group not found');
+			$isCurrentUserTmp = (self::getCurrentUserId() === (int)$user_id);
+			$canInviteGroup = CSocNetUserPerms::CanPerformOperation(self::getCurrentUserId(), $user_id, "invitegroup", self::isCurrentUserAdmin());
+			$user2groupRelation = CSocNetUserToGroup::GetUserRole($user_id, $arGroup["ID"]);
+
+			if (
+				!$isCurrentUserTmp && $canInviteGroup && !$user2groupRelation
+				&& CSocNetUserToGroup::SendRequestToJoinGroup(self::getCurrentUserId(), $user_id, $arGroup["ID"], $message, true)
+			)
+			{
+				$arSuccessID[] = $user_id;
+			}
 		}
 
 		return $arSuccessID;
@@ -2188,7 +2215,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$groupID <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
 		$filter = [
@@ -2207,13 +2234,13 @@ class CSocNetLogRestService extends IRestService
 
 			if (!CSocNetUserToGroup::SendRequestToBeMember(self::getCurrentUserId(), $arGroup["ID"], $message, $url, false))
 			{
-				throw new Exception('Cannot request to join group');
+				throw new SystemException('Cannot request to join group');
 			}
 
 			return true;
 		}
 
-		throw new Exception('Socialnetwork group not found');
+		throw new ObjectNotFoundException('Socialnetwork group not found');
 	}
 
 	public static function addGroupUsers($arFields): array
@@ -2223,12 +2250,12 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$groupId <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
 		if (!self::isCurrentUserAdmin())
 		{
-			throw new Exception('No permissions to add users');
+			throw new AccessDeniedException('No permissions to add users');
 		}
 
 		if (
@@ -2236,7 +2263,7 @@ class CSocNetLogRestService extends IRestService
 			|| (is_array($userIdList) && count($userIdList) <= 0)
 		)
 		{
-			throw new Exception('Wrong user IDs');
+			throw new ArgumentException('Wrong user IDs');
 		}
 
 		if (!is_array($userIdList))
@@ -2250,7 +2277,7 @@ class CSocNetLogRestService extends IRestService
 		$groupFields = $res->fetch();
 		if (!is_array($groupFields))
 		{
-			throw new Exception('Socialnetwork group not found');
+			throw new ObjectNotFoundException('Socialnetwork group not found');
 		}
 
 		if (
@@ -2338,17 +2365,17 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$groupId <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
 		if (!self::isCurrentUserAdmin())
 		{
-			throw new Exception('No permissions to update users role');
+			throw new AccessDeniedException('No permissions to update users role');
 		}
 
 		if (!in_array($role, [ UserToGroupTable::ROLE_MODERATOR, UserToGroupTable::ROLE_USER ], true))
 		{
-			throw new Exception('Incorrect role code');
+			throw new ArgumentException('Incorrect role code');
 		}
 
 		if (
@@ -2356,7 +2383,7 @@ class CSocNetLogRestService extends IRestService
 			|| (is_array($userIdList) && count($userIdList) <= 0)
 		)
 		{
-			throw new Exception('Wrong user IDs');
+			throw new ArgumentException('Wrong user IDs');
 		}
 
 		if (!is_array($userIdList))
@@ -2370,7 +2397,7 @@ class CSocNetLogRestService extends IRestService
 		$groupFields = $res->fetch();
 		if (!is_array($groupFields))
 		{
-			throw new Exception('Socialnetwork group not found');
+			throw new ObjectNotFoundException('Socialnetwork group not found');
 		}
 
 		$successUserId = [];
@@ -2411,12 +2438,12 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$groupId <= 0)
 		{
-			throw new Exception('Wrong group ID');
+			throw new ArgumentException('Wrong group ID');
 		}
 
 		if (!self::isCurrentUserAdmin())
 		{
-			throw new Exception('No permissions to update users role');
+			throw new AccessDeniedException('No permissions to update users role');
 		}
 
 		if (
@@ -2424,7 +2451,7 @@ class CSocNetLogRestService extends IRestService
 			|| (is_array($userIdList) && count($userIdList) <= 0)
 		)
 		{
-			throw new Exception('Wrong user IDs');
+			throw new ArgumentException('Wrong user IDs');
 		}
 
 		if (!is_array($userIdList))
@@ -2444,7 +2471,7 @@ class CSocNetLogRestService extends IRestService
 		$groupFields = $res->fetch();
 		if (!is_array($groupFields))
 		{
-			throw new Exception('Socialnetwork group not found');
+			throw new ObjectNotFoundException('Socialnetwork group not found');
 		}
 
 		$successUserId = [];
@@ -2568,7 +2595,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ($groupID <= 0)
 		{
-			throw new Exception("Wrong socialnetwork group ID");
+			throw new ArgumentException("Wrong socialnetwork group ID");
 		}
 
 		if (
@@ -2578,7 +2605,7 @@ class CSocNetLogRestService extends IRestService
 			|| !in_array(SONET_ENTITY_GROUP, $arSocNetFeaturesSettings[$feature]["allowed"], true)
 		)
 		{
-			throw new Exception("Wrong feature");
+			throw new ArgumentException("Wrong feature");
 		}
 
 		if (
@@ -2587,7 +2614,7 @@ class CSocNetLogRestService extends IRestService
 			|| !array_key_exists($operation, $arSocNetFeaturesSettings[$feature]["operations"])
 		)
 		{
-			throw new Exception("Wrong operation");
+			throw new ArgumentException("Wrong operation");
 		}
 
 		return CSocNetFeaturesPerms::CurrentUserCanPerformOperation(SONET_ENTITY_GROUP, $groupID, $feature, $operation);
@@ -2758,7 +2785,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$subjectId <= 0)
 		{
-			throw new Exception('Wrong group subject ID');
+			throw new ArgumentException('Wrong group subject ID');
 		}
 
 		$arFilter = [
@@ -2767,25 +2794,23 @@ class CSocNetLogRestService extends IRestService
 
 		$dbRes = CSocNetGroupSubject::getList(array(), $arFilter);
 
-		if ($arGroupSubject = $dbRes->fetch())
+		if (!($arGroupSubject = $dbRes->fetch()))
 		{
-			if (self::isCurrentUserAdmin())
-			{
-				$res = CSocNetGroupSubject::update($arGroupSubject["ID"], $fields);
-				if ((int)$res <= 0)
-				{
-					throw new Exception('Cannot update group subject');
-				}
-			}
-			else
-			{
-				throw new Exception('User has no permissions to update group subject');
-			}
-
-			return $res;
+			throw new ObjectNotFoundException('Socialnetwork group subject not found');
 		}
 
-		throw new Exception('Socialnetwork group subject not found');
+		if (!self::isCurrentUserAdmin())
+		{
+			throw new AccessDeniedException('User has no permissions to update group subject');
+		}
+
+		$res = CSocNetGroupSubject::update($arGroupSubject["ID"], $fields);
+		if ((int)$res <= 0)
+		{
+			throw new SystemException('Cannot update group subject');
+		}
+
+		return $res;
 	}
 
 	public static function deleteGroupSubject($arFields): bool
@@ -2794,7 +2819,7 @@ class CSocNetLogRestService extends IRestService
 
 		if ((int)$subjectId <= 0)
 		{
-			throw new Exception('Wrong group subject ID');
+			throw new ArgumentException('Wrong group subject ID');
 		}
 
 		$arFilter = [
@@ -2803,40 +2828,35 @@ class CSocNetLogRestService extends IRestService
 
 		$dbRes = CSocNetGroupSubject::getList(array(), $arFilter);
 		$arGroupSubject = $dbRes->fetch();
-		if (is_array($arGroupSubject))
+		if (!is_array($arGroupSubject))
 		{
-			$resSites = CSocNetGroupSubject::getSite($arGroupSubject['ID']);
-			while ($siteFields = $resSites->fetch())
-			{
-				$count = CSocNetGroupSubject::getList(
-					[],
-					[
-						'SITE_ID' => $siteFields['LID']
-					],
-					[], // count
-					false
-				);
-				if ($count <= 1)
-				{
-					throw new Exception('Cannot delete the sole group subject for site ('.$siteFields['LID'].')');
-				}
-			}
+			throw new ObjectNotFoundException('Socialnetwork group subject not found');
+		}
 
-			if (self::isCurrentUserAdmin())
+		$resSites = CSocNetGroupSubject::getSite($arGroupSubject['ID']);
+		while ($siteFields = $resSites->fetch())
+		{
+			$count = CSocNetGroupSubject::getList(
+				[],
+				[
+					'SITE_ID' => $siteFields['LID']
+				],
+				[] // count
+			);
+			if ($count <= 1)
 			{
-				if (!CSocNetGroupSubject::delete($arGroupSubject["ID"]))
-				{
-					throw new Exception('Cannot delete group subject');
-				}
-			}
-			else
-			{
-				throw new Exception('User has no permissions to delete group subject');
+				throw new SystemException('Cannot delete the sole group subject for site ('.$siteFields['LID'].')');
 			}
 		}
-		else
+
+		if (!self::isCurrentUserAdmin())
 		{
-			throw new Exception('Socialnetwork group subject not found');
+			throw new AccessDeniedException('User has no permissions to delete group subject');
+		}
+
+		if (!CSocNetGroupSubject::delete($arGroupSubject["ID"]))
+		{
+			throw new SystemException('Cannot delete group subject');
 		}
 
 		return true;
@@ -2846,7 +2866,7 @@ class CSocNetLogRestService extends IRestService
 	{
 		if (!self::isCurrentUserAdmin())
 		{
-			throw new Exception('User has no permissions to add group subject');
+			throw new AccessDeniedException('User has no permissions to add group subject');
 		}
 
 		foreach ($fields as $key => $value)
@@ -2866,7 +2886,7 @@ class CSocNetLogRestService extends IRestService
 
 		if (!$result)
 		{
-			throw new Exception('Socialnetwork group subject hasn\'t been added');
+			throw new SystemException('Socialnetwork group subject hasn\'t been added');
 		}
 
 		return [

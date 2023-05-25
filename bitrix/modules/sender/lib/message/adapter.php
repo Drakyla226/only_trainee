@@ -313,6 +313,11 @@ class Adapter implements iBase
 	 */
 	public function setFields(array $fields)
 	{
+		foreach ($fields as $key => $field)
+		{
+			$fields[$key] = nl2br(htmlspecialcharsbx((string) $field, ENT_COMPAT, false));
+		}
+
 		$this->fields = $fields;
 	}
 
@@ -330,7 +335,7 @@ class Adapter implements iBase
 		foreach ($this->getFields() as $code => $value)
 		{
 			$from[] = "$replaceChar$code$replaceChar";
-			$to[] = (string) $value;
+			$to[] = nl2br(htmlspecialcharsbx((string) $value, ENT_COMPAT, false));
 		}
 
 		return Integration\Sender\Mail\TransportMail::replaceTemplate(str_replace($from, $to, $content));
@@ -615,6 +620,16 @@ class Adapter implements iBase
 	}
 
 	/**
+	 * Is master yandex.
+	 *
+	 * @return bool
+	 */
+	public function isMasterYandex(): bool
+	{
+		return $this->message instanceof iMasterYandex;
+	}
+
+	/**
 	 * Return true if is hidden.
 	 *
 	 * @return bool
@@ -635,20 +650,21 @@ class Adapter implements iBase
 		{
 			return Integration\Bitrix24\Service::isAdAvailable();
 		}
-		elseif ($this->message instanceof iReturnCustomer)
+
+		if ($this->message instanceof iReturnCustomer)
 		{
 			return Integration\Bitrix24\Service::isRcAvailable();
 		}
-		else
-		{
-			switch ($this->getCode())
-			{
-				case iBase::CODE_MAIL:
-					return Integration\Bitrix24\Service::isEmailAvailable();
 
-				default:
-					return Integration\Bitrix24\Service::isMailingsAvailable();
-			}
+		switch ($this->getCode())
+		{
+			case iBase::CODE_MAIL:
+				return Integration\Bitrix24\Service::isEmailAvailable();
+			case iBase::CODE_MASTER_YANDEX:
+				return Integration\Bitrix24\Service::isMasterYandexAvailable();
+
+			default:
+				return Integration\Bitrix24\Service::isMailingsAvailable();
 		}
 	}
 

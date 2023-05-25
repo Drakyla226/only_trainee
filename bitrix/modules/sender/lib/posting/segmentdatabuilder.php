@@ -4,11 +4,14 @@ namespace Bitrix\Sender\Posting;
 
 use Bitrix\Main\DB\Result;
 use Bitrix\Main\Entity;
+use Bitrix\Main\Text\Encoding;
 use Bitrix\Sender\Connector;
 use Bitrix\Sender\Connector\IncrementallyConnector;
+use Bitrix\Sender\Entity\Segment;
 use Bitrix\Sender\GroupConnectorTable;
 use Bitrix\Sender\GroupTable;
 use Bitrix\Sender\Integration\Crm\Connectors\QueryCount;
+use Bitrix\Sender\Integration\Sender\Connectors\Contact;
 use Bitrix\Sender\Internals\Model\GroupCounterTable;
 use Bitrix\Sender\Internals\Model\GroupStateTable;
 use Bitrix\Sender\Internals\Model\GroupThreadTable;
@@ -87,6 +90,22 @@ class SegmentDataBuilder
 
 		return $groupState ? $groupState : $this->createGroupState();
 	}
+	/**
+	 * @return array|bool|false
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getAllStates()
+	{
+		return GroupStateTable::getList(
+			[
+				'filter' => [
+					'=GROUP_ID'  => $this->groupId,
+				]
+			]
+		)->fetchAll();
+	}
 
 	/**
 	 * @return bool
@@ -114,7 +133,7 @@ class SegmentDataBuilder
 		$dataToSet = [
 			'FILTER_ID' => $this->filterId,
 			'GROUP_ID' => $this->groupId,
-			'ENDPOINT' => json_encode($this->endpoint),
+			'ENDPOINT' => json_encode(Encoding::convertEncoding($this->endpoint, SITE_CHARSET, 'utf-8')),
 			'OFFSET' => 0,
 			'STATE' => GroupStateTable::STATES['CREATED'],
 			'NEW_CREATED' => true,
@@ -185,7 +204,10 @@ class SegmentDataBuilder
 				]
 			);
 
-			self::checkIsSegmentPrepared($this->groupId);
+			if (self::checkIsSegmentPrepared($this->groupId))
+			{
+				$this->calculateFilterCounts();
+			}
 		}
 	}
 
@@ -199,7 +221,11 @@ class SegmentDataBuilder
 	 */
 	public static function checkIsSegmentPrepared(int $groupId)
 	{
-		Locker::lock(self::SEGMENT_LOCK_KEY, $groupId);
+		if (!Locker::lock(self::SEGMENT_LOCK_KEY, $groupId))
+		{
+			return false;
+		}
+
 		$states = GroupStateTable::getList([
 			'filter' => [
 				'=GROUP_ID' => $groupId
@@ -434,7 +460,18 @@ class SegmentDataBuilder
 		$threadStrategy = Runtime\Env::getGroupThreadContext();
 
 		$threadStrategy->setGroupStateId($groupState['ID']);
-		$threadStrategy->fillThreads();
+
+		$threadState = $threadStrategy->checkThreads();
+		if ($threadState === AbstractThreadStrategy::THREAD_LOCKED)
+		{
+			return false;
+		}
+
+		if ($threadState === AbstractThreadStrategy::THREAD_NEEDED)
+		{
+			$threadStrategy->fillThreads();
+		}
+
 		$threadStrategy->setPerPage(self::PER_PAGE);
 
 		if (
@@ -446,7 +483,10 @@ class SegmentDataBuilder
 		}
 
 		$offset = $threadStrategy->getOffset();
-		Locker::lock(self::SEGMENT_DATA_LOCK_KEY, $this->groupId);
+		if (!Locker::lock(self::SEGMENT_DATA_LOCK_KEY, $this->groupId))
+		{
+			return false;
+		}
 
 		if ($offset < $lastId)
 		{
@@ -492,6 +532,8 @@ class SegmentDataBuilder
 		}
 
 		$groupState = $this->getCurrentGroupState();
+		$result = '';
+
 		if (isset($groupState['NEW_CREATED'])
 			|| $groupState
 			&& ($groupState['ENDPOINT'] !== json_encode($this->endpoint) || $rebuild))
@@ -558,9 +600,9 @@ class SegmentDataBuilder
 			case Type::PHONE:
 				return ['=HAS_PHONE' => 'Y'];
 			case Type::CRM_COMPANY_ID:
-				return ['=CRM_ENTITY_TYPE_ID' => 4];
+				return  ['!=COMPANY_ID' => null];
 			case Type::CRM_CONTACT_ID:
-				return ['=CRM_ENTITY_TYPE_ID' => 3];
+				return ['!=CONTACT_ID' => null];
 			case Type::CRM_DEAL_PRODUCT_CONTACT_ID:
 			case Type::CRM_ORDER_PRODUCT_CONTACT_ID:
 			case Type::CRM_DEAL_PRODUCT_COMPANY_ID:
@@ -770,6 +812,7 @@ class SegmentDataBuilder
 			self::CONNECTOR_ENTITY[$connector->getCode()]
 		));
 
+		Segment::updateAddressCounters($this->groupId, [$counter]);
 		if (CModule::IncludeModule('pull'))
 		{
 			\CPullWatch::AddToStack(
@@ -789,6 +832,48 @@ class SegmentDataBuilder
 		}
 
 		return $counter;
+	}
+
+	/**
+	 * Calculate all current counters
+	 * @return Connector\DataCounter[]
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function calculateFilterCounts(): array
+	{
+		$connectors = GroupConnectorTable::getList(
+			[
+				'filter' => ['=GROUP_ID' => $this->groupId]
+			])->fetchAll();
+
+		$counters = [];
+		foreach ($connectors as $dbConnector)
+		{
+			$endpoint = $dbConnector['ENDPOINT'];
+			$connector = Connector\Manager::getConnector(
+				$endpoint
+			);
+
+			$this->filterId = $endpoint['FILTER_ID'] ?? 'sender_crm_client_--filter--crmclient--';
+			if ($connector instanceof Contact)
+			{
+				$connector->setFieldValues($endpoint['FIELDS']);
+			}
+			$counters[] = self::CONNECTOR_ENTITY[$connector->getCode()] ?
+						new Connector\DataCounter(QueryCount::getPreparedCount(
+						$this->getQuery(),
+						self::SEGMENT_TABLE,
+						self::CONNECTOR_ENTITY[$connector->getCode()]
+					)) : $connector->getDataCounter()
+			;
+
+		}
+
+		Segment::updateAddressCounters($this->groupId, $counters);
+
+		return $counters;
 	}
 
 	/**
@@ -839,6 +924,11 @@ class SegmentDataBuilder
 			}
 
 			$entityConnector = \Bitrix\Sender\Connector\Manager::getConnector($connector['ENDPOINT']);
+
+			if (!$connector['FILTER_ID'] && $entityConnector instanceof Connector\BaseFilter)
+			{
+				$connector['FILTER_ID'] = $entityConnector->getUiFilterId();
+			}
 
 			if (
 				!$entityConnector instanceof IncrementallyConnector
@@ -977,25 +1067,26 @@ class SegmentDataBuilder
 
 	private function detectSenderType(array $row)
 	{
-		if ($row['PROD_CRM_ORDER_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		if (isset($row['PROD_CRM_ORDER_ID']) && $row['PROD_CRM_ORDER_ID']
+			&& isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 5)
 			return Type::CRM_ORDER_PRODUCT_CONTACT_ID;
-		if ($row['CRM_ENTITY_TYPE_ID'] == 5)
+		if (isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 5)
 			return Type::CRM_CONTACT_ID;
-		if ($row['SGT_DEAL_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		if (isset($row['SGT_DEAL_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 5)
 			return Type::CRM_DEAL_PRODUCT_CONTACT_ID;
 
-		if ($row['PROD_CRM_ORDER_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 4)
+		if (isset($row['PROD_CRM_ORDER_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 4)
 			return Type::CRM_ORDER_PRODUCT_COMPANY_ID;
-		if ($row['CRM_ENTITY_TYPE_ID'] == 4)
+		if (isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 4)
 			return Type::CRM_COMPANY_ID;
-		if ($row['SGT_DEAL_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 4)
+		if (isset($row['SGT_DEAL_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 4)
 			return Type::CRM_DEAL_PRODUCT_COMPANY_ID;
 
-		if ($row['IM'])
+		if (isset($row['IM']))
 			return Type::IM;
-		if ($row['EMAIL'])
+		if (isset($row['EMAIL']))
 			return Type::EMAIL;
-		if ($row['PHONE'])
+		if (isset($row['PHONE']))
 			return Type::PHONE;
 
 		return Type::EMAIL;
@@ -1004,33 +1095,60 @@ class SegmentDataBuilder
 	private function detectSenderTypes(array $row)
 	{
 		$types = [];
-		if ($row['PROD_CRM_ORDER_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		if (isset($row['PROD_CRM_ORDER_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		{
 			$types[] = Type::CRM_ORDER_PRODUCT_CONTACT_ID;
-		if ($row['CRM_ENTITY_TYPE_ID'] == 5)
+		}
+		if (isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		{
 			$types[] = Type::CRM_CONTACT_ID;
-		if ($row['SGT_DEAL_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		}
+		if (isset($row['SGT_DEAL_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 5)
+		{
 			$types[] = Type::CRM_DEAL_PRODUCT_CONTACT_ID;
+		}
 
-		if ($row['PROD_CRM_ORDER_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 4)
+		if (isset($row['PROD_CRM_ORDER_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) && $row['CRM_ENTITY_TYPE_ID'] == 4)
+		{
 			$types[] = Type::CRM_ORDER_PRODUCT_COMPANY_ID;
-		if ($row['CRM_ENTITY_TYPE_ID'] == 4)
+		}
+		if (isset($row['CRM_ENTITY_TYPE_ID']) &&$row['CRM_ENTITY_TYPE_ID'] == 4)
+		{
 			$types[] = Type::CRM_COMPANY_ID;
-		if ($row['SGT_DEAL_ID'] && $row['CRM_ENTITY_TYPE_ID'] == 4)
+		}
+		if (isset($row['SGT_DEAL_ID']) && isset($row['CRM_ENTITY_TYPE_ID']) &&$row['CRM_ENTITY_TYPE_ID'] == 4)
+		{
 			$types[] = Type::CRM_DEAL_PRODUCT_COMPANY_ID;
+		}
 
-		if ($row['IM'])
+		if ($row['CRM_ENTITY_TYPE_ID'] === Type::CRM_LEAD_ID)
+		{
+			$types[] = Type::CRM_LEAD_ID;
+		}
+
+		if (isset($row['IM']))
+		{
 			$types[] = Type::IM;
-		if ($row['EMAIL'])
+		}
+		if (isset($row['EMAIL']))
+		{
 			$types[] = Type::EMAIL;
-		if ($row['PHONE'])
+		}
+		if (isset($row['PHONE']))
+		{
 			$types[] = Type::PHONE;
+		}
 
 		return $types;
 	}
 
 	private function updateCounters(array $rowsDataCounter)
 	{
-		Locker::lock(self::SEGMENT_LOCK_KEY, $this->groupId);
+		if (!Locker::lock(self::SEGMENT_LOCK_KEY, $this->groupId))
+		{
+			return;
+		}
+
 		$counter = GroupCounterTable::getList([
 			'select' => [
 				'GROUP_ID', 'TYPE_ID', 'CNT'

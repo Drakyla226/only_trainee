@@ -224,13 +224,13 @@ class Processor extends \Bitrix\Socialnetwork\Component\LogListCommon\Processor
 			{
 				$this->setFilterKey('USER_ID', $result['currentUserId']);
 			}
-			elseif ($params['DISPLAY'] > 0)
+			elseif (is_numeric($params['DISPLAY']))
 			{
 				$this->setFilterKey('USER_ID', (int)$params['DISPLAY']);
 			}
 
 			if (
-				$params['DISPLAY'] > 0
+				is_numeric($params['DISPLAY'])
 				|| in_array($params['DISPLAY'], [ 'forme', 'mine'])
 			)
 			{
@@ -276,7 +276,6 @@ class Processor extends \Bitrix\Socialnetwork\Component\LogListCommon\Processor
 			}
 
 			$result['SHOW_FOLLOW_CONTROL'] = 'N';
-			$result['SHOW_UNREAD'] = 'N';
 			$this->showPinnedPanel = false;
 		}
 		elseif ($params['TO_USER_ID'] > 0)
@@ -569,6 +568,9 @@ class Processor extends \Bitrix\Socialnetwork\Component\LogListCommon\Processor
 			$filtered = false;
 			$filterOption = new \Bitrix\Main\UI\Filter\Options($result['FILTER_ID']);
 			$filterData = $filterOption->getFilter();
+
+			$result['FILTER_USED'] = (!empty($filterData) ? 'Y' : 'N');
+
 			$this->setFilterData($filterData);
 
 			if (
@@ -674,10 +676,11 @@ class Processor extends \Bitrix\Socialnetwork\Component\LogListCommon\Processor
 			}
 
 			$this->setFilterContent(trim($filterData['FIND']));
-			if (!empty($this->getFilterContent()))
+			$findValue = (string)$this->getFilterContent();
+			if ($findValue !== '')
 			{
 				$filtered = true;
-				$this->setFilterKey('*CONTENT',  LogIndex::prepareToken($this->getFilterContent()));
+				$this->setFilterKey('*CONTENT',  LogIndex::prepareToken($findValue));
 			}
 
 			if (

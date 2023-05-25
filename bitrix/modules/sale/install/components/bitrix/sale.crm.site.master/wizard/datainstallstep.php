@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Sale\CrmSiteMaster\Steps;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -316,8 +317,6 @@ class DataInstallStep extends \DataInstallStep
 		$sitePatcher->patchVoximplant();
 		$sitePatcher->patchMobile();
 		$sitePatcher->patchIm();
-
-		Option::set("crm", "crm_shop_enabled", "Y");
 
 		$sitePatcher->createDepartment(Loc::getMessage("SALE_CSM_WIZARD_DATAINSTALLSTEP_DEPARTMENT_NAME"));
 		$sitePatcher->prepareCrmCatalog();

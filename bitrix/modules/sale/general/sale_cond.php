@@ -300,17 +300,11 @@ class CSaleCondCtrlBasketGroup extends CSaleCondCtrlGroup
 						$currency = Sale\Internals\SiteCurrencyTable::getSiteCurrency(static::$arInitParams['SITE_ID']);
 					if (!empty($currency))
 					{
-						if($oneControl['ID'] == 'CondCumulativeGroup' && $row['control'][2]['id'] === 'Value')
+						if ($oneControl['ID'] == 'CondCumulativeGroup')
 						{
-							//insert currency after Value atom.
-							array_splice($row['control'], 3, 0, $currency);
-							array_splice($row['control'], 4, 0, Loc::getMessage('BT_SALE_COND_GROUP_CUMULATIVE_BEFORE_CONDITION'));
 							$row['containsOneAction'] = true;
 						}
-						else
-						{
-							$row['control'][] = $currency;
-						}
+						$row['control'][] = $currency;
 					}
 					unset($currency);
 				}
@@ -365,7 +359,7 @@ class CSaleCondCtrlBasketGroup extends CSaleCondCtrlGroup
 		{
 			$arControl['ATOMS'] = static::GetAtomsEx($arControl['ID'], true);
 			$arParams['COND_NUM'] = $arParams['FUNC_ID'];
-			$arValues = static::CheckAtoms($arOneCondition, $arOneCondition, $arControl, true);
+			$arValues = static::CheckAtoms($arOneCondition, $arParams, $arControl, true);
 			$boolError = ($arValues === false);
 		}
 
@@ -505,27 +499,6 @@ class CSaleCondCtrlBasketGroup extends CSaleCondCtrlGroup
 						'VALIDATE' => ''
 					)
 				),
-				'All' => array(
-					'JS' => array(
-						'id' => 'All',
-						'name' => 'aggregator',
-						'type' => 'select',
-						'values' => array(
-							'AND' => Loc::getMessage('BT_SALE_COND_GROUP_SELECT_ALL'),
-							'OR' => Loc::getMessage('BT_SALE_COND_GROUP_SELECT_ANY')
-						),
-						'defaultText' => Loc::getMessage('BT_SALE_COND_GROUP_BASKET_NUMBER_GROUP_SELECT_DEF'),
-						'defaultValue' => 'AND',
-						'first_option' => '...'
-					),
-					'ATOM' => array(
-						'ID' => 'All',
-						'FIELD_TYPE' => 'string',
-						'FIELD_LENGTH' => 255,
-						'MULTIPLE' => 'N',
-						'VALIDATE' => 'list'
-					)
-				)
 			),
 			'CondBsktAmtGroup' => array(
 				'Logic' => array(
@@ -1846,7 +1819,7 @@ class CSaleCondCtrlBasketItemConditions extends CGlobalCondCtrlAtoms
 		if (!$error)
 		{
 			$control['ATOMS'] = static::GetAtomsEx($control['ID'], true);
-			$values = static::CheckAtoms($condition, $condition, $control, false);
+			$values = static::CheckAtoms($condition, $params, $control, false);
 			$error = ($values === false);
 		}
 
@@ -2009,7 +1982,7 @@ class CSaleCondCtrlBasketProperties extends CGlobalCondCtrlAtoms
 		if (!$error)
 		{
 			$control['ATOMS'] = static::GetAtomsEx($control['ID'], true);
-			$values = static::CheckAtoms($condition, $condition, $control, false);
+			$values = static::CheckAtoms($condition, $params, $control, false);
 			$error = ($values === false);
 		}
 
@@ -3076,7 +3049,7 @@ class CSaleCondCumulativeCtrl extends \CSaleCondCtrlComplex
 		$control['ATOMS'] = static::GetAtomsEx($control['ID'], true);
 		$params['COND_NUM'] = $params['FUNC_ID'];
 
-		$values = static::CheckAtoms($oneCondition, $oneCondition, $control, true);
+		$values = static::CheckAtoms($oneCondition, $params, $control, true);
 		if ($values === false)
 		{
 			return false;

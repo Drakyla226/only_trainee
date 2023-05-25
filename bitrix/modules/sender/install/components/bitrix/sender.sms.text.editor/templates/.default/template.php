@@ -15,6 +15,9 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Main\Localization\Loc;
 
 $containerId = 'bx-sender-sms-text-editor';
+
+\Bitrix\Main\UI\Extension::load(['ui.design-tokens', 'ui.fonts.opensans']);
+
 ?>
 <script type="text/javascript">
 	BX.ready(function () {
@@ -42,3 +45,6 @@ $containerId = 'bx-sender-sms-text-editor';
 		</div>
 	</div>
 </div>
+<? if($arResult['TEMPLATE_OPTIONS_SELECTOR']): ?>
+	<span data-tag="<?=htmlspecialcharsbx(Json::encode($arResult['TEMPLATE_OPTIONS_SELECTOR']));?>"></span>
+<? endif; ?>

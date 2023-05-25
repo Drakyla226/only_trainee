@@ -13,11 +13,12 @@
 
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Localization\Loc;
-Bitrix\Main\UI\Extension::load(
-	[
-		'ui.notification',
-	]
-);
+
+Bitrix\Main\UI\Extension::load([
+	'ui.design-tokens',
+	'ui.notification',
+]);
+
 $getTileTemplate = function () use ($arParams)
 {
 	$inputName = $arParams['INPUT_NAME'] ?: '';
@@ -130,8 +131,8 @@ $containerId .= $arParams['ID'] ?: 'def';
 	</span>
 	<?if ($arParams['SHOW_BUTTON_ADD'] && !$arParams['READONLY']):?>
 		<span data-role="tile-add" class="sender-ui-tile-add">
-			<?if ($arParams['BUTTON_ADD_CAPTION']):?>
-				<?=htmlspecialcharsbx($arParams['BUTTON_ADD_CAPTION'])?>
+			<?if ($arParams['BUTTON_ADD_CAPTION'] ?? ''):?>
+				<?=htmlspecialcharsbx($arParams['BUTTON_ADD_CAPTION' ?? ''])?>
 			<?else:?>
 				<?=Loc::getMessage('SENDER_UI_TILE_SELECTOR_ADD')?>
 			<?endif;?>

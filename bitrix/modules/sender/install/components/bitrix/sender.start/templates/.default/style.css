@@ -20,7 +20,8 @@
 }
 
 .sender-start-title {
-	font: 16px/24px 'OpenSans-Regular', "Helvetica Neue", Arial, Helvetica, sans-serif;
+	font: 16px/24px var(--ui-font-family-secondary, var(--ui-font-family-open-sans));
+	font-weight: var(--ui-font-weight-regular, 400);
 	color: #333;
 	margin-bottom: 8px;
 }
@@ -50,7 +51,10 @@
 
 .sender-ui-tile-custom-list-item-subtitle {
 	margin-bottom: 20px;
-	max-width: 280px;
+	max-width: calc(100% - 20px);
+	max-height: calc(100% - 39px - 24px);
 	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 

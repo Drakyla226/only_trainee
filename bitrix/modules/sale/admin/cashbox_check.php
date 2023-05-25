@@ -1,5 +1,6 @@
-<?
-require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
+<?php
+
+require_once($_SERVER["DOCUMENT_ROOT"] . '/bitrix/modules/main/include/prolog_admin_before.php');
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Cashbox\Internals;
@@ -8,8 +9,19 @@ use Bitrix\Main\Page;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\Shipment;
 use Bitrix\Sale\Internals\StatusTable;
+use Bitrix\Main\Loader;
+use Bitrix\Sale\Link\EntityLinkBuilder\AdminEntityLinkBuilder;
+use Bitrix\Sale\Link\EntityLinkBuilder\CrmEntityLinkBuilder;
+use Bitrix\Sale\Link\Html\EntityLink;
+use Bitrix\Sale\Link\Html\OrderLink;
 
 $publicMode = $adminPage->publicMode || $adminSidePanelHelper->isPublicSidePanel();
+$shouldHideOrderEntities = (
+	$publicMode
+	&& Loader::includeModule('crm')
+	&& !CCrmSaleHelper::isWithOrdersMode()
+);
+
 $selfFolderUrl = $adminPage->getSelfFolderUrl();
 
 $saleModulePermissions = $APPLICATION->GetGroupRight("sale");
@@ -20,6 +32,12 @@ IncludeModuleLangFile(__FILE__);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/sale/prolog.php");
 Page\Asset::getInstance()->addJs("/bitrix/js/sale/cashbox.js");
 \Bitrix\Main\Loader::includeModule('sale');
+
+$orderEntityLinkBuilder =
+	$publicMode && Loader::includeModule('crm')
+		? new CrmEntityLinkBuilder()
+		: new AdminEntityLinkBuilder()
+;
 
 $tableId = "tbl_sale_cashbox_check";
 $instance = \Bitrix\Main\Application::getInstance();
@@ -39,7 +57,7 @@ if (($ids = $lAdmin->GroupAction()) && $saleModulePermissions >= "W")
 		if ($_REQUEST['action'] === 'delete')
 		{
 			$check = Internals\CashboxCheckTable::getRowById($id);
-			if ($check['STATUS'] == 'E' || $check['STATUS'] == 'N')
+			if ($check['STATUS'] == 'E' || $check['STATUS'] == 'N' || $check['STATUS'] == 'P')
 			{
 				Cashbox\CheckManager::delete($id);
 			}
@@ -126,12 +144,18 @@ $filterFields = array(
 		"type" => "date",
 		"default" => true
 	),
-	array(
-		"id" => "ORDER_ID",
-		"name" => GetMessage("SALE_F_ORDER_ID"),
-		"type" => "number",
-		"filterable" => "",
-		"quickSearch" => ""
+	...(
+	$shouldHideOrderEntities
+		? []
+		: [
+		[
+			"id" => "ORDER_ID",
+			"name" => GetMessage("SALE_F_ORDER_ID"),
+			"type" => "number",
+			"filterable" => "",
+			"quickSearch" => ""
+		]
+	]
 	),
 	array(
 		"id" => "STATUS",
@@ -147,7 +171,7 @@ $filter = array();
 
 $filterPresets = [
 	'base' => [
-		'name' => GetMessage('SALE_CASHBOX_CHECK_TITLE'),
+		'name' => GetMessage('SALE_CASHBOX_CHECK_PRESET_TITLE'),
 		'default' => true,
 		'current' => true,
 		'fields' => [
@@ -159,15 +183,26 @@ $lAdmin->setFilterPresets($filterPresets);
 
 $lAdmin->AddFilter($filterFields, $filter);
 
-$params = array(
-	'filter' => $filter
-);
-
 global $by, $order;
 $by = isset($by) ? $by : "ID";
 $order = isset($order) ? $order : "ASC";
-$params['order'] = array($by => $order);
 
+$params = array(
+	'filter' => $filter,
+	'order' => [$by => $order],
+	'runtime' => []
+);
+
+if ($shouldHideOrderEntities)
+{
+	$params['runtime'][] = new \Bitrix\Main\Entity\ReferenceField('ORDER_BINDING',
+		\Bitrix\Crm\Binding\OrderEntityTable::getEntity(),
+		[
+			'=ref.ORDER_ID' => 'this.ORDER_ID',
+		],
+		['join_type' => \Bitrix\Main\ORM\Query\Join::TYPE_INNER]
+	);
+}
 $dbResultList = new CAdminUiResult(Internals\CashboxCheckTable::getList($params), $tableId);
 
 $dbResultList->NavStart();
@@ -175,7 +210,21 @@ $dbResultList->NavStart();
 $headers = array(
 	array("id" => "ID", "content" => GetMessage("SALE_CASHBOX_ID"), "sort" => "ID", "default" => true),
 	array("id" => "CHECK_TYPE", "content" => GetMessage("SALE_CASHBOX_CHECK_TYPE"), "sort" => "TYPE", "default" => true),
-	array("id" => "ORDER_ID", "content" => GetMessage("SALE_CASHBOX_ORDER_ID"), "sort" => "ORDER_ID", "default" => true),
+	(
+	$shouldHideOrderEntities
+		? [
+		"id" => "ENTITY_ID",
+		"content" => GetMessage("SALE_CASHBOX_ENTITY_ID_SOURCE"),
+		"sort" => "ORDER_ID",
+		"default" => true
+	]
+		: [
+		"id" => "ORDER_ID",
+		"content" => GetMessage("SALE_CASHBOX_ORDER_ID"),
+		"sort" => "ORDER_ID",
+		"default" => true
+	]
+	),
 	array("id" => "CASHBOX_ID", "content" => GetMessage("SALE_CASHBOX_CASHBOX_ID"), "sort" => "CASHBOX_ID", "default" => true),
 	array("id" => "DATE_CREATE", "content" => GetMessage("SALE_CASHBOX_DATE_CREATE"), "sort" => "DATE_CREATE", "default" => true),
 	array("id" => "SUM", "content" => GetMessage("SALE_CASHBOX_SUM"), "sort" => "SUM", "default" => true),
@@ -239,12 +288,14 @@ $paymentData = Payment::getList(
 
 while ($payment = $paymentData->fetch())
 {
-	$linkIdUrl = $selfFolderUrl."sale_order_payment_edit.php?order_id=".$payment["ORDER_ID"]."&payment_id=".$payment["ID"]."&lang=".LANGUAGE_ID;
-	if ($publicMode)
-	{
-		$linkIdUrl = "/shop/orders/payment/details/".$payment["ID"]."/";
-	}
-	$linkId = '[<a href="'.$linkIdUrl.'">'.$payment["ID"].'</a>]';
+	$linkIdUrl = $orderEntityLinkBuilder->getPaymentDetailsLink(
+		(int)$payment['ORDER_ID'],
+		(int)$payment['ID']
+	);
+	$linkId = $linkIdUrl
+		? '[<a href="'.$linkIdUrl.'">'.$payment["ID"].'</a>]'
+		: '['.$payment["ID"].']';
+
 	$paymentRows[$payment['ID']] = $linkId.','.htmlspecialcharsbx($payment["PAY_SYSTEM_NAME"]).','.
 		($payment["PAID"] == "Y" ? Loc::getMessage("SALE_CHECK_PAYMENTS_PAID") :  Loc::getMessage("SALE_CHECK_PAYMENTS_UNPAID")).", ".
 		($payment["PS_STATUS"] <> '' ? Loc::getMessage("SALE_CASHBOX_STATUS").": ".htmlspecialcharsbx($payment["PS_STATUS"]).", " : "").
@@ -273,12 +324,13 @@ $shipmentData = Shipment::getList(
 
 while ($shipment = $shipmentData->fetch())
 {
-	$linkIdUrl = $selfFolderUrl."sale_order_shipment_edit.php?order_id=".$shipment["ORDER_ID"]."&shipment_id=".$shipment["ID"]."&lang=".LANGUAGE_ID;
-	if ($publicMode)
-	{
-		$linkIdUrl = "/shop/orders/shipment/details/".$shipment["ID"]."/";
-	}
-	$linkId = '[<a href="'.$linkIdUrl.'">'.$shipment["ID"].'</a>]';
+	$linkIdUrl = $orderEntityLinkBuilder->getShipmentDetailsLink(
+		(int)$shipment['ORDER_ID'],
+		(int)$shipment['ID']
+	);
+	$linkId = $linkIdUrl
+		? '[<a href="'.$linkIdUrl.'">'.$shipment["ID"].'</a>]'
+		: '[' . $shipment["ID"] . ']';
 
 	$fieldValue = $linkId.", ".
 		($shipment["DELIVERY_NAME"] <> '' ? htmlspecialcharsbx($shipment["DELIVERY_NAME"]).",</br> " : "").
@@ -306,54 +358,73 @@ while ($check = $dbResultList->Fetch())
 	$checkName = class_exists($checkClass) ? $checkClass::getName() : '';
 	$row->AddField("CHECK_TYPE", $checkName);
 
-	$orderField = '';
-	if ($check['ORDER_ID'] > 0)
+	$orderId = (int)$check['ORDER_ID'];
+	if ($shouldHideOrderEntities)
 	{
-		$orderIdUrl = "sale_order_view.php?ID=".(int)$check['ORDER_ID']."&lang=".LANGUAGE_ID;
-		if ($publicMode)
+		$entityLink = $orderEntityLinkBuilder->getOrderDetailUrl($orderId);
+		if ($orderEntityLinkBuilder instanceof CrmEntityLinkBuilder)
 		{
-			$orderIdUrl = "/shop/orders/details/".(int)$check['ORDER_ID']."/";
+			$relatedEntityLink = $orderEntityLinkBuilder->getEntityDetailUrl($orderId);
+			if ($relatedEntityLink)
+			{
+				$entityLink = $relatedEntityLink;
+			}
 		}
 
-		$orderField = "<a href=\"".$orderIdUrl."\">".(int)$check['ORDER_ID']."</a>";
+		$row->AddField("ENTITY_ID", EntityLink::createByOrder($orderId, $entityLink)->render());
 	}
+	else
+	{
+		$orderField = '';
+		if ($orderId > 0)
+		{
+			$orderField = new OrderLink(
+				$orderId,
+				$orderEntityLinkBuilder->getOrderDetailUrl($orderId)
+			);
+			$orderField = $orderField->render();
+		}
 
-	$row->AddField("ORDER_ID",  $orderField);
+		$row->AddField("ORDER_ID",  $orderField);
+	}
 
 	$paymentIdField = '';
 	if ($check['PAYMENT_ID'] > 0)
 	{
-		$paymentIdUrl = "sale_order_payment_edit.php?order_id=".(int)$check['ORDER_ID']."&payment_id=".(int)$check['PAYMENT_ID']."&lang=".LANGUAGE_ID;
-		if ($publicMode)
-		{
-			$paymentIdUrl = "/shop/orders/payment/details/".(int)$check['PAYMENT_ID']."/";
-		}
-		$paymentIdField = "<a href=\"".$paymentIdUrl."\">".(int)$check['PAYMENT_ID']."</a>";
+		$paymentIdUrl = $orderEntityLinkBuilder->getPaymentDetailsLink(
+			(int)$check['ORDER_ID'],
+			(int)$check['PAYMENT_ID']
+		);
+		$paymentIdField = $paymentIdUrl
+			? '<a href="'.$paymentIdUrl.'">'.(int)$check['PAYMENT_ID'].'</a>'
+			: (int)$check['PAYMENT_ID'];
 	}
 
-	if ($relatedEntities[$check['ID']]['P'])
+	$paymentEntityIds = $relatedEntities[$check['ID']]['P'] ?? null;
+	if (is_array($paymentEntityIds))
 	{
-		foreach ($relatedEntities[$check['ID']]['P'] as $entityId)
+		foreach ($paymentEntityIds as $entityId)
 		{
 			if ($paymentIdField)
 				$paymentIdField .= "<br>";
 
-			$paymentIdUrl = "sale_order_payment_edit.php?order_id=".(int)$check["ORDER_ID"]."&payment_id=".$entityId."&lang=".LANGUAGE_ID;
-			if ($publicMode)
-			{
-				$paymentIdUrl = "/shop/orders/payment/details/".$entityId."/";
-			}
-
-			$paymentIdField .= "<a href=\"".$paymentIdUrl."\">".(int)$entityId."</a>";
+			$paymentIdUrl = $orderEntityLinkBuilder->getPaymentDetailsLink(
+				(int)$check['ORDER_ID'],
+				(int)$entityId
+			);
+			$paymentIdField = $paymentIdUrl
+				? '<a href="'.$paymentIdUrl.'">'.(int)$entityId.'</a>'
+				: (int)$entityId;
 		}
 	}
 
 	$row->AddField("PAYMENT_ID",  $paymentIdField);
 
-	$paymentField = $paymentRows[(int)$check['PAYMENT_ID']];
-	if ($relatedEntities[$check['ID']]['P'])
+	$paymentId = (int)($check['PAYMENT_ID'] ?? 0);
+	$paymentField = $paymentRows[$paymentId] ?? null;
+	if (is_array($paymentEntityIds))
 	{
-		foreach ($relatedEntities[$check['ID']]['P'] as $entityId)
+		foreach ($paymentEntityIds as $entityId)
 		{
 			if ($paymentField)
 				$paymentField .= "<br>";
@@ -365,34 +436,39 @@ while ($check = $dbResultList->Fetch())
 	$shipmentIdField = '';
 	if ($check['SHIPMENT_ID'] > 0)
 	{
-		$shipmentIdUrl = "sale_order_shipment_edit.php?order_id=".(int)$check['ORDER_ID']."&shipment_id=".(int)$check['SHIPMENT_ID']."&lang=".LANGUAGE_ID;
-		if ($publicMode)
-		{
-			$shipmentIdUrl = "/shop/orders/shipment/details/".(int)$check['SHIPMENT_ID']."/";
-		}
-		$shipmentIdField .= "<a href=\"".$shipmentIdUrl."\">".(int)$check['SHIPMENT_ID']."</a>";
+		$shipmentIdUrl = $orderEntityLinkBuilder->getShipmentDetailsLink(
+			(int)$check['ORDER_ID'],
+			(int)$check['SHIPMENT_ID']
+		);
+		$shipmentIdField = $shipmentIdUrl
+			? '[<a href="'.$shipmentIdUrl.'">'.(int)$check['SHIPMENT_ID'].'</a>]'
+			: '[' . (int)$check['SHIPMENT_ID'] . ']';
 	}
-	if ($relatedEntities[$check['ID']]['S'])
+
+	$shipmentEntityIds = $relatedEntities[$check['ID']]['S'] ?? null;
+	if (is_array($shipmentEntityIds))
 	{
-		foreach ($relatedEntities[$check['ID']]['S'] as $entityId)
+		foreach ($shipmentEntityIds as $entityId)
 		{
 			if ($shipmentIdField)
 				$shipmentIdField .= "<br>";
 
-			$shipmentIdUrl = "sale_order_shipment_edit.php?order_id=".(int)$check['ORDER_ID']."&shipment_id=".(int)$entityId."&lang=".LANGUAGE_ID;
-			if ($publicMode)
-			{
-				$shipmentIdUrl = "/shop/orders/shipment/details/".(int)$entityId."/";
-			}
-			$shipmentIdField .= "<a href=\"".$shipmentIdUrl."\">".(int)$entityId."</a>";
+			$shipmentIdUrl = $orderEntityLinkBuilder->getShipmentDetailsLink(
+				(int)$check['ORDER_ID'],
+				(int)$entityId
+			);
+			$shipmentIdField = $shipmentIdUrl
+				? '<a href="'.$shipmentIdUrl.'">'.(int)$entityId.'</a>'
+				: (int)$entityId;
 		}
 	}
 	$row->AddField("SHIPMENT_ID",  $shipmentIdField);
 
-	$shipmentField = $shipmentRows[(int)$check['SHIPMENT_ID']];
-	if ($relatedEntities[$check['ID']]['S'])
+	$shipmentId = (int)($check['SHIPMENT_ID'] ?? 0);
+	$shipmentField = $shipmentRows[$shipmentId] ?? '';
+	if (is_array($shipmentEntityIds))
 	{
-		foreach ($relatedEntities[$check['ID']]['S'] as $entityId)
+		foreach ($shipmentEntityIds as $entityId)
 		{
 			if ($shipmentField)
 				$shipmentField .= "<br>";
@@ -403,7 +479,9 @@ while ($check = $dbResultList->Fetch())
 
 	$row->AddField("DATE_CREATE", $check['DATE_CREATE']);
 	$row->AddField("SUM", SaleFormatCurrency($check['SUM'], $check['CURRENCY']));
-	$row->AddField("CASHBOX_ID", htmlspecialcharsbx($cashboxList[$check['CASHBOX_ID']]['NAME']));
+
+	$cashboxName = $cashboxList[$check['CASHBOX_ID']]['NAME'] ?? null;
+	$row->AddField("CASHBOX_ID", htmlspecialcharsbx($cashboxName));
 
 	$cashbox = null;
 	$checkLink = '';
@@ -428,7 +506,7 @@ while ($check = $dbResultList->Fetch())
 	$row->AddField("STATUS", Loc::getMessage('SALE_CASHBOX_STATUS_'.$check['STATUS']) . $errorMessage);
 
 	$arActions = array();
-	if ($check['STATUS'] === 'E' || $check['STATUS'] == 'N')
+	if ($check['STATUS'] === 'E' || $check['STATUS'] == 'N' || $check['STATUS'] == 'P')
 	{
 		$arActions[] = array(
 			"ICON" => "delete",
@@ -525,6 +603,4 @@ else
 	$lAdmin->DisplayList();
 }
 
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_admin.php");
-
-?>
+require($_SERVER["DOCUMENT_ROOT"]. '/bitrix/modules/main/include/epilog_admin.php');

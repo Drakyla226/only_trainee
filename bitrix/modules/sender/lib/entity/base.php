@@ -121,7 +121,7 @@ abstract class Base
 	 * @return integer|null
 	 * @throws SystemException
 	 */
-	protected function saveByEntity(MainEntityBase $entity, $id = null, array $data, $primary = null)
+	protected function saveByEntity(MainEntityBase $entity, $id, array $data, $primary = null)
 	{
 		/** @var \Bitrix\Main\Entity\DataManager $className Class name. */
 		$className = $entity->getDataClass();
@@ -187,7 +187,7 @@ abstract class Base
 	 * @param array $data Data.
 	 * @return integer|null
 	 */
-	abstract protected function saveData($id = null, array $data);
+	abstract protected function saveData($id, array $data);
 
 	/**
 	 * Copy data.
@@ -206,32 +206,35 @@ abstract class Base
 		unset($loadedData['ID']);
 		$data = $data + $loadedData;
 
-		foreach ($data['FIELDS'] as $index => $field)
+		if (isset($data['FIELDS']))
 		{
-			if ($field['TYPE'] !== 'file')
+			foreach ($data['FIELDS'] as $index => $field)
 			{
-				continue;
-			}
-
-			if (empty($field['VALUE']))
-			{
-				continue;
-			}
-
-			$values = is_array($field['VALUE']) ? $field['VALUE'] : explode(',', $field['VALUE']);
-			$field['VALUE'] = array();
-			foreach ($values as $fileId)
-			{
-				$copiedFileId = \CFile::copyFile($fileId);
-				if (!$copiedFileId)
+				if ($field['TYPE'] !== 'file')
 				{
 					continue;
 				}
 
-				$field['VALUE'][] = $copiedFileId;
+				if (empty($field['VALUE']))
+				{
+					continue;
+				}
+
+				$values = is_array($field['VALUE']) ? $field['VALUE'] : explode(',', $field['VALUE']);
+				$field['VALUE'] = array();
+				foreach ($values as $fileId)
+				{
+					$copiedFileId = \CFile::copyFile($fileId);
+					if (!$copiedFileId)
+					{
+						continue;
+					}
+
+					$field['VALUE'][] = $copiedFileId;
+				}
+				$field['VALUE'] = implode(',', $field['VALUE']);
+				$data['FIELDS'][$index] = $field;
 			}
-			$field['VALUE'] = implode(',', $field['VALUE']);
-			$data['FIELDS'][$index] = $field;
 		}
 
 		return $this->saveData(null, $data);

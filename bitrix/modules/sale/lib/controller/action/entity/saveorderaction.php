@@ -4,6 +4,7 @@ namespace Bitrix\Sale\Controller\Action\Entity;
 use Bitrix\Main;
 use Bitrix\Sale;
 use Bitrix\Crm;
+use Bitrix\Crm\Order\Manager;
 
 /**
  * Class SaveOrderAction
@@ -11,8 +12,10 @@ use Bitrix\Crm;
  * @example BX.ajax.runAction("sale.entity.saveOrder", { data: { fields: { siteId:'s1', [userId:1, personTypeId:1] properties: {...}}}});
  * @internal
  */
-final class SaveOrderAction extends BaseAction
+final class SaveOrderAction extends Sale\Controller\Action\BaseAction
 {
+	private ?int $compilationDealId;
+
 	/**
 	 * @param array $fields
 	 * @return array|null
@@ -111,6 +114,20 @@ final class SaveOrderAction extends BaseAction
 					Sale\Controller\ErrorEnumeration::SAVE_ORDER_ACTION_SAVE
 				);
 				return $result;
+			}
+
+			if (
+				Main\Loader::includeModule('crm')
+				&& class_exists(Crm\Integration\CompilationManager::class)
+			)
+			{
+				if (isset($this->compilationDealId))
+				{
+					Manager::copyOrderProductsToDeal($order, $this->compilationDealId);
+				}
+
+				Crm\Integration\CompilationManager::sendOrderBoundEvent($order);
+				Crm\Integration\CompilationManager::sendToCompilationDealTimeline($order);
 			}
 
 			$resultData['ORDER'] = $order;
@@ -218,6 +235,14 @@ final class SaveOrderAction extends BaseAction
 				Sale\Controller\ErrorEnumeration::SAVE_ORDER_ACTION_SET_BASKET
 			);
 			return $result;
+		}
+
+		if (
+			Main\Loader::includeModule('crm')
+			&& class_exists(Crm\Integration\CompilationManager::class)
+		)
+		{
+			$this->compilationDealId = Crm\Integration\CompilationManager::processOrderForCompilation($order);
 		}
 
 		$result->setData(['order' => $order]);
@@ -353,6 +378,11 @@ final class SaveOrderAction extends BaseAction
 		if ((int)$fields['USER_ID'] > 0)
 		{
 			$userId = (int)$fields['USER_ID'];
+
+			if ($this->isLandingShop($order) && Main\Loader::includeModule('crm'))
+			{
+				Crm\Service\Sale\Order\BuyerService::getInstance()->attachUserToBuyers($userId);
+			}
 		}
 		else
 		{

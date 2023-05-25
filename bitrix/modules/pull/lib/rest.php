@@ -376,8 +376,8 @@ class Rest extends \IRestService
 
 		$configParams = Array();
 		$configParams['USER_ID'] = $userId;
-		$configParams['CACHE'] = $params['CACHE'] !== 'N';
-		$configParams['REOPEN'] = $params['REOPEN'] !== 'N';
+		$configParams['CACHE'] = !isset($params['CACHE']) || $params['CACHE'] !== 'N';
+		$configParams['REOPEN'] = !isset($params['REOPEN']) || $params['REOPEN'] !== 'N';
 		$configParams['JSON'] = true;
 
 		$config = \Bitrix\Pull\Config::get($configParams);
@@ -385,6 +385,8 @@ class Rest extends \IRestService
 		{
 			throw new \Bitrix\Rest\RestException("Push & Pull server is not configured", "SERVER_ERROR", \CRestServer::STATUS_INTERNAL);
 		}
+
+		$config['serverTime'] = date('c', time());
 
 		return $config;
 	}

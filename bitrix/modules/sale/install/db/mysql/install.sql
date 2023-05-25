@@ -1252,7 +1252,8 @@ create table if not exists b_sale_order_payment_item(
 	QUANTITY DECIMAL(18,4) NOT NULL,
 	XML_ID varchar(255) null,
 	PRIMARY KEY (ID),
-	INDEX IX_S_O_PI_ENTITY_ID_TYPE (ENTITY_ID, ENTITY_TYPE)
+	INDEX IX_S_O_PI_ENTITY_ID_TYPE (ENTITY_ID, ENTITY_TYPE),
+	INDEX IX_S_O_PI_PAYMENT_ID (PAYMENT_ID)
 );
 
 create table if not exists b_sale_product2product
@@ -2118,8 +2119,7 @@ create table if not exists b_sale_facebook_conversion_params(
 	ENABLED CHAR(1) NOT NULL,
 	PARAMS VARCHAR(500) NOT NULL,
 	PRIMARY KEY (ID),
-	INDEX IX_FACEBOOK_CONVERSION_EVENT_NAME(EVENT_NAME),
-	INDEX IX_FACEBOOK_CONVERSION_LID(LID)
+	INDEX IX_FACEBOOK_CONVERSION_EVENT_NAME_LID(EVENT_NAME, LID)
 );
 
 create table if not exists b_sale_analytics(

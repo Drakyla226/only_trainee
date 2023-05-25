@@ -9,11 +9,6 @@ if (!CModule::IncludeModule("socialnetwork"))
 	return;
 }
 
-if(!class_exists('CUserOptions'))
-{
-	include_once($_SERVER['DOCUMENT_ROOT']."/bitrix/modules/main/classes/".$GLOBALS['DBType']."/favorites.php");
-}
-
 $arSocNetFeaturesSettings = CSocNetAllowed::GetAllowedFeatures();
 
 $arStaticTabs = array("general", "friends", "groups", "users", "messages_users", "messages_input", "messages_output", "user_ban", "log", "subscribe", "bizproc");
@@ -932,17 +927,18 @@ if ($arParams["USE_MAIN_MENU"] == "Y")
 {
 	$arResult["PAGE_ID"] = $page_id;
 
+	$customMenu = CMenuCustom::getInstance();
+
 	foreach ($arResult["FEATURES"] as $arFeature)
 	{
-		$GLOBALS["BX_MENU_CUSTOM"]->AddItem($arParams["MAIN_MENU_TYPE"], array( 
-				"TEXT" => $arFeature["FeatureName"],
-				"LINK" => $arFeature["Url"],
-				"SELECTED" => ($arResult["PAGE_ID"] == $arFeature["feature"]),
-				"PERMISSION" => "R",
-				"DEPTH_LEVEL" => 1,
-				"IS_PARENT" => false,
-			)
-		);
+		$customMenu->AddItem($arParams["MAIN_MENU_TYPE"], array(
+			"TEXT" => $arFeature["FeatureName"],
+			"LINK" => $arFeature["Url"],
+			"SELECTED" => ($arResult["PAGE_ID"] == $arFeature["feature"]),
+			"PERMISSION" => "R",
+			"DEPTH_LEVEL" => 1,
+			"IS_PARENT" => false,
+		));
 	}
 }
 else

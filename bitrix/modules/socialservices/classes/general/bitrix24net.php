@@ -318,8 +318,7 @@ class CSocServBitrix24Net extends CSocServAuth
 </script>
 <?
 
-		\CMain::FinalActions();
-		die();
+		CMain::FinalActions();
 	}
 
 	public static function registerSite($domain)
@@ -747,6 +746,13 @@ class CBitrix24NetTransport
 	const METHOD_PROFILE_CONTACTS = 'profile.contacts';
 	const METHOD_PROFILE_RESTORE_PASSWORD = 'profile.password.restore';
 	const METHOD_PROFILE_PUSH_QRCODE_AUTH_TOKEN = 'profile.pushqrcodeauthtoken';
+	const METHOD_BRANCH_LIST = 'branch.list';
+	const METHOD_BRANCH_UPDATE = 'branch.update';
+	const METHOD_BRANCH_REMOVE = 'branch.remove';
+	const METHOD_BRANCH_PROFILE_REFRESH = 'branch.profile.refresh';
+	const METHOD_BRANCH_APPEND = 'branch.append';
+	const METHOD_BRANCH_REGISTRATION_START = 'branch.registration.start';
+	const METHOD_BRANCH_REGISTRATION_CHECK = 'branch.registration.check';
 
 	const RESTORE_PASSWORD_METHOD_EMAIL = 'EMAIL';
 	const RESTORE_PASSWORD_METHOD_PHONE = 'PHONE';
@@ -937,6 +943,56 @@ class CBitrix24NetTransport
 	public function pushQrCodeAuthToken(array $params)
 	{
 		return $this->call(self::METHOD_PROFILE_PUSH_QRCODE_AUTH_TOKEN, $params, LANGUAGE_ID);
+	}
+
+	/**
+	 * Returns branch list.
+	 * @param array $params
+	 * @return mixed
+	 */
+	public function branchList(array $params = [])
+	{
+		return $this->call(self::METHOD_BRANCH_LIST, $params, LANGUAGE_ID);
+	}
+
+	/**
+	 * Update info about item in the branch.
+	 * @param array $params
+	 * @return mixed
+	 */
+	public function branchUpdate(array $params = [])
+	{
+		return $this->call(self::METHOD_BRANCH_UPDATE, $params, LANGUAGE_ID);
+	}
+
+	/**
+	 * Removes brunch from the list.
+	 * @param array $params
+	 * @return mixed
+	 */
+	public function branchRemove(array $params = [])
+	{
+		return $this->call(self::METHOD_BRANCH_REMOVE, $params, LANGUAGE_ID);
+	}
+
+	public function branchProfileRefresh($params)
+	{
+		return $this->call(self::METHOD_BRANCH_PROFILE_REFRESH, $params, LANGUAGE_ID);
+	}
+
+	public function branchAppend($params)
+	{
+		return $this->call(self::METHOD_BRANCH_APPEND, $params, LANGUAGE_ID);
+	}
+
+	public function branchRegistrationStart($params)
+	{
+		return $this->call(self::METHOD_BRANCH_REGISTRATION_START, $params, LANGUAGE_ID);
+	}
+
+	public function branchRegistrationCheck($params)
+	{
+		return $this->call(self::METHOD_BRANCH_REGISTRATION_CHECK, $params, LANGUAGE_ID);
 	}
 }
 

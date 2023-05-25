@@ -2,6 +2,7 @@
 
 namespace Sale\Handlers\Delivery\YandexTaxi\Api\Transport;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Sale\Handlers\Delivery\YandexTaxi\Common\Logger;
@@ -34,9 +35,6 @@ final class Client
 	/** @var bool */
 	private $isTestEnvironment = false;
 
-	/** @var int */
-	private $apiVersion = 1;
-
 	/**
 	 * Client constructor.
 	 * @param OauthTokenProvider $oauthTokenProvider
@@ -51,58 +49,45 @@ final class Client
 	}
 
 	/**
-	 * @param string $uri
-	 * @param array $body
-	 * @param array $options
-	 * @return Response
-	 * @throws Exception
-	 * @throws \Bitrix\Main\ArgumentException
-	 */
-	public function post(string $uri, $body = [], $options = [])
-	{
-		return $this->request('post', $uri, $body, $options);
-	}
-
-	/**
-	 * @param string $uri
-	 * @param array $options
-	 * @return Response
-	 * @throws Exception
-	 * @throws \Bitrix\Main\ArgumentException
-	 */
-	public function get(string $uri, $options = [])
-	{
-		return $this->request('get', $uri, null, $options = []);
-	}
-
-	/**
+	 * @param int $version
 	 * @param string $method
-	 * @param string $uri
-	 * @param null $body
-	 * @param array $options
+	 * @param string $endpoint
+	 * @param array|null $queryParams
+	 * @param mixed|null $body
 	 * @return Response
 	 * @throws Exception
-	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	private function request(string $method, string $uri, $body = null, $options = [])
+	public function request(
+		int $version,
+		string $method,
+		string $endpoint,
+		?array $queryParams = null,
+		$body = null
+	)
 	{
 		$httpClient = $this->makeHttpClient();
 
-		if ($method == 'post')
+		if ($method === HttpClient::HTTP_POST)
 		{
 			$result = $httpClient->post(
-				$this->getBase($options) . $uri,
+				$this->getUrl($version, $endpoint, $queryParams),
 				json_encode($body, JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)
 			);
 		}
 		else
 		{
-			$result = $httpClient->get($this->getBase($options) . $uri);
+			$result = $httpClient->get(
+				$this->getUrl($version, $endpoint, $queryParams)
+			);
 		}
 
 		$status = $httpClient->getStatus();
 
-		if ($result === false || $status == 0 || $status >= 500)
+		if (
+			$result === false
+			|| $status === 0
+			|| $status >= 500
+		)
 		{
 			$errors = implode(';', $httpClient->getError());
 
@@ -115,7 +100,16 @@ final class Client
 			throw new Exception(sprintf('transport_exception: %s', $errors));
 		}
 
-		return new Response((int)$httpClient->getStatus(), Json::decode($result));
+		try
+		{
+			$response = Json::decode($result);
+		}
+		catch (ArgumentException $e)
+		{
+			throw new Exception(sprintf('transport_exception: unexpected JSON format: %s', $result));
+		}
+
+		return new Response((int)$httpClient->getStatus(), $response);
 	}
 
 	/**
@@ -144,19 +138,19 @@ final class Client
 	}
 
 	/**
-	 * @param array $options
+	 * @param int $version
+	 * @param string $endpoint
+	 * @param array|null $queryParams
 	 * @return string
 	 */
-	private function getBase($options = []): string
+	private function getUrl(int $version, string $endpoint, ?array $queryParams): string
 	{
-		$baseUriTemplate = isset($options['base_uri_template'])
-			? $options['base_uri_template']
-			: 'https://b2b.taxi%s.yandex.net/b2b/cargo/integration/v%s/';
-
 		return sprintf(
-			$baseUriTemplate,
+			'https://b2b.taxi%s.yandex.net/b2b/cargo/integration/v%s/%s?%s',
 			($this->isTestEnvironment ? '.tst' : ''),
-			$this->apiVersion
+			$version,
+			$endpoint,
+			$queryParams ? http_build_query($queryParams) : ''
 		);
 	}
 
@@ -177,17 +171,6 @@ final class Client
 	public function isTestEnvironment(): bool
 	{
 		return $this->isTestEnvironment;
-	}
-
-	/**
-	 * @param int $apiVersion
-	 * @return Client
-	 */
-	public function setApiVersion(int $apiVersion): Client
-	{
-		$this->apiVersion = $apiVersion;
-
-		return $this;
 	}
 
 	/**

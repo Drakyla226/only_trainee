@@ -3,6 +3,7 @@
 namespace Bitrix\Pull;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\BinaryString;
 use Bitrix\Main\Type\DateTime;
@@ -18,8 +19,9 @@ class ProtobufTransport
 	/**
 	 * @param array $messages Messages to send to the pull server.
 	 */
-	public static function sendMessages(array $messages)
+	public static function sendMessages(array $messages, array $options = []): Result
 	{
+		$result = new Result();
 		if(!Config::isProtobufUsed())
 		{
 			throw new SystemException("Sending messages in protobuf format is not supported by queue server");
@@ -29,7 +31,8 @@ class ProtobufTransport
 		$requests = static::createRequests($protobufMessages);
 		$requestBatches = static::createRequestBatches($requests);
 
-		$queueServerUrl = \CHTTP::urlAddParams(Config::getPublishUrl(), ["binaryMode" => "true"]);
+		$queueServerUrl = $options['serverUrl'] ?? Config::getPublishUrl();
+		$queueServerUrl = \CHTTP::urlAddParams($queueServerUrl, ["binaryMode" => "true"]);
 		foreach ($requestBatches as $requestBatch)
 		{
 			$urlWithSignature = $queueServerUrl;
@@ -42,10 +45,16 @@ class ProtobufTransport
 			}
 
 			$httpClient->disableSslVerification();
-			$httpClient->query(HttpClient::HTTP_POST, $urlWithSignature, $bodyStream);
+			$sendResult = $httpClient->query(HttpClient::HTTP_POST, $urlWithSignature, $bodyStream);
+			if (!$sendResult)
+			{
+				$errorCode = array_key_first($httpClient->getError());
+				$errorMsg = $httpClient->getError()[$errorCode];
+				$result->addError(new \Bitrix\Main\Error($errorMsg, $errorCode));
+			}
 		}
 
-		return true;
+		return $result;
 	}
 
 	/**
@@ -109,7 +118,7 @@ class ProtobufTransport
 			{
 				return [];
 			}
-			if(BinaryString::getLength($binaryResponse) == 0)
+			if(strlen($binaryResponse) == 0)
 			{
 				return [];
 			}
@@ -158,7 +167,7 @@ class ProtobufTransport
 
 		foreach ($messages as $message)
 		{
-			$event = $message['event'];
+			$event = $message['event'] ?? null;
 			if(!is_array($message['channels']) || count($message['channels']) == 0 || !isset($event['module_id']) || !isset($event['command']))
 			{
 				continue;
@@ -182,12 +191,6 @@ class ProtobufTransport
 
 		$extra = is_array($event['extra']) ? $event['extra'] : [];
 
-		$extra['server_time'] = $extra['server_time'] ?: new DateTime();
-		$extra['server_time_unix'] = $extra['server_time_unix'] ?: microtime(true);
-		$extra['server_name'] = Option::get('main', 'server_name', $_SERVER['SERVER_NAME']);
-		$extra['revision_web'] = PULL_REVISION_WEB;
-		$extra['revision_mobile'] = PULL_REVISION_MOBILE;
-
 		$body = Common::jsonEncode(array(
 			'module_id' => $event['module_id'],
 			'command' => $event['command'],
@@ -198,7 +201,7 @@ class ProtobufTransport
 		// for statistics
 		$messageType = "{$event['module_id']}_{$event['command']}";
 		$messageType = preg_replace("/[^\w]/", "", $messageType);
-		
+
 		$maxChannelsPerRequest = \CPullOptions::GetMaxChannelsPerRequest();
 		$receivers = [];
 		foreach ($channels as $channel)
@@ -227,6 +230,7 @@ class ProtobufTransport
 			$message->setReceiversList(new MessageCollection($receivers));
 			$message->setExpiry($event['expiry']);
 			$message->setBody($body);
+			$message->setType($messageType); // for statistics
 
 			$result[] = $message;
 		}
@@ -286,7 +290,7 @@ class ProtobufTransport
 			$currentBatchSize += $messageSize;
 		}
 
-		if(count($currentMessageBatch) > 0)
+		if(!empty($currentMessageBatch))
 		{
 			$incomingMessagesRequest = new Protobuf\IncomingMessagesRequest();
 			$incomingMessagesRequest->setMessagesList(new MessageCollection($currentMessageBatch));

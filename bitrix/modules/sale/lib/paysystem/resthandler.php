@@ -19,7 +19,7 @@ use Bitrix\Sale\Helpers\Rest;
  */
 class RestHandler extends PaySystem\ServiceHandler
 {
-	private $handlerSettings = array();
+	private $handlerFields = array();
 
 	private const FORM_MODE = 'form';
 	private const CHECKOUT_MODE = 'checkout';
@@ -66,14 +66,13 @@ class RestHandler extends PaySystem\ServiceHandler
 			return $result;
 		}
 
-		$params = $this->getCheckoutPayParams($payment, $request);
-
-		if ($this->needMoreCheckoutParams($settings, $params))
+		if (!$this->canCheckout($payment, $request))
 		{
 			$template = $this->getCheckoutFormTemplate($payment);
 		}
 		else
 		{
+			$params = $this->getCheckoutPayParams($payment, $request);
 			$requestResult = Rest\Http::sendRequest($actionUri, $params);
 			if (!$requestResult->isSuccess())
 			{
@@ -84,6 +83,16 @@ class RestHandler extends PaySystem\ServiceHandler
 			$requestData = $requestResult->getData();
 			if (empty($requestData['PAYMENT_URL']) || empty($requestData['PAYMENT_ID']))
 			{
+				if (!empty($requestData['PAYMENT_ERRORS']) && is_array($requestData['PAYMENT_ERRORS']))
+				{
+					foreach ($requestData['PAYMENT_ERRORS'] as $error)
+					{
+						$result->addError(new Error($error));
+					}
+
+					return $result;
+				}
+
 				$result->addError(new Error(Loc::getMessage('SALE_HANDLERS_REST_HANDLER_ERROR_DATA_MISSING')));
 				return $result;
 			}
@@ -92,6 +101,12 @@ class RestHandler extends PaySystem\ServiceHandler
 			$url = $requestData['PAYMENT_URL'];
 
 			$result->setPaymentUrl($url);
+
+			$qrCode = ((new PaySystem\BarcodeGenerator())->generate($url));
+			if ($qrCode)
+			{
+				$result->setQr(base64_encode($qrCode));
+			}
 
 			$template = $this->getCheckoutPayTemplate($url);
 		}
@@ -721,36 +736,44 @@ class RestHandler extends PaySystem\ServiceHandler
 		return parent::getClientType($psMode);
 	}
 
-	/**
-	 * @return array
-	 */
-	public function getDescription()
+	protected function includeDescription(): array
 	{
+		$fields = $this->getHandlerFields();
 		$settings = $this->getHandlerSettings();
 
-		return array(
-			'NAME' => $settings['NAME'],
+		return [
+			'NAME' => $fields['NAME'] ?? '',
+			'SORT' => $fields['SORT'] ?? 100,
 			'CODES' => $settings['CODES'] ?: []
-		);
+		];
+	}
+
+	private function getHandlerFields(): array
+	{
+		if (!$this->handlerFields)
+		{
+			$handler = $this->service->getField('ACTION_FILE');
+			$dbRes = PaySystemRestHandlersTable::getList([
+				'filter' => ['CODE' => $handler]
+			]);
+			$data = $dbRes->fetch();
+
+			if ($data)
+			{
+				$this->handlerFields = $data;
+			}
+		}
+
+		return $this->handlerFields;
 	}
 
 	/**
 	 * @return array
 	 */
-	private function getHandlerSettings()
+	private function getHandlerSettings(): array
 	{
-		if (!$this->handlerSettings)
-		{
-			$handler = $this->service->getField('ACTION_FILE');
-			$dbRes = PaySystemRestHandlersTable::getList(array('filter' => array('CODE' => $handler)));
-			$data = $dbRes->fetch();
-			if ($data)
-			{
-				$this->handlerSettings = $data['SETTINGS'];
-			}
-		}
-
-		return $this->handlerSettings;
+		$handlerFields = $this->getHandlerFields();
+		return $handlerFields['SETTINGS'] ?? [];
 	}
 
 	private function getMode(): string
@@ -907,5 +930,30 @@ class RestHandler extends PaySystem\ServiceHandler
 		}
 
 		return $template;
+	}
+
+	public function canCheckout(Payment $payment, Request $request = null): bool
+	{
+		if ($request === null)
+		{
+			$request = Context::getCurrent()->getRequest();
+		}
+
+		$mode = $this->getMode();
+		if ($mode !== self::CHECKOUT_MODE)
+		{
+			return false;
+		}
+
+		$settings = $this->getHandlerSettings();
+		$actionUri = $settings['CHECKOUT_DATA']['ACTION_URI'] ?? null;
+		if (!isset($actionUri))
+		{
+			return false;
+		}
+
+		$params = $this->getCheckoutPayParams($payment, $request);
+
+		return !$this->needMoreCheckoutParams($settings, $params);
 	}
 }

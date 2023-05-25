@@ -145,6 +145,19 @@ class EventQuestionTable extends Entity\DataManager
  * <li> MESSAGE text,
  * </ul>
  *
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_EventAnswer_Query query()
+ * @method static EO_EventAnswer_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_EventAnswer_Result getById($id)
+ * @method static EO_EventAnswer_Result getList(array $parameters = array())
+ * @method static EO_EventAnswer_Entity getEntity()
+ * @method static \Bitrix\Vote\EO_EventAnswer createObject($setDefaultValues = true)
+ * @method static \Bitrix\Vote\EO_EventAnswer_Collection createCollection()
+ * @method static \Bitrix\Vote\EO_EventAnswer wakeUpObject($row)
+ * @method static \Bitrix\Vote\EO_EventAnswer_Collection wakeUpCollection($rows)
  */
 class EventAnswerTable extends Entity\DataManager
 {
@@ -654,7 +667,7 @@ SQL
 					//endregion
 				}
 			}
-			if (!array_key_exists($question["ID"], $fields) && $question['REQUIRED'] == 'Y')
+			if ($question['REQUIRED'] === 'Y' && $question['ACTIVE'] === 'Y' && !array_key_exists($question["ID"], $fields))
 			{
 				$this->errorCollection->add(array(new Error(Loc::getMessage("VOTE_REQUIRED_MISSING"), "QUESTION_".$questionId)));
 			}
@@ -665,12 +678,14 @@ SQL
 		return $fields;
 	}
 
-	public function add(array $eventFields, array $ballot, $setCounter = true)
+	public function add(array $eventFields, array $ballot, $setCounter = true): ?EventResult
 	{
 		$this->errorCollection->clear();
 		$fields = $this->check($ballot);
 		if (!$this->errorCollection->isEmpty())
-			return false;
+		{
+			return null;
+		}
 		$eventFields = array(
 			"VOTE_ID"			=> $this->vote->getId(),
 			"VOTE_USER_ID"		=> $eventFields["VOTE_USER_ID"],
@@ -701,7 +716,7 @@ SQL
 			if (ExecuteModuleEventEx($event, array(&$eventFields, &$sqlAnswers)) === false)
 			{
 				$this->errorCollection->add(array(new Error("onBeforeVoting error", "VOTE_".$eventFields["VOTE_ID"])));
-				return false;
+				return null;
 			}
 		}
 		/***************** /Event ******************************************/
@@ -765,6 +780,6 @@ SQL
 			}
 			EventTable::delete($eventId);
 		}
-		return false;
+		return null;
 	}
 }

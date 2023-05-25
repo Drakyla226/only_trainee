@@ -6,6 +6,7 @@
  * @copyright 2001-2016 Bitrix
  */
 namespace Bitrix\Vote;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
 use \Bitrix\Main\Entity;
@@ -34,6 +35,19 @@ Loc::loadMessages(__FILE__);
  * <li> STAT_GUEST_ID int,
  * </ul>
  *
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_User_Query query()
+ * @method static EO_User_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_User_Result getById($id)
+ * @method static EO_User_Result getList(array $parameters = array())
+ * @method static EO_User_Entity getEntity()
+ * @method static \Bitrix\Vote\EO_User createObject($setDefaultValues = true)
+ * @method static \Bitrix\Vote\EO_User_Collection createCollection()
+ * @method static \Bitrix\Vote\EO_User wakeUpObject($row)
+ * @method static \Bitrix\Vote\EO_User_Collection wakeUpCollection($rows)
  */
 class UserTable extends Entity\DataManager
 {
@@ -122,6 +136,7 @@ class UserTable extends Entity\DataManager
 
 class User extends BaseObject
 {
+	private const DB_TIMELOCK = 15;
 	const SYSTEM_USER_ID = 0;
 	static $usersIds = [];
 
@@ -268,6 +283,27 @@ class User extends BaseObject
 			$result = $vote->isVotedFor($userId);
 		}
 		return $result;
+	}
+
+	protected function getLockingKey(int $voteId): string
+	{
+		return implode('_', [
+			static::class,
+			$this->getId() > 0 ? $this->getId() : bitrix_sessid(),
+			$voteId
+		]);
+	}
+
+	public function lock(int $voteId): bool
+	{
+		$lockingKey = $this->getLockingKey($voteId);
+		return Application::getConnection()->lock($lockingKey, self::DB_TIMELOCK);
+	}
+
+	public function unlock(int $voteId)
+	{
+		$lockingKey = $this->getLockingKey($voteId);
+		Application::getConnection()->unlock($lockingKey);
 	}
 
 	/**

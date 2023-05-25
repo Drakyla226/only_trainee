@@ -5,6 +5,7 @@ namespace Bitrix\Socialnetwork\Component;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\ActionFilter\Service\Token;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ErrorCollection;
@@ -12,7 +13,6 @@ use Bitrix\Main\Error;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Page\Asset;
 use Bitrix\Main\Security\Random;
-use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
 use Bitrix\Socialnetwork\ComponentHelper;
@@ -49,9 +49,52 @@ class LogEntry extends \CBitrixComponent implements \Bitrix\Main\Engine\Contract
 
 	public function onPrepareComponentParams($params = [])
 	{
-		global $USER;
+		if (
+			!isset($params['IND'])
+			|| (string)$params['IND'] === ''
+		)
+		{
+			$params['IND'] = \Bitrix\Main\Security\Random::getString(8);
+		}
 
-		$this->errorCollection = new ErrorCollection();
+		if (empty($params['LOG_PROPERTY']))
+		{
+			$params['LOG_PROPERTY'] = [ 'UF_SONET_LOG_FILE' ];
+			if (
+				ModuleManager::isModuleInstalled('webdav')
+				|| ModuleManager::isModuleInstalled('disk'))
+			{
+				$params['LOG_PROPERTY'][] = 'UF_SONET_LOG_DOC';
+			}
+		}
+
+		if (empty($params['COMMENT_PROPERTY']))
+		{
+			$params['COMMENT_PROPERTY'] = [ 'UF_SONET_COM_FILE' ];
+			if (
+				ModuleManager::isModuleInstalled('webdav')
+				|| ModuleManager::isModuleInstalled('disk')
+			)
+			{
+				$params['COMMENT_PROPERTY'][] = 'UF_SONET_COM_DOC';
+			}
+
+			$params['COMMENT_PROPERTY'][] = 'UF_SONET_COM_URL_PRV';
+		}
+
+		if (empty($params['PATH_TO_LOG_TAG']))
+		{
+			$folderUsers = Option::get('socialnetwork', 'user_page', false, SITE_ID);
+			$params['PATH_TO_LOG_TAG'] = $folderUsers . 'log/?TAG=#tag#';
+			if (SITE_TEMPLATE_ID === 'bitrix24')
+			{
+				$params['PATH_TO_LOG_TAG'] .= '&apply_filter=Y';
+			}
+		}
+
+		\CSocNetLogComponent::processDateTimeFormatParams($params);
+
+		$params['COMMENT_ID'] = (int)$params['COMMENT_ID'];
 
 		return $params;
 	}

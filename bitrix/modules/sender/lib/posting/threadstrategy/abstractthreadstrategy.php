@@ -25,6 +25,9 @@ abstract class AbstractThreadStrategy implements IThreadStrategy
 	protected $filter;
 	protected $runtime;
 
+	public const THREAD_UNAVAILABLE = -1;
+	public const THREAD_LOCKED = -2;
+	public const THREAD_NEEDED = 1;
 	/**
 	 *
 	 * @return array
@@ -41,8 +44,6 @@ abstract class AbstractThreadStrategy implements IThreadStrategy
 		$query = '
 				INSERT INTO `'.$tableName.'`(THREAD_ID, POSTING_ID, THREAD_TYPE)
 					VALUES '.implode(',', $insertData).'
-					ON DUPLICATE KEY UPDATE
-				THREAD_ID = VALUES(THREAD_ID)
 			';
 
 		try
@@ -96,7 +97,7 @@ abstract class AbstractThreadStrategy implements IThreadStrategy
 
 	protected function setFilter() : void
 	{
-		$this->filter = ['IS_UNSUB' => 'N'];
+		$this->filter = ['=IS_UNSUB' => 'N'];
 	}
 	protected function setSelect(): void
 	{
@@ -155,6 +156,33 @@ abstract class AbstractThreadStrategy implements IThreadStrategy
 		$this->threadId = $thread[0]["THREAD_ID"];
 		$this->updateStatus(PostingThreadTable::STATUS_IN_PROGRESS);
 		$this->unlock();
+	}
+
+	/**
+	 * Check threads is available and not need to insert
+	 * @return int|null
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function checkThreads(): ?int
+	{
+		$thread = PostingThreadTable::getList(
+			[
+				"select" => ["THREAD_ID"],
+				"filter" => [
+					'=POSTING_ID' => $this->postingId,
+				],
+				"limit"  => 1
+			]
+		)->fetchAll();
+
+		if (isset($thread[0]) && isset($thread[0]["THREAD_ID"]))
+		{
+			return self::THREAD_UNAVAILABLE;
+		}
+
+		return self::THREAD_NEEDED;
 	}
 
 	/**

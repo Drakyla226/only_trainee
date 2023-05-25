@@ -175,17 +175,6 @@ this.BX = this.BX || {};
 	          node.classList.remove('--project');
 	        }
 	      });
-	      /*
-	      		const submitButtonNode = document.getElementById('sonet_group_create_popup_form_button_submit');
-	      		if (
-	      			submitButtonNode
-	      			&& submitButtonNode.getAttribute('bx-action-type') === 'create'
-	      		)
-	      		{
-	      			submitButtonNode.innerHTML = (isChecked ? Loc.getMessage('SONET_GCE_T_DO_CREATE_PROJECT') : Loc.getMessage('SONET_GCE_T_DO_CREATE'));
-	      		}
-	      */
-
 	      this.recalcNameInput();
 	    }
 	  }, {
@@ -704,7 +693,7 @@ this.BX = this.BX || {};
 
 	          _this2.inputNode.value = parseInt(response.data.fileId);
 	          _this2.typeInputNode.value = '';
-	          _this2.imageNode.style = "background-image: url('".concat(response.data.fileUri, "'); background-size: cover;");
+	          _this2.imageNode.style = "background-image: url('".concat(encodeURI(response.data.fileUri), "'); background-size: cover;");
 
 	          _this2.recalc();
 	        }
@@ -1614,12 +1603,13 @@ this.BX = this.BX || {};
 	  babelHelpers.createClass(TeamManager$$1, null, [{
 	    key: "getInstance",
 	    value: function getInstance() {
-	      return WorkgroupForm.instance;
+	      return TeamManager$$1.instance;
 	    }
 	  }]);
 
 	  function TeamManager$$1(params) {
 	    babelHelpers.classCallCheck(this, TeamManager$$1);
+	    this.groupId = parseInt(params.groupId, 10);
 	    this.ownerSelector = null;
 	    this.scrumMasterSelector = null;
 	    this.moderatorsSelector = null;
@@ -1635,6 +1625,7 @@ this.BX = this.BX || {};
 	    this.isCurrentUserAdmin = main_core.Type.isBoolean(params.isCurrentUserAdmin) ? params.isCurrentUserAdmin : false;
 	    this.extranetInstalled = main_core.Type.isBoolean(params.extranetInstalled) ? params.extranetInstalled : false;
 	    this.allowExtranet = main_core.Type.isBoolean(params.allowExtranet) ? params.allowExtranet : false;
+	    TeamManager$$1.instance = this;
 	    this.buildOwnerSelector();
 	    this.buildScrumMasterSelector();
 	    this.buildModeratorsSelector();
@@ -1668,7 +1659,8 @@ this.BX = this.BX || {};
 	              intranetUsersOnly: !this.allowExtranet,
 	              inviteEmployeeLink: true,
 	              inviteExtranetLink: true,
-	              checkWorkgroupWhenInvite: false
+	              groupId: this.groupId,
+	              checkWorkgroupWhenInvite: true
 	            }
 	          }, {
 	            id: 'department',
@@ -1746,7 +1738,8 @@ this.BX = this.BX || {};
 	            options: {
 	              intranetUsersOnly: !this.allowExtranet,
 	              inviteEmployeeLink: true,
-	              checkWorkgroupWhenInvite: false
+	              groupId: this.groupId,
+	              checkWorkgroupWhenInvite: true
 	            }
 	          }, {
 	            id: 'department',
@@ -1787,7 +1780,8 @@ this.BX = this.BX || {};
 	              inviteEmployeeLink: true,
 	              '!userId': this.isCurrentUserAdmin ? [parseInt(main_core.Loc.getMessage('USER_ID'))] : [],
 	              intranetUsersOnly: !this.allowExtranet,
-	              checkWorkgroupWhenInvite: false
+	              groupId: this.groupId,
+	              checkWorkgroupWhenInvite: true
 	            }
 	          }, {
 	            id: 'department',
@@ -1939,6 +1933,11 @@ this.BX = this.BX || {};
 	            isChecked: this.allowExtranet,
 	            options: this.moderatorsOptions
 	          });
+
+	          if (WorkgroupForm.getInstance().initialFocus === 'addModerator') {
+	            this.moderatorsSelector.getAddButtonLink().click();
+	          }
+
 	          break;
 
 	        case TeamManager$$1.contextList.users:
@@ -2116,7 +2115,6 @@ this.BX = this.BX || {};
 	    _this.signedParameters = params.signedParameters;
 	    _this.userSelector = '';
 	    _this.lastAction = 'invite';
-	    _this.arUserSelector = [];
 	    _this.animationList = {};
 	    _this.selectedTypeCode = false;
 	    _this.groupId = parseInt(params.groupId);
@@ -2129,6 +2127,7 @@ this.BX = this.BX || {};
 	    _this.confidentialityTypes = params.confidentialityTypes;
 	    _this.selectedProjectType = params.selectedProjectType;
 	    _this.selectedConfidentialityType = params.selectedConfidentialityType;
+	    _this.initialFocus = main_core.Type.isStringFilled(params.focus) ? params.focus : '';
 	    _this.scrumManager = new Scrum({
 	      isScrumProject: _this.isScrumProject
 	    });
@@ -2180,10 +2179,21 @@ this.BX = this.BX || {};
 	      new TypePresetSelector();
 	      new ConfidentialitySelector();
 	      new FeaturesManager();
-	      var groupNameNode = document.getElementById('GROUP_NAME_input');
 
-	      if (groupNameNode) {
-	        groupNameNode.focus();
+	      if (main_core.Type.isStringFilled(this.initialFocus)) {
+	        if (this.initialFocus === 'description') {
+	          var groupDescriptionNode = document.getElementById('GROUP_DESCRIPTION_input');
+
+	          if (groupDescriptionNode) {
+	            groupDescriptionNode.focus();
+	          }
+	        }
+	      } else {
+	        var groupNameNode = document.getElementById('GROUP_NAME_input');
+
+	        if (groupNameNode) {
+	          groupNameNode.focus();
+	        }
 	      }
 
 	      this.bindEvents();
@@ -2289,10 +2299,9 @@ this.BX = this.BX || {};
 	      }
 
 	      var visibleCheckboxNode = document.getElementById('GROUP_VISIBLE');
-	      var openedCheckboxNode = document.getElementById('GROUP_OPENED');
 
-	      if (visibleCheckboxNode && openedCheckboxNode && !Util.getCheckedValue(visibleCheckboxNode)) {
-	        Util.setCheckedValue(openedCheckboxNode, false);
+	      if (visibleCheckboxNode) {
+	        this.switchNotVisible(visibleCheckboxNode.checked);
 	      }
 	    }
 	  }, {
@@ -2335,6 +2344,8 @@ this.BX = this.BX || {};
 	            visibleBlock.value = 'N';
 	          }
 	        }
+
+	        this.switchNotVisible(visibleBlock.checked);
 	      }
 	    }
 	  }, {
@@ -2422,38 +2433,21 @@ this.BX = this.BX || {};
 	                });
 	              }
 
-	              if (main_core.Type.isArray(response.USERS_ID)) {
-	                var selectedUsers = [];
-	                response.USERS_ID.forEach(function (currentValue) {
-	                  selectedUsers["U".concat(currentValue)] = 'users';
-	                });
-
-	                _this3.arUserSelector.forEach(function (selectorId) {
-	                  var selectorInstance = BX.UI.SelectorManager.instances[selectorId];
-
-	                  if (main_core.Type.isUndefined(selectorInstance)) {
-	                    return;
-	                  }
-
-	                  var selectorNode = document.getElementById("ui-tile-selector-".concat(selectorId));
-	                  selectorNode.querySelectorAll('.ui-tile-selector-item').forEach(function (node) {
-	                    var userCode = node.getAttribute('data-bx-id');
-
-	                    if (!main_core.Type.isStringFilled(userCode)) {
-	                      return;
-	                    }
-
-	                    selectorInstance.getRenderInstance().deleteItem({
-	                      entityType: 'USERS',
-	                      itemId: userCode
-	                    });
-	                  });
-	                  selectorInstance.itemsSelected = selectedUsers;
-	                  selectorInstance.reinit();
-	                });
-	              }
-
 	              if (main_core.Type.isArray(response.SUCCESSFULL_USERS_ID) && response.SUCCESSFULL_USERS_ID.length > 0) {
+	                response.SUCCESSFULL_USERS_ID = response.SUCCESSFULL_USERS_ID.map(function (userId) {
+	                  return Number(userId);
+	                });
+	                var usersSelector = TeamManager$$1.getInstance().usersSelector;
+	                var usersSelectorDialog = usersSelector ? usersSelector.getDialog() : null;
+
+	                if (usersSelectorDialog) {
+	                  usersSelectorDialog.getSelectedItems().forEach(function (item) {
+	                    if (item.entityId === 'user' && response.SUCCESSFULL_USERS_ID.includes(item.id)) {
+	                      item.deselect();
+	                    }
+	                  });
+	                }
+
 	                window.top.BX.SidePanel.Instance.postMessageAll(window, 'sonetGroupEvent', {
 	                  code: 'afterInvite',
 	                  data: {}

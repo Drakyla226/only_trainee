@@ -40,12 +40,12 @@ $APPLICATION->SetTitle("Задание 3");
 </div> -->
 
  <!-- ЗАДАНИЕ 3 -->
-<div class="">    
+<div class="">
     <a href="/news/">Новости</a>
 </div>
  <?$APPLICATION->IncludeComponent(
-	"bitrix:news.list", 
-	"news_list", 
+	"bitrix:news.list",
+	"news_list",
 	array(
 		"ACTIVE_DATE_FORMAT" => "j M Y",
 		"ADD_SECTIONS_CHAIN" => "Y",
@@ -94,12 +94,12 @@ $APPLICATION->SetTitle("Задание 3");
 			0 => "",
 			1 => "",
 		),
-		"SET_BROWSER_TITLE" => "Y",
+		"SET_BROWSER_TITLE" => "N",
 		"SET_LAST_MODIFIED" => "N",
 		"SET_META_DESCRIPTION" => "Y",
 		"SET_META_KEYWORDS" => "Y",
 		"SET_STATUS_404" => "N",
-		"SET_TITLE" => "Y",
+		"SET_TITLE" => "N",
 		"SHOW_404" => "N",
 		"SORT_BY1" => "ACTIVE_FROM",
 		"SORT_BY2" => "SORT",
@@ -114,4 +114,3 @@ $APPLICATION->SetTitle("Задание 3");
 </body>
 
 <?require($_SERVER["DOCUMENT_ROOT"]."/bitrix/footer.php");?>
->

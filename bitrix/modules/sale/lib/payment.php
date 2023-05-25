@@ -28,26 +28,6 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	protected $payableItemCollection;
 
 	/**
-	 * Payment constructor.
-	 * @param array $fields
-	 * @throws Main\ArgumentNullException
-	 */
-	protected function __construct(array $fields = [])
-	{
-		$priceFields = ['SUM', 'PRICE_COD'];
-
-		foreach ($priceFields as $code)
-		{
-			if (isset($fields[$code]))
-			{
-				$fields[$code] = PriceMaths::roundPrecision($fields[$code]);
-			}
-		}
-
-		parent::__construct($fields);
-	}
-
-	/**
 	 * @return string|void
 	 */
 	public static function getRegistryEntity()
@@ -201,7 +181,8 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 			'PAID' => 'N',
 			'XML_ID' => static::generateXmlId(),
 			'IS_RETURN' => static::RETURN_NONE,
-			'CURRENCY' => $collection->getOrder()->getCurrency()
+			'CURRENCY' => $collection->getOrder()->getCurrency(),
+			'ORDER_ID' => $collection->getOrder()->getId()
 		];
 
 		$payment = static::createPaymentObject();
@@ -633,7 +614,7 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 		$result = new Result();
 
 		$id = $this->getId();
-		$isNew = (int)$id <= 0;
+		$isNew = $id <= 0;
 
 		$this->callEventOnBeforeEntitySaved();
 
@@ -756,7 +737,10 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 		/** @var OrderHistory $orderHistory */
 		$orderHistory = $registry->getOrderHistoryClassName();
 
-		$this->setFieldNoDemand('ORDER_ID', $this->getOrder()->getId());
+		if ($this->getOrderId() === 0)
+		{
+			$this->setFieldNoDemand('ORDER_ID', $this->getOrder()->getId());
+		}
 
 		$r = $this->addInternal($this->getFields()->getValues());
 		if (!$r->isSuccess())
@@ -923,9 +907,9 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	/**
 	 * @return int
 	 */
-	public function getOrderId()
+	public function getOrderId() : int
 	{
-		return $this->getField('ORDER_ID');
+		return (int)$this->getField('ORDER_ID');
 	}
 
 	/**
@@ -1040,7 +1024,7 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	 */
 	public function isInner()
 	{
-		return (int)$this->getPaymentSystemId() === (int)Sale\PaySystem\Manager::getInnerPaySystemId();
+		return $this->getPaymentSystemId() === Sale\PaySystem\Manager::getInnerPaySystemId();
 	}
 
 	/**
@@ -1051,23 +1035,22 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	 * @throws Main\NotImplementedException
 	 * @throws \Exception
 	 */
-	public function setField($name, $value)
+	protected function normalizeValue($name, $value)
 	{
-		$priceFields = [
-			'SUM' => 'SUM',
-			'PRICE_COD' => 'PRICE_COD',
-		];
-		if (isset($priceFields[$name]))
+		if ($this->isPriceField($name))
 		{
 			$value = PriceMaths::roundPrecision($value);
 		}
-
-		if ($name === 'REASON_MARKED' && mb_strlen($value) > 255)
+		elseif ($name === 'REASON_MARKED')
 		{
-			$value = mb_substr($value, 0, 255);
+			$value = (string)$value;
+			if (mb_strlen($value) > 255)
+			{
+				$value = mb_substr($value, 0, 255);
+			}
 		}
 
-		return parent::setField($name, $value);
+		return parent::normalizeValue($name, $value);
 	}
 
 	/**
@@ -1110,34 +1093,6 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 		}
 
 		return $result;
-	}
-
-	/**
-	 * @internal
-	 *
-	 * @param $name
-	 * @param $value
-	 * @throws Main\ArgumentNullException
-	 * @throws Main\ArgumentOutOfRangeException
-	 */
-	public function setFieldNoDemand($name, $value)
-	{
-		$priceFields = [
-			'SUM' => 'SUM',
-			'PRICE_COD' => 'PRICE_COD',
-		];
-		if (isset($priceFields[$name]))
-		{
-			$value = PriceMaths::roundPrecision($value);
-		}
-
-		if ($name === 'REASON_MARKED'
-			&& mb_strlen($value) > 255)
-		{
-			$value = mb_substr($value, 0, 255);
-		}
-
-		parent::setFieldNoDemand($name, $value);
 	}
 
 	/**
@@ -1218,7 +1173,7 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	{
 		$providerInstance = null;
 
-		if (is_array($mapping))
+		if (is_array($mapping) && isset($mapping['PROVIDER_KEY']))
 		{
 			switch ($mapping['PROVIDER_KEY'])
 			{
@@ -1405,6 +1360,14 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	public function getMarkField()
 	{
 		return 'MARKED';
+	}
+
+	protected function isPriceField(string $name) : bool
+	{
+		return
+			$name === 'PRICE_COD'
+			|| $name === 'SUM'
+		;
 	}
 
 	/**

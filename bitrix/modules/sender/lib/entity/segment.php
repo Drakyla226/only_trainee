@@ -19,8 +19,10 @@ use Bitrix\Sender\GroupTable;
 use Bitrix\Sender\Internals\Model\GroupCounterTable;
 use Bitrix\Sender\ListTable;
 use Bitrix\Sender\Posting\SegmentDataBuilder;
+use Bitrix\Main\Type;
 
 Loc::loadMessages(__FILE__);
+Loc::loadMessages(__DIR__ . '/letter.php');
 
 class Segment extends Base
 {
@@ -129,12 +131,14 @@ class Segment extends Base
 	 * @param array $data Data.
 	 * @return integer|null
 	 */
-	protected function saveData($id = null, array $data)
+	protected function saveData($id, array $data)
 	{
 		$endpoints = $data['ENDPOINTS'];
 		unset($data['ENDPOINTS']);
 
-		if (!$id)
+		if (!$id
+			&& isset($data['STATUS'])
+			&& $data['STATUS'] !== GroupTable::STATUS_NEW)
 		{
 			$data['STATUS'] = GroupTable::STATUS_DONE;
 		}
@@ -163,7 +167,7 @@ class Segment extends Base
 					continue;
 				}
 
-				$connector->setFieldValues($endpoint['FIELDS']);
+				$connector->setFieldValues(is_array($endpoint['FIELDS']) ? $endpoint['FIELDS'] : null);
 				$endpoint['FIELDS'] = $connector->getFieldValues();
 				$statFields = $connector->getStatFields();
 
@@ -184,7 +188,7 @@ class Segment extends Base
 					'ADDRESS_COUNT' => $dataCounter->getSummary()
 				);
 
-				if($endpoint['FILTER_ID'])
+				if(isset($endpoint['FILTER_ID']))
 				{
 					$groupConnector['FILTER_ID'] = $endpoint['FILTER_ID'];
 				}
@@ -196,6 +200,11 @@ class Segment extends Base
 				}
 
 				$this->updateDealCategory($id, $connector);
+			}
+
+			if (isset($data['STATUS']) && GroupTable::STATUS_NEW === $data['STATUS'])
+			{
+				SegmentDataBuilder::actualize($id, true);
 			}
 
 			SegmentDataBuilder::checkIsSegmentPrepared($id);
@@ -496,6 +505,29 @@ class Segment extends Base
 	public function remove()
 	{
 		return $this->removeByEntity(GroupTable::getEntity(), $this->getId());
+	}
+
+	/**
+	 * Copy.
+	 *
+	 * @return bool
+	 */
+	public function copy()
+	{
+		$data = $this->loadData($this->getId());
+
+		return $this->copyData(
+			$this->getId(),
+			[
+				'NAME' => Loc::getMessage('SENDER_ENTITY_LETTER_COPY_PREFIX') . ' ' .$data['NAME'],
+				'CODE' => null,
+				'STATUS' => GroupTable::STATUS_NEW,
+				'DATE_USE' => null,
+				'USE_COUNT' => 0,
+				'USE_COUNT_EXCLUDE' => 0,
+				'DATE_INSERT' => new Type\DateTime(),
+			]
+		);
 	}
 
 	/**

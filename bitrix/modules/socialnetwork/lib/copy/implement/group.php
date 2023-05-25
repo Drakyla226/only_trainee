@@ -88,7 +88,14 @@ class Group extends CopyImplementer
 
 			if ($fields["OWNER_ID"] != $fields["OLD_OWNER_ID"])
 			{
-				\CSocNetUserToGroup::setOwner($fields["OWNER_ID"], $groupId);
+				if (\CSocNetUserToGroup::setOwner($fields["OWNER_ID"], $groupId))
+				{
+					$dictionary = $container->getDictionary();
+
+					$dictionary["NEW_OWNER_ID"] = $fields["OWNER_ID"];
+
+					$container->setDictionary($dictionary);
+				}
 			}
 
 			if ($this->userGroupHelper)
@@ -338,19 +345,55 @@ class Group extends CopyImplementer
 
 	private function copyFeatures(int $groupId, int $copiedGroupId): void
 	{
+		$featuresMapIds = [];
+
 		$queryObject = \CSocNetFeatures::getList(
 			[],
-			["ENTITY_ID" => $groupId, "ENTITY_TYPE" => SONET_ENTITY_GROUP]
+			[
+				"ENTITY_ID" => $groupId,
+				"ENTITY_TYPE" => SONET_ENTITY_GROUP
+			]
 		);
 		while ($feature = $queryObject->fetch())
 		{
-			\CSocNetFeatures::setFeature(
+			$copiedFeatureId = \CSocNetFeatures::setFeature(
 				SONET_ENTITY_GROUP,
 				$copiedGroupId,
 				$feature["FEATURE"],
 				($feature["ACTIVE"] == "Y"),
 				false
 			);
+
+			if (is_numeric($copiedFeatureId))
+			{
+				$featuresMapIds[$feature["ID"]] = $copiedFeatureId;
+			}
+		}
+
+		if ($featuresMapIds)
+		{
+			$this->copyFeaturesPerms($groupId, $featuresMapIds);
+		}
+	}
+
+	private function copyFeaturesPerms(int $groupId, array $featuresMapIds): void
+	{
+		$queryObject = \CSocNetFeaturesPerms::getList(
+			[],
+			[
+				'FEATURE_ENTITY_ID' => $groupId,
+			],
+		);
+		while ($permFields = $queryObject->fetch())
+		{
+			if (array_key_exists($permFields['FEATURE_ID'], $featuresMapIds))
+			{
+				\CSocNetFeaturesPerms::setPerm(
+					$featuresMapIds[$permFields['FEATURE_ID']],
+					$permFields['OPERATION_ID'],
+					$permFields['ROLE']
+				);
+			}
 		}
 	}
 }

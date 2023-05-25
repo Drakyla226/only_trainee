@@ -1,4 +1,4 @@
-import {Type} from 'main.core';
+import {Type, Event} from 'main.core';
 import {BaseEvent, EventEmitter} from 'main.core.events';
 
 import {FeedInstance} from './feed';
@@ -15,6 +15,36 @@ export class MoreButton
 		more: 'feed-post-text-more',
 		comment: 'feed-com-text',
 	};
+
+	constructor()
+	{
+		EventEmitter.subscribe(
+			'BX.Livefeed:recalculateComments',
+			this.onRecalculateLivefeedComments.bind(this)
+		);
+	}
+
+	onRecalculateLivefeedComments(baseEvent: BaseEvent)
+	{
+		const [ data ] = baseEvent.getCompatData();
+		if (!Type.isDomNode(data.rootNode))
+		{
+			return;
+		}
+
+		const informerBlock = data.rootNode;
+
+		const moreBlock = informerBlock.querySelector(`.${MoreButton.cssClass.more}`);
+		if (moreBlock)
+		{
+			informerBlock.classList.remove(MoreButton.cssClass.postSeparator);
+		}
+
+		MoreButton.recalcPost({
+			arPos: { height: (data.rootNode.offsetHeight + data.rootNode.offsetTop) },
+			informerBlock
+		});
+	}
 
 	static recalcPost(params)
 	{
@@ -45,7 +75,7 @@ export class MoreButton
 	static recalcPostsList()
 	{
 		const buttonsList = FeedInstance.getMoreButtons();
-		buttonsList.forEach((buttonData, index, object) => {
+		buttonsList.forEach((buttonData, key) => {
 
 			if (
 				!Type.isPlainObject(buttonData)
@@ -71,6 +101,26 @@ export class MoreButton
 						const innerNode = outerNode.querySelector(`div.${this.cssClass.postTextInner}`);
 						innerNode.style.overflowX = 'scroll';
 					}
+
+					const moreButton = outerNode.querySelector(`.${this.cssClass.more}`);
+					if (moreButton)
+					{
+						Event.unbindAll(moreButton, 'click');
+						Event.bind(moreButton, 'click', (e) => {
+
+							BX.UI.Animations.expand({
+								moreButtonNode: e.currentTarget,
+								type: 'post',
+								classBlock: this.cssClass.postText,
+								classOuter: this.cssClass.postTextInner,
+								classInner: this.cssClass.postTextInnerInner,
+								heightLimit: 300,
+								callback: (textBlock) => {
+									this.expand(textBlock);
+								},
+							});
+						});
+					}
 				}
 			}
 
@@ -78,8 +128,10 @@ export class MoreButton
 				arPos: { height: (bodyNode.offsetHeight + bodyNode.offsetTop)},
 				informerBlock: (Type.isStringFilled(buttonData.informerBlockID) ? document.getElementById(buttonData.informerBlockID) : null)
 			});
-			object.splice(index, 1);
+			buttonsList.delete(key);
 		});
+
+		FeedInstance.setMoreButtons(buttonsList);
 
 		const feedContainer = document.getElementById('log_internal_container');
 		if (!feedContainer)

@@ -12,6 +12,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\Internals\Counter;
+use Bitrix\Socialnetwork\Internals\EventService;
 
 Loc::loadMessages(__FILE__);
 
@@ -211,6 +212,11 @@ class CAllSocNetUserToGroup
 		{
 			ExecuteModuleEventEx($eventFields, [ $id, $relationFields ]);
 		}
+
+		EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_USER_DELETE, [
+			'GROUP_ID' => $relationFields['GROUP_ID'],
+			'USER_ID' => $relationFields['USER_ID'],
+		]);
 
 		if (Loader::includeModule('im'))
 		{
@@ -684,6 +690,11 @@ class CAllSocNetUserToGroup
 			$APPLICATION->ThrowException($errorMessage, "ERROR_CREATE_USER2GROUP");
 			return false;
 		}
+
+		\Bitrix\Socialnetwork\Helper\UserToGroup\RequestPopup::unsetHideRequestPopup([
+			'groupId' => $groupId,
+			'userId' => $userId,
+		]);
 
 		if ($groupFields["OPENED"] === "Y")
 		{
@@ -1260,6 +1271,11 @@ class CAllSocNetUserToGroup
 						],
 					]);
 				}
+
+				\Bitrix\Socialnetwork\Helper\UserToGroup\RequestPopup::unsetHideRequestPopup([
+					'groupId' => (int)$relationFields['GROUP_ID'],
+					'userId' => (int)$relationFields['USER_ID'],
+				]);
 			}
 			else
 			{
@@ -1405,6 +1421,11 @@ class CAllSocNetUserToGroup
 					"MESSAGE_TYPE" => SONET_MESSAGE_SYSTEM
 				);
 				CSocNetMessages::Add($arMessageFields);
+
+				\Bitrix\Socialnetwork\Helper\UserToGroup\RequestPopup::unsetHideRequestPopup([
+					'groupId' => (int)$groupId,
+					'userId' => (int)$arRelation['USER_ID'],
+				]);
 			}
 			else
 			{
@@ -2329,21 +2350,6 @@ class CAllSocNetUserToGroup
 				return false;
 			}
 		}
-		else
-		{
-			if ($e = $APPLICATION->GetException())
-			{
-				$errorMessage = $e->GetString();
-			}
-			if ($errorMessage === '')
-			{
-				$errorMessage = Loc::getMessage('SONET_UG_ERROR_CANNOT_GET_CURRENT_OWNER_RELATION');
-			}
-
-			$APPLICATION->ThrowException($errorMessage, "ERROR_GET_USER2GROUP");
-			$DB->Rollback();
-			return false;
-		}
 
 		CSocNetUserToGroup::__SpeedFileDelete($groupFields["OWNER_ID"]);
 
@@ -2721,6 +2727,7 @@ class CAllSocNetUserToGroup
 			$arReturn["UserCanModerateGroup"] = false;
 			$arReturn["UserCanSpamGroup"] = false;
 			$arReturn["InitiatedByType"] = false;
+			$arReturn["InitiatedByUserId"] = false;
 			$arReturn["Operations"]["viewsystemevents"] = false;
 		}
 		else
@@ -2750,6 +2757,7 @@ class CAllSocNetUserToGroup
 			);
 
 			$arReturn["InitiatedByType"] = false;
+			$arReturn["InitiatedByUserId"] = false;
 			if ($arReturn["UserRole"] === UserToGroupTable::ROLE_REQUEST)
 			{
 				$dbRelation = CSocNetUserToGroup::GetList(
@@ -2757,11 +2765,12 @@ class CAllSocNetUserToGroup
 					[ 'USER_ID' => $userId, 'GROUP_ID' => $groupId ],
 					false,
 					false,
-					[ 'INITIATED_BY_TYPE' ]
+					[ 'INITIATED_BY_TYPE', 'INITIATED_BY_USER_ID' ]
 				);
 				if ($arRelation = $dbRelation->Fetch())
 				{
 					$arReturn["InitiatedByType"] = $arRelation["INITIATED_BY_TYPE"];
+					$arReturn["InitiatedByUserId"] = (int)$arRelation['INITIATED_BY_USER_ID'];
 				}
 			}
 

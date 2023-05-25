@@ -46,8 +46,17 @@ elseif (
 	}
 }
 
-CUtil::InitJSCore(array("ajax", "window", "tooltip", "popup", "fx", "viewer", "content_view", "clipboard"));
 UI\Extension::load([
+	'ui.design-tokens',
+	'ui.fonts.opensans',
+	'ajax',
+	'window',
+	'tooltip',
+	'popup',
+	'fx',
+	'viewer',
+	'content_view',
+	'clipboard',
 	'socialnetwork.livefeed',
 	'socialnetwork.commentaux',
 	'tasks.comment-action-controller',
@@ -96,9 +105,9 @@ if (
 
 $stub = '
 <div class="feed-stub">
-<svg style="display: block" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" width="100%" height="230">
+<svg class="feed-stub-svg" style="display: block" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" width="100%" height="230">
 	<svg>
-		<rect width="100%" height="230" y="0" fill="#fff"/>
+		<rect class="feed-stub-rect" width="100%" height="230" y="0" fill="#fff" />
 	</svg>
 	<svg>
 		<defs>
@@ -274,7 +283,7 @@ if (
 			<?php
 		}
 
-		if (in_array($arResult['PAGE_MODE'], [ 'first', 'refresh' ]))
+	if (in_array($arResult['PAGE_MODE'], [ 'first', 'refresh' ]))
 		{
 			?>
 			BX.ready(function(){
@@ -387,7 +396,7 @@ if (
 				}
 				else
 				{
-				?>
+					?>
 					BX.ready(function() {
 						setTimeout(function() {
 							BX.Livefeed.MoreButton.recalcPostsList();
@@ -403,8 +412,6 @@ if (
 		?>
 		BX.ready(function()
 		{
-			BX.Livefeed.FeedInstance.clearMoreButtons();
-
 			if (BX('sonet_log_comment_text'))
 			{
 				BX('sonet_log_comment_text').onkeydown = BX.eventCancelBubble;
@@ -474,15 +481,14 @@ if (
 
 			$ind = \Bitrix\Main\Security\Random::getString(8);
 
-			$event_date_log_ts = ($arEvent["LOG_DATE_TS"] ?? (MakeTimeStamp($arEvent["LOG_DATE"]) - (int)$arResult["TZ_OFFSET"])
-			);
+			$event_date_log_ts = ($arEvent["LOG_DATE_TS"] ?? (MakeTimeStamp($arEvent["LOG_DATE"]) - (int)$arResult["TZ_OFFSET"]));
 
 			$is_unread = (
 				$arResult["SHOW_UNREAD"] === "Y"
 				&& in_array($arResult["COUNTER_TYPE"], [ '**', 'CRM_**', 'blog_post' ])
 				&& $arEvent["USER_ID"] != $arResult["currentUserId"]
-				&& (int)$arResult["LAST_LOG_TS"] > 0
-				&& $event_date_log_ts > $arResult["LAST_LOG_TS"]
+						&& (int)$arResult["LAST_LOG_TS"] > 0
+						&& $event_date_log_ts > $arResult["LAST_LOG_TS"]
 			);
 
 			if(
@@ -504,26 +510,9 @@ if (
 		}
 	}
 
-	/*
-	* empty stub start
-	*/
-	$emptyMessage = (
-		$arResult["IS_FILTERED"]
-		&& (
-			empty($arParams["GROUP_ID"])
-			|| (int)$arParams["GROUP_ID"] <= 0
-		)
-			? Loc::getMessage('SONET_C30_T_EMPTY_SEARCH')
-			: Loc::getMessage('SONET_C30_T_EMPTY')
-	);
-
-	?><div class="feed-wrap-empty-wrap" id="feed-empty-wrap" style="display: <?=(!is_array($arResult["Events"]) || empty($arResult["Events"]) ? 'block' : 'none')?>"><?php
-		?><div class="feed-wrap-empty"><?=$emptyMessage?></div><?php
-	?></div><?php
-
 	$blockContent = ob_get_clean();
 
-		if (in_array($arResult['PAGE_MODE'], ['refresh', 'next' ]))
+	if (in_array($arResult['PAGE_MODE'], ['refresh', 'next' ]))
 	{
 		$targetHtml .= $blockContent;
 	}
@@ -531,10 +520,6 @@ if (
 	{
 		echo $blockContent;
 	}
-
-	/*
-	* empty stub end
-	*/
 
 	if (
 		$arParams["SHOW_NAV_STRING"] !== "N"
@@ -676,6 +661,28 @@ if (
 	{
 			?></div><?php // feed-wrap
 		?></div><?php // log_internal_container
+
+		/*
+		* empty stub start
+		*/
+
+		$emptyMessage = (
+		$arResult["IS_FILTERED"]
+			&& (
+				empty($arParams["GROUP_ID"])
+				|| (int)$arParams["GROUP_ID"] <= 0
+			)
+				? Loc::getMessage('SONET_C30_T_EMPTY_SEARCH')
+				: Loc::getMessage('SONET_C30_T_EMPTY')
+		);
+
+		?><div class="feed-wrap-empty-wrap" id="feed-empty-wrap" style="display: <?= (!is_array($arResult["Events"]) || empty($arResult["Events"]) ? 'block' : 'none') ?>"><?php
+			?><div class="feed-wrap-empty"><?= $emptyMessage ?></div><?php
+		?></div><?php
+
+		/*
+		* empty stub end
+		*/
 
 		CUtil::InitJSCore(array("ajax"));
 

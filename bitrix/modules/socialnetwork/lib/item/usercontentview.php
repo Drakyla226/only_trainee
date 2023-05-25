@@ -364,6 +364,7 @@ class UserContentView
 						{
 							$provider->setOption('checkAccess', true);
 							$provider->initSourceFields();
+
 							if (empty($provider->getSourceFields()))
 							{
 								$hasPermissions = false;
@@ -378,7 +379,7 @@ class UserContentView
 						}
 
 /*
-TODO: https://cp.bitrix.ru/company/personal/user/15/tasks/task/view/167281/
+TODO: https://bitrix24.team/company/personal/user/15/tasks/task/view/167281/
 						$provider->deleteCounter([
 							'userId' => $this->getCurrentUser()->getId(),
 							'siteId' => SITE_ID

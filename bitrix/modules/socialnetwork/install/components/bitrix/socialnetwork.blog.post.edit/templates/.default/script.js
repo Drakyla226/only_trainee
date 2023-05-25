@@ -939,18 +939,16 @@ this.BX.Socialnetwork = this.BX.Socialnetwork || {};
 	            }
 	          }
 	        }).then(function (response) {
-	          main_core.Runtime.html(null, response.data.asset.join(' ')).then(function () {
-	            main_core.Runtime.html(contentContainer, response.data.html).then(function () {
-	              _this6.clickDisabled = false;
+	          main_core.Runtime.html(contentContainer, response.data.html).then(function () {
+	            _this6.clickDisabled = false;
 
-	              _this6.closeWait(contentContainer);
+	            _this6.closeWait(contentContainer);
 
-	              _this6.endAnimation();
+	            _this6.endAnimation();
 
-	              main_core_events.EventEmitter.emit(document.getElementById('divlivefeed_task_form'), 'OnShowLHE', new main_core_events.BaseEvent({
-	                compatData: ['justShow']
-	              }));
-	            });
+	            main_core_events.EventEmitter.emit(document.getElementById('divlivefeed_task_form'), 'OnShowLHE', new main_core_events.BaseEvent({
+	              compatData: ['justShow']
+	            }));
 	          });
 	          main_core.Dom.adjust(content, {
 	            style: {
@@ -1884,8 +1882,10 @@ this.BX.Socialnetwork = this.BX.Socialnetwork || {};
 	          }
 	        }
 
-	        BX.submit(document.getElementById(this.formId), value);
-	        this.formParams.submitted = true;
+	        setTimeout(function () {
+	          BX.submit(document.getElementById(_this3.formId), value);
+	          _this3.formParams.submitted = true;
+	        }, 100);
 	      }
 	    }
 	  }, {
@@ -2163,7 +2163,10 @@ this.BX.Socialnetwork = this.BX.Socialnetwork || {};
 	      PostForm.getInstance().initedEditorsList.push(editor.id);
 	      main_core_events.EventEmitter.subscribe(editor, 'OnSetViewAfter', function () {
 	        if (_this4.formParams.createdFromEmail) {
-	          editor.SetContent("".concat(editor.GetContent()).concat(main_core.Loc.getMessage('CREATED_ON_THE_BASIC_OF_THE_MESSAGE')));
+	          if (editor.GetContent() === '') {
+	            editor.SetContent("".concat(main_core.Loc.getMessage('CREATED_ON_THE_BASIC_OF_THE_MESSAGE')));
+	          }
+
 	          editor.Focus(true);
 	        }
 	      });
@@ -2358,5 +2361,5 @@ this.BX.Socialnetwork = this.BX.Socialnetwork || {};
 	exports.PostFormAutoSave = PostFormAutoSave;
 	exports.PostFormEditor = PostFormEditor;
 
-}((this.BX.Socialnetwork.Livefeed = this.BX.Socialnetwork.Livefeed || {}),BX.Main,BX.UI.EntitySelector,BX,BX,BX.Event));
+}((this.BX.Socialnetwork.Livefeed = this.BX.Socialnetwork.Livefeed || {}),BX.Main,BX.UI.EntitySelector,BX.Main,BX,BX.Event));
 //# sourceMappingURL=script.js.map

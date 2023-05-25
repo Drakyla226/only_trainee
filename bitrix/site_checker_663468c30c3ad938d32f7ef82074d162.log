@@ -1,20 +1,20 @@
-2023-May-22 09:35:53 Наличие необходимых модулей php (check_php_modules): Ok
+2023-May-25 12:28:44 Наличие необходимых модулей php (check_php_modules): Ok
 Все необходимые модули установлены
-2023-May-22 09:35:53 Обязательные параметры PHP (check_php_settings): Ok
+2023-May-25 12:28:44 Обязательные параметры PHP (check_php_settings): Ok
 Настройки правильные
-2023-May-22 09:35:53 Модули веб-сервера (check_security): Ok
+2023-May-25 12:28:44 Модули веб-сервера (check_security): Ok
 Конфликтов не выявлено
-2023-May-22 09:35:53 Значения переменных сервера (check_server_vars): Ok
+2023-May-25 12:28:44 Значения переменных сервера (check_server_vars): Ok
 Корректные
-2023-May-22 09:35:53 Сохранение сессии (check_session): Ok
+2023-May-25 12:28:44 Сохранение сессии (check_session): Ok
 50% done
-2023-May-22 09:35:53 Параметры настройки UTF (mbstring и константа BX_UTF) (check_mbstring): Ok
+2023-May-25 12:28:44 Параметры настройки UTF (mbstring и константа BX_UTF) (check_mbstring): Ok
 Правильные. Сайт работает в UTF кодировке
-2023-May-22 09:35:53 Служебные скрипты в корне сайта (check_install_scripts): Ok
+2023-May-25 12:28:44 Служебные скрипты в корне сайта (check_install_scripts): Ok
 Отсутствуют
-2023-May-22 09:35:53 Работа с сокетами (check_socket): Ok
+2023-May-25 12:28:44 Работа с сокетами (check_socket): Ok
 Connection to localhost:80	Success
 
 Успешно
-2023-May-22 09:35:53 Выполнение агентов на cron (check_bx_crontab): Warning
+2023-May-25 12:28:44 Выполнение агентов на cron (check_bx_crontab): Warning
 Замечание. Агенты выполняются на хитах, рекомендуется перевести выполнение агентов на cron

@@ -11,6 +11,7 @@ use Bitrix\Main;
 use Bitrix\Main\Localization;
 use Bitrix\Sale\Basket\RefreshFactory;
 use Bitrix\Sale\Internals;
+use Bitrix\Sale\Tax\VatCalculator;
 
 Localization\Loc::loadMessages(__FILE__);
 
@@ -80,12 +81,14 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 */
 	public function findItemById($id)
 	{
+		$id = (int)$id;
+
 		if ($id <= 0)
 		{
 			return null;
 		}
 
-		if ($this->getId() === (int)$id)
+		if ($this->getId() === $id)
 		{
 			return $this;
 		}
@@ -131,6 +134,7 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 			"MODULE" => $moduleId,
 			"BASE_PRICE" => 0,
 			"CAN_BUY" => 'Y',
+			"VAT_RATE" => null,
 			"CUSTOM_PRICE" => 'N',
 			"PRODUCT_ID" => $productId,
 			'XML_ID' => static::generateXmlId(),
@@ -270,16 +274,6 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 */
 	protected function __construct(array $fields = [])
 	{
-		$priceFields = ['BASE_PRICE', 'PRICE', 'DISCOUNT_PRICE'];
-
-		foreach ($priceFields as $code)
-		{
-			if (isset($fields[$code]))
-			{
-				$fields[$code] = PriceMaths::roundPrecision($fields[$code]);
-			}
-		}
-
 		parent::__construct($fields);
 
 		$this->calculatedFields = new Internals\Fields();
@@ -398,6 +392,20 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 		return $result;
 	}
 
+	protected function normalizeValue($name, $value)
+	{
+		if ($this->isPriceField($name))
+		{
+			$value = PriceMaths::roundPrecision($value);
+		}
+		elseif ($name === 'VAT_RATE')
+		{
+			$value = is_numeric($value) ? (float)$value : null;
+		}
+
+		return parent::normalizeValue($name, $value);
+	}
+
 	/**
 	 * @param string $name						Field name.
 	 * @param string|int|float $value			Field value.
@@ -407,16 +415,6 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 */
 	public function setField($name, $value)
 	{
-		$priceFields = [
-			'BASE_PRICE' => 'BASE_PRICE',
-			'PRICE' => 'PRICE',
-			'DISCOUNT_PRICE' => 'DISCOUNT_PRICE',
-		];
-		if (isset($priceFields[$name]))
-		{
-			$value = PriceMaths::roundPrecision($value);
-		}
-
 		if ($this->isCalculatedField($name))
 		{
 			$this->calculatedFields->set($name, $value);
@@ -448,16 +446,6 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 */
 	public function setFieldNoDemand($name, $value)
 	{
-		$priceFields = [
-			'BASE_PRICE' => 'BASE_PRICE',
-			'PRICE' => 'PRICE',
-			'DISCOUNT_PRICE' => 'DISCOUNT_PRICE',
-		];
-		if (isset($priceFields[$name]))
-		{
-			$value = PriceMaths::roundPrecision($value);
-		}
-
 		if ($this->isCalculatedField($name))
 		{
 			$this->calculatedFields->set($name, $value);
@@ -569,13 +557,14 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 */
 	public function getCallbackFunction()
 	{
-		$callbackFunction = trim($this->getField('CALLBACK_FUNC'));
-		if (!isset($callbackFunction) || (strval(trim($callbackFunction)) == ""))
+		$callbackFunction = $this->getField('CALLBACK_FUNC');
+		if (empty($callbackFunction))
 		{
 			return null;
 		}
 
-		if (!function_exists($callbackFunction))
+		$callbackFunction = trim((string)$callbackFunction);
+		if (empty($callbackFunction) || !function_exists($callbackFunction))
 		{
 			return null;
 		}
@@ -691,16 +680,39 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 
 			if ($this->getField('SUBSCRIBE') !== 'Y')
 			{
-				if (array_key_exists('AVAILABLE_QUANTITY', $providerData) && $providerData['AVAILABLE_QUANTITY'] > 0)
+				if ($providerData)
 				{
-					$availableQuantity = $providerData['AVAILABLE_QUANTITY'];
+					if (array_key_exists('AVAILABLE_QUANTITY', $providerData) && $providerData['AVAILABLE_QUANTITY'] > 0)
+					{
+						$availableQuantity = $providerData['AVAILABLE_QUANTITY'];
+					}
+					else
+					{
+						$result->addError(
+							new ResultError(
+								Localization\Loc::getMessage(
+									'SALE_BASKET_ITEM_WRONG_AVAILABLE_QUANTITY_2',
+									['#PRODUCT_NAME#' => $this->getField('NAME')]
+								),
+								'SALE_BASKET_ITEM_WRONG_AVAILABLE_QUANTITY'
+							)
+						);
+
+						return $result;
+					}
 				}
 				else
 				{
+					$errorMessageCode = 'SALE_BASKET_PRODUCT_NOT_AVAILABLE';
+					if ($this->isService())
+					{
+						$errorMessageCode = 'SALE_BASKET_SERVICE_NOT_AVAILABLE';
+					}
+
 					$result->addError(
 						new ResultError(
 							Localization\Loc::getMessage(
-								'SALE_BASKET_ITEM_WRONG_AVAILABLE_QUANTITY_2',
+								$errorMessageCode,
 								['#PRODUCT_NAME#' => $this->getField('NAME')]
 							),
 							'SALE_BASKET_ITEM_WRONG_AVAILABLE_QUANTITY'
@@ -887,16 +899,14 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	 */
 	public function getVat()
 	{
-		$vatRate = $this->getVatRate();
-		if ($vatRate == 0)
-			return 0;
+		$calculator = new VatCalculator((float)$this->getVatRate());
+		$vat = $calculator->calc(
+			$this->getPrice(),
+			$this->isVatInPrice(),
+			false
+		);
 
-		if ($this->isVatInPrice())
-			$vat = PriceMaths::roundPrecision(($this->getPrice() * $this->getQuantity() * $vatRate / ($vatRate + 1)));
-		else
-			$vat = PriceMaths::roundPrecision(($this->getPrice() * $this->getQuantity() * $vatRate));
-
-		return $vat;
+		return PriceMaths::roundPrecision($vat * $this->getQuantity());
 	}
 
 	/**
@@ -923,7 +933,7 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 
 		if (!$this->isVatInPrice())
 		{
-			$vatRate = $this->getVatRate();
+			$vatRate = (float)$this->getVatRate();
 			$price += $this->getBasePrice() * $vatRate;
 		}
 
@@ -940,7 +950,7 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 
 		if (!$this->isVatInPrice())
 		{
-			$vatRate = $this->getVatRate();
+			$vatRate = (float)$this->getVatRate();
 			$price += $this->getPrice() * $vatRate;
 		}
 
@@ -1032,6 +1042,30 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	}
 
 	/**
+	 * Change basket item currency.
+	 *
+	 * @param string $currency
+	 *
+	 * @return Main\Result
+	 */
+	public function changeCurrency(string $currency): Main\Result
+	{
+		$result = new Main\Result();
+
+		$oldCurrency = $this->getCurrency();
+		if ($oldCurrency === $currency)
+		{
+			return $result;
+		}
+
+		$result->addErrors(
+			$this->setField('CURRENCY', $currency)->getErrors()
+		);
+
+		return $result;
+	}
+
+	/**
 	 * @return float
 	 * @throws Main\ArgumentNullException
 	 */
@@ -1058,7 +1092,7 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	}
 
 	/**
-	 * @return float|null|string
+	 * @return float|null
 	 * @throws Main\ArgumentNullException
 	 */
 	public function getVatRate()
@@ -1677,6 +1711,15 @@ abstract class BasketItemBase extends Internals\CollectableEntity
 	public static function getEntityEventName()
 	{
 		return 'SaleBasketItem';
+	}
+
+	protected function isPriceField(string $name) : bool
+	{
+		return
+			$name === 'BASE_PRICE'
+			|| $name === 'PRICE'
+			|| $name === 'DISCOUNT_PRICE'
+		;
 	}
 
 	/**

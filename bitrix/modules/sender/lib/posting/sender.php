@@ -26,6 +26,7 @@ use Bitrix\Sender\Internals\Model\PostingThreadTable;
 use Bitrix\Sender\MailingTable;
 use Bitrix\Sender\Message;
 use Bitrix\Sender\Message\Adapter;
+use Bitrix\Sender\Posting\ThreadStrategy\AbstractThreadStrategy;
 use Bitrix\Sender\Posting\ThreadStrategy\IThreadStrategy;
 use Bitrix\Sender\PostingRecipientTable;
 use Bitrix\Sender\PostingTable;
@@ -173,6 +174,8 @@ class Sender
 			return;
 		}
 
+		$threadState = $this->threadStrategy->checkThreads();
+
 		$this->startTime();
 
 		$this->isConsentSupport = $this->letter
@@ -181,7 +184,12 @@ class Sender
 				->get('APPROVE_CONFIRMATION') === 'Y';
 
 		$this->threadStrategy->setPostingId($this->postingId);
-		$this->threadStrategy->fillThreads();
+
+		if ($threadState === AbstractThreadStrategy::THREAD_NEEDED)
+		{
+			$this->threadStrategy->fillThreads();
+		}
+
 		$this->threadStrategy->lockThread();
 		$threadId = $this->threadStrategy->getThreadId();
 
@@ -383,7 +391,11 @@ class Sender
 			return true;
 		}
 
-		if ($this->status != PostingTable::STATUS_NEW)
+		if (
+			($this->status !== PostingTable::STATUS_NEW)
+			&& !$this->isReiterate
+			&& ($this->letter->getData()['WAITING_RECIPIENT'] !== 'N')
+		)
 		{
 			return true;
 		}
@@ -403,7 +415,11 @@ class Sender
 			return;
 		}
 
-		if ($this->status != PostingTable::STATUS_NEW && !$this->isTrigger)
+		if (
+			($this->status !== PostingTable::STATUS_NEW)
+			&& !$this->isTrigger
+			&& !$this->isReiterate
+		)
 		{
 			return;
 		}
@@ -767,8 +783,8 @@ class Sender
 		$message->getUnsubTracker()->setModuleId('sender')->setFields(
 			[
 				'RECIPIENT_ID' => $recipient['ID'],
-				'CONTACT_ID' => $recipient['CONTACT_ID'],
-				'MAILING_ID'   => isset($recipient['CAMPAIGN_ID']) ? $recipient['CAMPAIGN_ID'] : 0,
+				'CONTACT_ID' => $recipient['CONTACT_ID'] ?? '',
+				'MAILING_ID'   => $recipient['CAMPAIGN_ID'] ?? 0,
 				'EMAIL'        => $message->getRecipientCode(),
 				'CODE'         => $message->getRecipientCode(),
 				'TEST'         => $isTest ? 'Y' : 'N'
@@ -779,7 +795,7 @@ class Sender
 		$message->setFields($fields);
 		$message->setRecipientId($recipient['ID']);
 		$message->setRecipientCode($recipient['CONTACT_CODE']);
-		$message->setRecipientType(Recipient\Type::getCode($recipient['CONTACT_TYPE_ID']));
+		$message->setRecipientType(Recipient\Type::getCode($recipient['CONTACT_TYPE_ID'] ?? ''));
 		$message->setRecipientData($recipient);
 	}
 
@@ -790,15 +806,15 @@ class Sender
 		{
 			$recipient["NAME"] = Recipient\Field::getDefaultName();
 		}
-
+		$recipient["MAILING_CHAIN_ID"] ??= 0;
 		$senderChainId = (int)$recipient["MAILING_CHAIN_ID"] > 0 ? (int)$recipient["MAILING_CHAIN_ID"]
 			: (int)$recipient['CAMPAIGN_ID'];
 
 		// prepare params for send
 		$fields = [
-			'EMAIL_TO'          => $recipient['CONTACT_CODE'],
-			'NAME'              => $recipient['NAME'],
-			'USER_ID'           => $recipient["USER_ID"],
+			'EMAIL_TO'          => $recipient['CONTACT_CODE'] ?? '',
+			'NAME'              => $recipient['NAME'] ?? '',
+			'USER_ID'           => $recipient["USER_ID"] ?? '',
 			'SENDER_CHAIN_ID'   => $senderChainId,
 			'SENDER_CHAIN_CODE' => 'sender_chain_item_'.$senderChainId
 		];

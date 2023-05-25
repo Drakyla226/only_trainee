@@ -77,6 +77,19 @@ Loc::loadMessages(__FILE__);
  * <li> OPTIONS int,
  * </ul>
  *
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_Vote_Query query()
+ * @method static EO_Vote_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Vote_Result getById($id)
+ * @method static EO_Vote_Result getList(array $parameters = array())
+ * @method static EO_Vote_Entity getEntity()
+ * @method static \Bitrix\Vote\EO_Vote createObject($setDefaultValues = true)
+ * @method static \Bitrix\Vote\EO_Vote_Collection createCollection()
+ * @method static \Bitrix\Vote\EO_Vote wakeUpObject($row)
+ * @method static \Bitrix\Vote\EO_Vote_Collection wakeUpCollection($rows)
  */
 class VoteTable extends Entity\DataManager
 {
@@ -203,7 +216,7 @@ class VoteTable extends Entity\DataManager
 	public static function onAfterAdd(\Bitrix\Main\ORM\Event $event)
 	{
 		$id = $event->getParameter("id");
-		$id = $id["ID"];
+		$id = is_array($id) && array_key_exists("ID", $id) ? $id["ID"] : $id;
 		$fields = $event->getParameter("fields");
 		/***************** Event onAfterVoteAdd ****************************/
 		foreach (GetModuleEvents("vote", "onAfterVoteAdd", true) as $event)
@@ -223,7 +236,7 @@ class VoteTable extends Entity\DataManager
 			/** @var array $data */
 			$data = $event->getParameter("fields");
 			$id = $event->getParameter("id");
-			$id = $id["ID"];
+			$id = is_array($id) && array_key_exists("ID", $id) ? $id["ID"] : $id;
 			foreach ($events as $ev)
 			{
 				if (ExecuteModuleEventEx($ev, array($id, &$data)) === false)
@@ -247,7 +260,7 @@ class VoteTable extends Entity\DataManager
 	public static function onAfterUpdate(\Bitrix\Main\ORM\Event $event)
 	{
 		$id = $event->getParameter("id");
-		$id = $id["ID"];
+		$id = is_array($id) && array_key_exists("ID", $id) ? $id["ID"] : $id;
 		$fields = $event->getParameter("fields");
 		/***************** Event onAfterVoteAdd ****************************/
 		foreach (GetModuleEvents("vote", "onAfterVoteUpdate", true) as $event)
@@ -643,10 +656,10 @@ class Vote extends BaseObject implements \ArrayAccess
 		$questions = array();
 		foreach ($questionsToSave as $key => $question)
 		{
-			if ($question["DEL"] == "Y")
+			if (($question["DEL"] ?? null) == "Y")
 				continue;
 
-			$question["ID"] = intval($question["ID"]);
+			$question["ID"] = intval($question["ID"] ?? null);
 			$question = array(
 				"ID" => (array_key_exists($question["ID"], $questionsToRevise) ? $question["ID"] : null),
 				"QUESTION" => trim($question["QUESTION"]),
@@ -658,9 +671,9 @@ class Vote extends BaseObject implements \ArrayAccess
 			$newAnswers = array();
 			foreach ($question["ANSWERS"] as $keya => $answer)
 			{
-				$answer["ID"] = intval($answer["ID"]);
+				$answer["ID"] = intval($answer["ID"] ?? null);
 				$answer["MESSAGE"] = trim($answer["MESSAGE"]);
-				if ($answer["DEL"] != "Y" && $answer["MESSAGE"] !== "")
+				if (($answer["DEL"] ?? null) != "Y" && $answer["MESSAGE"] !== "")
 				{
 					$answer = array(
 						"ID" => $answer["ID"],
@@ -739,14 +752,14 @@ class Vote extends BaseObject implements \ArrayAccess
 		$vote += ["QUESTIONS" => []];
 		/************** Check Data *****************************************/
 		$iQuestions = 0;
-		foreach ($data["QUESTIONS"] as $key => $question)
+		foreach ($data["QUESTIONS"] as $question)
 		{
 			$savedAnswers = array();
 			if ($question["ID"] > 0 && array_key_exists($question["ID"], $vote["QUESTIONS"]))
 			{
 				$savedAnswers = $vote["QUESTIONS"][$question["ID"]]["ANSWERS"];
 				unset($vote["QUESTIONS"][$question["ID"]]);
-				if ($question["DEL"] == "Y")
+				if (isset($question["DEL"]) && $question["DEL"] === "Y")
 				{
 					\CVoteQuestion::Delete($question["ID"]);
 					continue;
@@ -765,7 +778,7 @@ class Vote extends BaseObject implements \ArrayAccess
 			$iAnswers = 0;
 			foreach ($question["ANSWERS"] as $answer)
 			{
-				if (array_key_exists($answer["ID"], $savedAnswers))
+				if (!empty($answer["ID"]) && array_key_exists($answer["ID"], $savedAnswers))
 				{
 					unset($savedAnswers[$answer["ID"]]);
 					if ($answer["DEL"] == "Y")
@@ -930,7 +943,12 @@ class Vote extends BaseObject implements \ArrayAccess
 				"V_" => "*",
 				"Q_" => "QUESTION.*",
 				"A_" => "QUESTION.ANSWER.*",
-				"U_" => "USER.USER.*",
+				"U_ID" => "USER.USER.ID",
+				"U_NAME" => "USER.USER.NAME",
+				"U_LAST_NAME" => "USER.USER.LAST_NAME",
+				"U_SECOND_NAME" => "USER.USER.SECOND_NAME",
+				"U_LOGIN" => "USER.USER.LOGIN",
+				"U_PERSONAL_PHOTO" => "USER.USER.PERSONAL_PHOTO",
 			),
 			"filter" => array("VOTE_ID" => $this->id, "VALID" => "Y"),
 			"order" => array(
@@ -974,7 +992,11 @@ class Vote extends BaseObject implements \ArrayAccess
 				"V_" => "*",
 				"Q_" => "QUESTION.*",
 				"A_" => "QUESTION.ANSWER.*",
-				"U_" => "USER.USER.*",
+				"U_ID" => "USER.USER.ID",
+				"U_NAME" => "USER.USER.NAME",
+				"U_LAST_NAME" => "USER.USER.LAST_NAME",
+				"U_SECOND_NAME" => "USER.USER.SECOND_NAME",
+				"U_PERSONAL_PHOTO" => "USER.USER.PERSONAL_PHOTO",
 			),
 			"filter" => array("VOTE_ID" => $this->id, "VALID" => "Y"),
 			"order" => array(
@@ -1385,94 +1407,102 @@ HTML;
 	public function registerEvent(array $data, array $params, \Bitrix\Vote\User $user)
 	{
 		if ($this["LAMP"] == "red")
+		{
 			throw new AccessDeniedException(Loc::getMessage("VOTE_IS_NOT_ACTIVE"));
-
+		}
 		$voteId = $this->getId();
+		if ($user->lock($voteId) !== true)
+		{
+			throw new AccessDeniedException(Loc::getMessage("VOTE_IS_OCCUPIED"));
+		}
+
 		$userId = $user->getId();
+
+		$this->errorCollection->clear();
+
 		/** @var \Bitrix\Main\Result $result */
 		if ($params["revote"] != true)
 		{
 			$result = $this->canVote($user);
 		}
 		//region Delete event If It is possible
-		else
+		else if (
+			($result = $this->canRevote($user))
+			&& $result->isSuccess()
+			&& !empty($result->getData())
+			&& ($eventIdsToDelete = array_column($result->getData(), 'ID'))
+			&& !empty($eventIdsToDelete)
+		)
 		{
-			$result = $this->canRevote($user);
-
-			if ($result->isSuccess() && !empty($result->getData()))
+			$dbRes = \Bitrix\Vote\EventTable::getList([
+				"select" => [
+					"V_" => "*",
+					"Q_" => "QUESTION.*",
+					"A_" => "QUESTION.ANSWER.*"],
+				"filter" => [
+					"VOTE_ID" => $voteId,
+					"ID" => $eventIdsToDelete],
+				"order" => [
+					"ID" => "ASC",
+					"QUESTION.ID" => "ASC",
+					"QUESTION.ANSWER.ID" => "ASC"]
+			]);
+			if ($dbRes && ($res = $dbRes->fetch()))
 			{
-				$ids = [];
-				foreach ($result->getData() as $res)
-					$ids[] = $res["ID"];
-				if (!empty($ids))
+				if (\Bitrix\Main\Loader::includeModule("im"))
 				{
-					$dbRes = \Bitrix\Vote\EventTable::getList([
-						"select" => [
-							"V_" => "*",
-							"Q_" => "QUESTION.*",
-							"A_" => "QUESTION.ANSWER.*"],
-						"filter" => [
-							"VOTE_ID" => $voteId,
-							"ID" => $ids],
-						"order" => [
-							"ID" => "ASC",
-							"QUESTION.ID" => "ASC",
-							"QUESTION.ANSWER.ID" => "ASC"]
-					]);
-					if ($dbRes && ($res = $dbRes->fetch()))
-					{
-						if (\Bitrix\Main\Loader::includeModule("im"))
-							\CIMNotify::DeleteByTag("VOTING|".$voteId, $userId);
-						$vEId = 0;
-						$qEId = 0;
-						do
-						{
-							if ($vEId < $res["V_ID"])
-							{
-								$vEId = $res["V_ID"];
-								\Bitrix\Vote\Event::deleteEvent(intval($res["V_ID"]));
-								$this->vote["COUNTER"] = max($this->vote["COUNTER"] - 1, 0);
-							}
-							if (array_key_exists($res["Q_QUESTION_ID"], $this->questions) &&
-								array_key_exists($res["A_ANSWER_ID"], $this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"]))
-							{
-								if ($qEId < $res["Q_ID"])
-								{
-									$qEId = $res["Q_ID"];
-									$this->questions[$res["Q_QUESTION_ID"]]["COUNTER"] = max($this->questions[$res["Q_QUESTION_ID"]]["COUNTER"] - 1, 0);
-								}
-
-								$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["COUNTER"] = max(
-									$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["COUNTER"] - 1,
-									0);
-								if ($this->questions[$res["Q_QUESTION_ID"]]["COUNTER"] > 0)
-								{
-									$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["~PERCENT"] =
-										$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["COUNTER"] * 100 /
-										$this->questions[$res["Q_QUESTION_ID"]]["COUNTER"];
-									$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["PERCENT"] = round($this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["~PERCENT"], 2);
-								}
-								else
-								{
-									$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["~PERCENT"] = 0;
-									$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["PERCENT"] = 0;
-								}
-							}
-						} while ($dbRes && ($res = $dbRes->fetch()));
-						$this->clearCache();
-						$this->clearVotingCache();
-					}
+					\CIMNotify::DeleteByTag("VOTING|".$voteId, $userId);
 				}
-				$result = $this->canVote($user);
+				$vEId = 0;
+				$qEId = 0;
+				do
+				{
+					if ($vEId < $res["V_ID"])
+					{
+						$vEId = $res["V_ID"];
+						\Bitrix\Vote\Event::deleteEvent(intval($res["V_ID"]));
+						$this->vote["COUNTER"] = max($this->vote["COUNTER"] - 1, 0);
+					}
+					if (array_key_exists($res["Q_QUESTION_ID"], $this->questions) &&
+						array_key_exists($res["A_ANSWER_ID"], $this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"]))
+					{
+						if ($qEId < $res["Q_ID"])
+						{
+							$qEId = $res["Q_ID"];
+							$this->questions[$res["Q_QUESTION_ID"]]["COUNTER"] = max($this->questions[$res["Q_QUESTION_ID"]]["COUNTER"] - 1, 0);
+						}
+
+						$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["COUNTER"] = max(
+							$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["COUNTER"] - 1,
+							0);
+						if ($this->questions[$res["Q_QUESTION_ID"]]["COUNTER"] > 0)
+						{
+							$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["~PERCENT"] =
+								$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["COUNTER"] * 100 /
+								$this->questions[$res["Q_QUESTION_ID"]]["COUNTER"];
+							$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["PERCENT"] = round($this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["~PERCENT"], 2);
+						}
+						else
+						{
+							$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["~PERCENT"] = 0;
+							$this->questions[$res["Q_QUESTION_ID"]]["ANSWERS"][$res["A_ANSWER_ID"]]["PERCENT"] = 0;
+						}
+					}
+				} while ($dbRes && ($res = $dbRes->fetch()));
+				$this->clearCache();
+				$this->clearVotingCache();
 			}
+			$result = $this->canVote($user);
 		}
 		//endregion
-		if (!$result->isSuccess())
-			throw new AccessDeniedException(implode(" ", $result->getErrorMessages()));
 
-		$event = new \Bitrix\Vote\Event($this);
-		if ($event->check($data))
+		if (!$result->isSuccess())
 		{
+			$this->errorCollection->add($result->getErrors());
+		}
+		else
+		{
+			$event = new \Bitrix\Vote\Event($this);
 			/**
 			 * @var \Bitrix\Main\Type\Dictionary $eventResult
 			 */
@@ -1484,7 +1514,13 @@ HTML;
 				"VALID"				=> "Y",
 				"VISIBLE" 			=> ($this["ANONYMITY"] == \Bitrix\Vote\Vote\Anonymity::ANONYMOUSLY ? "N" : "Y") // can be replaced from $data array ["EXTRAS"]["HIDDEN"] = "Y"
 			);
-			if (($eventResult = $event->add($eventFields, $data)) && $eventResult)
+			if (!$event->check($data)
+				|| !($eventResult = $event->add($eventFields, $data))
+			)
+			{
+				$this->errorCollection->add($event->getErrors());
+			}
+			else
 			{
 				$this->vote["COUNTER"]++;
 				foreach ($eventResult->get("BALLOT") as $questionId => $question)
@@ -1529,17 +1565,20 @@ HTML;
 				}
 				// notification TODO replace this functional into other function
 				if ($this["NOTIFY"] !== "N" && $this["AUTHOR_ID"] > 0 && $this["AUTHOR_ID"] != $userId)
+				{
 					self::sendVotingMessage($eventResult->toArray(), $this, ($this["NOTIFY"] == "I" ? "im" : "mail"));
+				}
 
 				/***************** Event onAfterVoting *****************************/
 				foreach (GetModuleEvents("vote", "onAfterVoting", true) as $ev)
+				{
 					ExecuteModuleEventEx($ev, array($voteId, $eventResult->get("EVENT_ID"), $userId));
+				}
 				/***************** /Event ******************************************/
-				return true;
 			}
 		}
-		$this->errorCollection->add($event->getErrors());
-		return false;
+		$user->unlock($voteId);
+		return $this->errorCollection->isEmpty();
 	}
 
 	/**
@@ -1554,13 +1593,17 @@ HTML;
 		$canVoteResult = $this->canVote($user);
 		if (!$canVoteResult->isSuccess())
 		{
-			/** @var Error $error */
-			$error = $canVoteResult->getErrorCollection()->rewind();
 			$result = 0;
-			do
+			for (
+				$canVoteResult->getErrorCollection()->rewind();
+				$canVoteResult->getErrorCollection()->valid();
+				$canVoteResult->getErrorCollection()->next()
+			)
 			{
+				/** @var Error $error */
+				$error = $canVoteResult->getErrorCollection()->current();
 				$result |= $error->getCode();
-			} while ($error = $canVoteResult->getErrorCollection()->next());
+			}
 		}
 		return $result;
 	}
@@ -1722,7 +1765,8 @@ HTML;
 			$dbRes = \Bitrix\Vote\EventTable::getList([
 				"select" => [
 					"*",
-					"USER_" => "USER.*"
+					"USER_COOKIE_ID" => "USER.COOKIE_ID",
+					"USER_AUTH_USER_ID" => "USER.AUTH_USER_ID",
 				],
 				"filter" => [
 					"VOTE_ID" => $voteId,
