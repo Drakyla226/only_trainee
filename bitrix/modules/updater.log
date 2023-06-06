@@ -6251,3 +6251,7 @@
 2023-05-25 11:43:21 -  - exec CUpdateClient::GetHTTPPage
 2023-05-25 11:43:21 -  - TIME GetUpdatesList(request) 0.296 sec
 2023-05-25 11:43:21 -  - exec CUpdateClient::ParseServerData
+2023-05-31 23:50:19 - CRUPDCF1 - Run updater '/bitrix/updates/update_m1685566219/sprint.migration/updater4.2.4.php': CopyFiles(install/gadgets/, gadgets/)
+2023-05-31 23:51:48 - CRUPDCF1 - Run updater '/bitrix/updates/update_m1685566308/bitrix.eshop/updater22.0.0.php': CopyFiles(install/components, components)
+2023-05-31 23:51:48 - CRUPDCF1 - Run updater '/bitrix/updates/update_m1685566308/bitrix.eshop/updater22.0.0.php': CopyFiles(install/wizards, wizards)
+2023-05-31 23:51:50 - CRUPDCF1 - Run updater '/bitrix/updates/update_m1685566310/bitrix.eshop/updater22.100.0.php': CopyFiles(install/wizards, wizards)

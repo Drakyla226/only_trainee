@@ -1,23 +1,20 @@
 <?
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
-$APPLICATION->SetTitle("Задание 3");
+$APPLICATION->SetTitle("Задание 4");
 ?>
 <body>
-<!--<div class="contact-form">
-    <div class="contact-form__head">
-        <div class="contact-form__head-title">Связаться</div>
-        <div class="contact-form__head-text">Наши сотрудники помогут выполнить подбор услуги и&nbsp;расчет цены с&nbsp;учетом
-            ваших требований
-        </div>
-    </div>
+    <!--ЗАДАНИЕ 2
+    <div class="contact-form">
+        <div class="contact-form__head">
+            <div class="contact-form__head-title">Связаться</div>
+            <div class="contact-form__head-text">Наши сотрудники помогут выполнить подбор услуги и&nbsp;расчет цены с&nbsp;учетом
+                ваших требований
+            </div>
+        </div>-->
 
- ЗАДАНИЕ 2
-  <form class="contact-form__form" action="/" method="POST">
-    <?$APPLICATION->IncludeComponent(
-	"bitrix:form.result.new",
-	"form_result",
-	array(
-		"CACHE_TIME" => "3600",
+      <form class="contact-form__form" action="/" method="POST">
+        <?$APPLICATION->IncludeComponent("bitrix:form.result.new", "form_result", array(
+	"CACHE_TIME" => "3600",
 		"CACHE_TYPE" => "A",
 		"CHAIN_ITEM_LINK" => "",
 		"CHAIN_ITEM_TEXT" => "",
@@ -34,20 +31,20 @@ $APPLICATION->SetTitle("Задание 3");
 			"RESULT_ID" => "RESULT_ID",
 		)
 	),
-	false
+	false,
+	array(
+	"ACTIVE_COMPONENT" => "N"
+	)
 );?>
-  </form>
-</div> -->
+      </form>
+    </div>
 
- <!-- ЗАДАНИЕ 3 -->
+ <!-- ЗАДАНИЕ 3
 <div class="">
     <a href="/news/">Новости</a>
-</div>
- <?$APPLICATION->IncludeComponent(
-	"bitrix:news.list",
-	"news_list",
-	array(
-		"ACTIVE_DATE_FORMAT" => "j M Y",
+</div> -->
+ <?$APPLICATION->IncludeComponent("bitrix:news.list", "news_list", array(
+	"ACTIVE_DATE_FORMAT" => "j M Y",
 		"ADD_SECTIONS_CHAIN" => "Y",
 		"AJAX_MODE" => "N",
 		"AJAX_OPTION_ADDITIONAL" => "",
@@ -108,7 +105,10 @@ $APPLICATION->SetTitle("Задание 3");
 		"STRICT_SECTION_CHECK" => "N",
 		"COMPONENT_TEMPLATE" => "news_list"
 	),
-	false
+	false,
+	array(
+	"ACTIVE_COMPONENT" => "N"
+	)
 );?>
 
 </body>
